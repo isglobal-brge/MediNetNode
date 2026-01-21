@@ -7,7 +7,7 @@
 
 ## Overview
 
-MediNetNode is a software that complements MedinetHub by providing a way to a centers manage their datasets and people whi can acces, allow users to train their own models using the datasets uploaded to the Node and to monitor the models during training without sharing data.
+MediNetNode is a software that complements MedinetHub by providing a way to a centers manage their datasets and people who can acces, allow users to train their own models using the datasets uploaded to the Node and to monitor the models during training without sharing data.
 
 ## Features Available
 
