@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Initial Setup - MediNet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #42a5f5;
+            --primary-dark: #1976d2;
+            --primary-light: #e3f2fd;
+            --success-color: #66bb6a;
+            --danger-color: #ef5350;
+            --primary-gradient: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+            --card-bg: rgba(255, 255, 255, 0.98);
+            --shadow-soft: 0 10px 30px rgba(66, 165, 245, 0.08);
+            --shadow-hover: 0 20px 40px rgba(66, 165, 245, 0.12);
+            --border-radius: 16px;
+            --glass-bg: rgba(255, 255, 255, 0.25);
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .setup-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 2rem 0;
+        }
+
+        .setup-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-soft);
+            border: none;
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .setup-header {
+            background: var(--primary-gradient);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .setup-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 150px;
+            height: 150px;
+            background: var(--glass-bg);
+            border-radius: 50%;
+        }
+
+        .setup-logo {
+            width: 80px;
+            height: 80px;
+            background: var(--glass-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2.5rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--primary-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .section-number {
+            width: 2.5rem;
+            height: 2.5rem;
+            background: var(--primary-gradient);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .form-control {
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(66, 165, 245, 0.25);
+        }
+
+        .form-control.is-valid {
+            border-color: var(--success-color);
+            background-image: none;
+        }
+
+        .form-control.is-invalid {
+            border-color: var(--danger-color);
+            background-image: none;
+        }
+
+        .validation-feedback {
+            display: none;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .validation-feedback.valid {
+            color: var(--success-color);
+            display: block;
+        }
+
+        .validation-feedback.invalid {
+            color: var(--danger-color);
+            display: block;
+        }
+
+        .validation-icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.25rem;
+            display: none;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper.valid .validation-icon.success {
+            display: block;
+            color: var(--success-color);
+        }
+
+        .input-wrapper.invalid .validation-icon.error {
+            display: block;
+            color: var(--danger-color);
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 12px;
+            padding: 0.875rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .preview-card {
+            background: linear-gradient(135deg, var(--primary-light) 0%, rgba(66, 165, 245, 0.1) 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid rgba(66, 165, 245, 0.2);
+        }
+
+        .preview-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+        }
+
+        .preview-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .preview-value {
+            font-weight: 600;
+            color: var(--primary-dark);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .help-text {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container setup-container">
+        <div class="row justify-content-center w-100">
+            <div class="col-12">
+                <div class="setup-card">
+                    <!-- Header -->
+                    <div class="setup-header">
+                        <div class="setup-logo">
+                            <i class="bi bi-hospital"></i>
+                        </div>
+                        <h2 class="fw-bold mb-2">Welcome to MediNet!</h2>
+                        <p class="mb-0 opacity-90 fs-5">Let's set up your medical center</p>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="p-4 p-md-5">
+                        <!-- Error Alert -->
+                        <div id="errorAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <span id="errorMessage"></span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+
+                        <form id="setupForm" class="needs-validation" novalidate>
+                            {% csrf_token %}
+
+                            <!-- Section 1: Administrator Account -->
+                            <div class="mb-5">
+                                <div class="section-header">
+                                    <div class="section-number">1</div>
+                                    <div>
+                                        <h5 class="mb-0">Administrator Account</h5>
+                                        <small class="text-muted">Create the first system administrator</small>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="username" class="form-label fw-medium">
+                                            <i class="bi bi-person me-1 text-muted"></i>
+                                            Username *
+                                        </label>
+                                        <input type="text"
+                                               class="form-control"
+                                               id="username"
+                                               name="username"
+                                               required
+                                               autocomplete="username"
+                                               placeholder="admin">
+                                        <div class="help-text">This will be your login username</div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="email" class="form-label fw-medium">
+                                            <i class="bi bi-envelope me-1 text-muted"></i>
+                                            Email *
+                                        </label>
+                                        <input type="email"
+                                               class="form-control"
+                                               id="email"
+                                               name="email"
+                                               required
+                                               autocomplete="email"
+                                               placeholder="admin@hospital.com">
+                                        <div class="help-text">Administrator contact email</div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="password" class="form-label fw-medium">
+                                            <i class="bi bi-lock me-1 text-muted"></i>
+                                            Password *
+                                        </label>
+                                        <input type="password"
+                                               class="form-control"
+                                               id="password"
+                                               name="password"
+                                               required
+                                               autocomplete="new-password"
+                                               minlength="8"
+                                               placeholder="Minimum 8 characters">
+                                        <div class="help-text">At least 8 characters for security</div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="confirmPassword" class="form-label fw-medium">
+                                            <i class="bi bi-lock-fill me-1 text-muted"></i>
+                                            Confirm Password *
+                                        </label>
+                                        <input type="password"
+                                               class="form-control"
+                                               id="confirmPassword"
+                                               name="confirmPassword"
+                                               required
+                                               autocomplete="new-password"
+                                               placeholder="Re-enter password">
+                                        <div class="validation-feedback" id="passwordMatch"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Medical Center Configuration -->
+                            <div class="mb-4">
+                                <div class="section-header">
+                                    <div class="section-number">2</div>
+                                    <div>
+                                        <h5 class="mb-0">Medical Center Configuration</h5>
+                                        <small class="text-muted">Configure your center's network identity</small>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="centerDisplayName" class="form-label fw-medium">
+                                            <i class="bi bi-hospital me-1 text-muted"></i>
+                                            Center Name (Display) *
+                                        </label>
+                                        <input type="text"
+                                               class="form-control"
+                                               id="centerDisplayName"
+                                               name="center_display_name"
+                                               required
+                                               placeholder="e.g., Central Hospital, Northern Clinic">
+                                        <div class="help-text">Full name of your medical center (for display purposes)</div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="centerId" class="form-label fw-medium">
+                                            <i class="bi bi-grid-3x3 me-1 text-muted"></i>
+                                            Center ID (Network Identifier) *
+                                        </label>
+                                        <div class="input-wrapper">
+                                            <input type="text"
+                                                   class="form-control"
+                                                   id="centerId"
+                                                   name="center_id"
+                                                   required
+                                                   pattern="^[a-z0-9-]{3,20}$"
+                                                   placeholder="e.g., central, norte, pediatrico">
+                                            <i class="bi bi-check-circle-fill validation-icon success"></i>
+                                            <i class="bi bi-x-circle-fill validation-icon error"></i>
+                                        </div>
+                                        <div class="validation-feedback" id="centerIdFeedback"></div>
+                                        <div class="alert alert-info mt-2 p-2" style="font-size: 0.85rem;">
+                                            <strong><i class="bi bi-info-circle me-1"></i>Network ID Rules:</strong>
+                                            <ul class="mb-0 mt-1" style="padding-left: 1.5rem;">
+                                                <li>3-20 characters</li>
+                                                <li>Lowercase letters, numbers, hyphens only</li>
+                                                <li>No spaces or special characters</li>
+                                                <li>This ID identifies your center in the MediNet network</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Preview Section -->
+                            <div id="previewSection" class="preview-card fade-in d-none">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="bi bi-eye me-2"></i>Configuration Preview
+                                </h6>
+                                <div class="preview-item">
+                                    <span class="preview-label">Network ID:</span>
+                                    <code class="preview-value" id="previewCenterId">-</code>
+                                </div>
+                                <div class="preview-item">
+                                    <span class="preview-label">Display Name:</span>
+                                    <span class="preview-value" id="previewCenterName">-</span>
+                                </div>
+                                <div class="preview-item">
+                                    <span class="preview-label">API URL:</span>
+                                    <code class="preview-value" id="previewApiUrl">-</code>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="submit"
+                                        id="submitBtn"
+                                        class="btn btn-primary"
+                                        disabled>
+                                    <span id="btnText">
+                                        <i class="bi bi-rocket-takeoff me-2"></i>
+                                        Complete Medical Center Setup
+                                    </span>
+                                    <span id="btnSpinner" class="d-none">
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        Setting up...
+                                    </span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Security Note -->
+                        <div class="info-box">
+                            <h6 class="fw-bold mb-2">
+                                <i class="bi bi-shield-lock me-2"></i>Security Note
+                            </h6>
+                            <p class="mb-0 small">
+                                After completing setup, this page will be permanently disabled.
+                                Remember your login credentials - they will be stored securely in the database.
+                                The first user will automatically receive <strong>ADMIN role</strong> with full permissions.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Real-time validation and form handling
+        const form = document.getElementById('setupForm');
+        const centerId = document.getElementById('centerId');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirmPassword');
+        const submitBtn = document.getElementById('submitBtn');
+        const previewSection = document.getElementById('previewSection');
+        const errorAlert = document.getElementById('errorAlert');
+
+        // Center ID validation
+        const centerIdPattern = /^[a-z0-9-]{3,20}$/;
+
+        centerId.addEventListener('input', function() {
+            const value = this.value.toLowerCase();
+            this.value = value;
+
+            const wrapper = this.parentElement;
+            const feedback = document.getElementById('centerIdFeedback');
+
+            if (!value) {
+                wrapper.classList.remove('valid', 'invalid');
+                feedback.textContent = '';
+                feedback.className = 'validation-feedback';
+                return;
+            }
+
+            if (value.startsWith('-') || value.endsWith('-')) {
+                wrapper.classList.remove('valid');
+                wrapper.classList.add('invalid');
+                feedback.textContent = 'Center ID cannot start or end with hyphen';
+                feedback.className = 'validation-feedback invalid';
+                return;
+            }
+
+            if (!centerIdPattern.test(value)) {
+                wrapper.classList.remove('valid');
+                wrapper.classList.add('invalid');
+                feedback.textContent = 'Only lowercase letters, numbers, and hyphens (3-20 characters)';
+                feedback.className = 'validation-feedback invalid';
+            } else {
+                wrapper.classList.remove('invalid');
+                wrapper.classList.add('valid');
+                feedback.textContent = 'Valid network identifier';
+                feedback.className = 'validation-feedback valid';
+            }
+
+            updatePreview();
+        });
+
+        // Password confirmation validation
+        function validatePasswordMatch() {
+            const feedback = document.getElementById('passwordMatch');
+
+            if (!confirmPassword.value) {
+                feedback.textContent = '';
+                feedback.className = 'validation-feedback';
+                return;
+            }
+
+            if (password.value === confirmPassword.value) {
+                confirmPassword.classList.remove('is-invalid');
+                confirmPassword.classList.add('is-valid');
+                feedback.textContent = 'Passwords match';
+                feedback.className = 'validation-feedback valid';
+            } else {
+                confirmPassword.classList.remove('is-valid');
+                confirmPassword.classList.add('is-invalid');
+                feedback.textContent = 'Passwords do not match';
+                feedback.className = 'validation-feedback invalid';
+            }
+        }
+
+        password.addEventListener('input', validatePasswordMatch);
+        confirmPassword.addEventListener('input', validatePasswordMatch);
+
+        // Update preview section
+        function updatePreview() {
+            const centerIdValue = centerId.value;
+            const centerNameValue = document.getElementById('centerDisplayName').value;
+
+            if (centerIdValue && centerNameValue) {
+                previewSection.classList.remove('d-none');
+                document.getElementById('previewCenterId').textContent = centerIdValue;
+                document.getElementById('previewCenterName').textContent = centerNameValue;
+                document.getElementById('previewApiUrl').textContent = `http://localhost:8000`;
+            }
+        }
+
+        document.getElementById('centerDisplayName').addEventListener('input', updatePreview);
+
+        // Enable submit button when form is valid
+        form.addEventListener('input', function() {
+            const isValid = form.checkValidity() &&
+                           password.value === confirmPassword.value &&
+                           centerIdPattern.test(centerId.value) &&
+                           !centerId.value.startsWith('-') &&
+                           !centerId.value.endsWith('-');
+
+            submitBtn.disabled = !isValid;
+        });
+
+        // Form submission
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+
+            // Disable button and show spinner
+            submitBtn.disabled = true;
+            document.getElementById('btnText').classList.add('d-none');
+            document.getElementById('btnSpinner').classList.remove('d-none');
+            errorAlert.classList.add('d-none');
+
+            try {
+                const formData = {
+                    username: document.getElementById('username').value.trim(),
+                    password: password.value,
+                    email: document.getElementById('email').value.trim(),
+                    center_id: centerId.value.toLowerCase().trim(),
+                    center_display_name: document.getElementById('centerDisplayName').value.trim()
+                };
+
+                const response = await fetch('/api/setup/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Success - show message and redirect
+                    alert(`✅ Medical Center Setup Complete!\n\n` +
+                          `Center ID: ${data.center.id}\n` +
+                          `Center Name: ${data.center.name}\n` +
+                          `Port: ${data.center.port}\n\n` +
+                          `Credentials saved to: ${data.credentials_file}\n\n` +
+                          `Redirecting to login...`);
+
+                    window.location.href = '/auth/login/';
+                } else {
+                    // Error - show message
+                    document.getElementById('errorMessage').textContent = data.error || 'Setup failed. Please try again.';
+                    errorAlert.classList.remove('d-none');
+
+                    // Re-enable button
+                    submitBtn.disabled = false;
+                    document.getElementById('btnText').classList.remove('d-none');
+                    document.getElementById('btnSpinner').classList.add('d-none');
+                }
+            } catch (error) {
+                console.error('Setup error:', error);
+                document.getElementById('errorMessage').textContent = 'Network error. Please check your connection and try again.';
+                errorAlert.classList.remove('d-none');
+
+                // Re-enable button
+                submitBtn.disabled = false;
+                document.getElementById('btnText').classList.remove('d-none');
+                document.getElementById('btnSpinner').classList.add('d-none');
+            }
+        });
+
+        // Focus animation
+        document.querySelectorAll('.form-control').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.classList.add('focused');
+            });
+
+            input.addEventListener('blur', function() {
+                if (!this.value) {
+                    this.parentElement.classList.remove('focused');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

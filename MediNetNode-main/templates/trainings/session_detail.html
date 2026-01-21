@@ -1,0 +1,1732 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .session-header {
+        background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .session-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 200px;
+        height: 200px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        transform: translate(50%, -50%);
+    }
+    
+    .session-id {
+        font-family: 'Courier New', monospace;
+        font-size: 1.5rem;
+        font-weight: bold;
+        background: rgba(255,255,255,0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        display: inline-block;
+        backdrop-filter: blur(10px);
+    }
+    
+    .status-badge-large {
+        font-size: 1rem;
+        font-weight: 600;
+        padding: 0.5rem 1.5rem;
+        border-radius: 25px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+        margin-top: 1rem;
+    }
+    
+    .status-starting { background: linear-gradient(45deg, #ffc107, #ffeb3b); color: #856404; }
+    .status-active { background: linear-gradient(45deg, #28a745, #20c997); color: white; box-shadow: 0 0 20px rgba(40, 167, 69, 0.5); }
+    .status-completed { background: linear-gradient(45deg, #007bff, #42a5f5); color: white; }
+    .status-failed { background: linear-gradient(45deg, #dc3545, #e57373); color: white; }
+    .status-cancelled { background: linear-gradient(45deg, #6c757d, #9e9e9e); color: white; }
+    
+    .info-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease-in-out;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    }
+    
+    .info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+    }
+    
+    .info-label i {
+        margin-right: 0.5rem;
+        color: #1976d2;
+    }
+    
+    .info-value {
+        font-family: 'Courier New', monospace;
+        background: rgba(25, 118, 210, 0.1);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    
+    .progress-enhanced {
+        height: 12px;
+        border-radius: 6px;
+        background: linear-gradient(45deg, #e9ecef, #f8f9fa);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .progress-enhanced .progress-bar {
+        border-radius: 6px;
+        background: linear-gradient(45deg, #00b894, #55a3ff);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .progress-enhanced .progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    
+    .rounds-table {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .rounds-table .table {
+        margin-bottom: 0;
+    }
+    
+    .rounds-table .table thead th {
+        background: #1976d2;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem 0.75rem;
+    }
+    
+    .rounds-table .table tbody tr {
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
+    }
+    
+    .rounds-table .table tbody tr:hover {
+        background-color: rgba(25, 118, 210, 0.05);
+        border-left-color: #1976d2;
+        transform: translateX(2px);
+    }
+    
+    .rounds-table .table tbody td {
+        padding: 0.75rem;
+        vertical-align: middle;
+    }
+    
+    .metric-badge {
+        color: white;
+        padding: 0.3rem 0.85rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 0.1rem;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Professional solid colors for metrics - Better palette */
+    .metric-badge.loss {
+        background: #e63946;
+    }
+
+    .metric-badge.accuracy {
+        background: #2a9d8f;
+    }
+
+    .metric-badge.precision {
+        background: #f77f00;
+    }
+
+    .metric-badge.recall {
+        background: #7209b7;
+    }
+
+    .metric-badge.f1 {
+        background: #06a6ed;
+    }
+    
+    .resource-card {
+        background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .resource-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    
+    .resource-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Configuration Modal Styling */
+    .config-json-modal {
+        background: #2d3748;
+        border-radius: 8px;
+        padding: 1.5rem;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .config-json-modal pre {
+        margin: 0;
+        color: #e2e8f0;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .config-json-modal code {
+        background: transparent;
+        color: #e2e8f0;
+        padding: 0;
+    }
+    
+    .modal-dialog.modal-xl {
+        max-width: 1140px;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid #dee2e6;
+        background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+        color: white;
+    }
+    
+    .modal-header .btn-close {
+        filter: invert(1);
+    }
+    
+    .modal-footer {
+        border-top: 1px solid #dee2e6;
+        background: #f8f9fa;
+    }
+    
+    .config-json {
+        background: #2d3748;
+        color: #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        max-height: 500px;
+        overflow-y: auto;
+        border: 1px solid #4a5568;
+    }
+    
+    .error-card {
+        background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        margin-top: 1rem;
+    }
+    
+    .error-message {
+        background: rgba(255,255,255,0.15);
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        backdrop-filter: blur(10px);
+        white-space: pre-wrap;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .auto-refresh-indicator {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(25, 118, 210, 0.95);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border-radius: 25px;
+        font-size: 0.85rem;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .auto-refresh-indicator:hover {
+        background: rgba(25, 118, 210, 1);
+        transform: scale(1.02);
+    }
+    
+    .auto-refresh-indicator.panel-open {
+        background: rgba(25, 118, 210, 1);
+        border-color: rgba(255,255,255,0.4);
+    }
+    
+    .auto-refresh-indicator .toggle-arrow {
+        transition: transform 0.3s ease;
+        font-size: 0.7rem;
+    }
+    
+    .auto-refresh-indicator.panel-open .toggle-arrow {
+        transform: rotate(180deg);
+    }
+    
+    .auto-refresh-indicator.updating {
+        background: rgba(40, 167, 69, 0.95);
+        animation: pulse 1s ease-in-out infinite alternate;
+    }
+    
+    /* Clean Refresh Control Styles */
+    .btn-ghost {
+        background: transparent;
+        border: 1px solid transparent;
+        color: #6c757d;
+        padding: 0.375rem 0.5rem;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-ghost:hover {
+        background: #f8f9fa;
+        color: #495057;
+        border-color: #dee2e6;
+    }
+    
+    .progress-info {
+        font-size: 0.85rem;
+    }
+    
+    /* Refresh Settings Modal - Zero Conflicts */
+    .refresh-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(2px);
+    }
+    
+    .refresh-modal-overlay.show {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .refresh-modal {
+        background: white;
+        border-radius: 16px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        transform: scale(0.9) translateY(20px);
+        transition: all 0.3s ease;
+    }
+    
+    .refresh-modal-overlay.show .refresh-modal {
+        transform: scale(1) translateY(0);
+    }
+    
+    .refresh-modal-header {
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .refresh-modal-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    
+    .refresh-modal-close {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    
+    .refresh-modal-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .refresh-modal-body {
+        padding: 24px;
+    }
+    
+    .current-status {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .status-item {
+        display: flex;
+        align-items: center;
+        font-size: 0.9rem;
+        color: #495057;
+    }
+    
+    .setting-section {
+        margin-bottom: 24px;
+    }
+    
+    .setting-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .interval-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        max-width: 520px;
+        margin: 0 auto;
+    }
+    
+    .interval-card {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        padding: 16px 8px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .interval-card:hover {
+        border-color: #42a5f5;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(66, 165, 245, 0.15);
+    }
+    
+    .interval-card.active {
+        background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+        color: white;
+        border-color: #1976d2;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(25, 118, 210, 0.3);
+    }
+    
+    .interval-card i {
+        font-size: 1.2rem;
+        margin-bottom: 4px;
+    }
+    
+    .interval-time {
+        font-size: 1rem;
+        font-weight: 700;
+    }
+    
+    .interval-label {
+        font-size: 0.75rem;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Manual Mode Section */
+    .manual-mode-section {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+    }
+    
+    .manual-mode-card {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 16px;
+        padding: 20px 32px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 350px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .manual-mode-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(108, 117, 125, 0.1), transparent);
+        transition: left 0.5s ease;
+    }
+    
+    .manual-mode-card:hover::before {
+        left: 100%;
+    }
+    
+    .manual-mode-card:hover {
+        border-color: #6c757d;
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(108, 117, 125, 0.2);
+    }
+    
+    .manual-mode-card.active {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+        border-color: #6c757d;
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(108, 117, 125, 0.4);
+    }
+    
+    .manual-mode-card i {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+    
+    .manual-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    
+    .manual-description {
+        font-size: 0.8rem;
+        opacity: 0.8;
+        font-style: italic;
+    }
+    
+    .refresh-modal-footer {
+        padding: 20px 24px;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .footer-actions {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        padding: 0 20px;
+    }
+    
+    .modal-btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        min-width: 140px;
+        justify-content: center;
+    }
+    
+    .modal-btn.secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .modal-btn.secondary:hover {
+        background: #5a6268;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .modal-btn.primary {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    }
+    
+    .modal-btn.primary:hover {
+        background: linear-gradient(135deg, #218838 0%, #1fa087 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    
+    .modal-btn.primary:disabled {
+        background: #dee2e6;
+        color: #6c757d;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .modal-btn.info {
+        background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+        color: white;
+    }
+    
+    .modal-btn.info:hover {
+        background: linear-gradient(135deg, #138496 0%, #1fa087 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+    }
+    
+    /* Pending changes indicator */
+    .interval-card.pending {
+        border-color: #ffc107;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+        box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.25);
+    }
+    
+    .manual-mode-card.pending {
+        border-color: #ffc107;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+        box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.25);
+    }
+    
+    /* Responsive Modal */
+    @media (max-width: 576px) {
+        .refresh-modal {
+            width: 95%;
+            margin: 10px;
+        }
+        
+        .refresh-modal-header {
+            padding: 16px 20px;
+        }
+        
+        .refresh-modal-body {
+            padding: 20px;
+        }
+        
+        .current-status {
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+        }
+        
+        .interval-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .manual-mode-card {
+            padding: 16px 24px;
+            max-width: 100%;
+        }
+        
+        .manual-title {
+            font-size: 1rem;
+        }
+        
+        .manual-description {
+            font-size: 0.75rem;
+        }
+        
+        .refresh-modal-footer {
+            padding: 16px 20px;
+        }
+        
+        .footer-actions {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .modal-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+    
+    @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.05); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-eye me-2 text-primary"></i>
+        Training Details
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{% url 'trainings:active_sessions' %}" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-activity me-1"></i>
+                Active Sessions
+            </a>
+            <a href="{% url 'trainings:history' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-clock-history me-1"></i>
+                History
+            </a>
+        </div>
+        {% if can_cancel %}
+        <div class="btn-group">
+            <button class="btn btn-outline-danger btn-sm" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#cancelModal">
+                <i class="bi bi-stop-circle me-1"></i>
+                Cancel Training
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Auto-refresh indicator (always visible on session detail page) -->
+<div class="auto-refresh-indicator" id="refreshIndicator">
+    <i class="bi bi-arrow-clockwise"></i>
+    <span id="refreshText">Auto-refresh in <span id="countdown">15</span>s</span>
+    <span class="toggle-arrow">▼</span>
+</div>
+
+
+<!-- Session Header -->
+<div class="session-header">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <div class="session-id">{{ session.session_id }}</div>
+            <h3 class="mt-2 mb-1">{{ session.dataset_name }}</h3>
+            <p class="mb-0 opacity-75">
+                <i class="bi bi-person-circle me-2"></i>
+                Started by {{ session.user.username }}
+                {% if session.client_id %}
+                    • Client: {{ session.client_id }}
+                {% endif %}
+            </p>
+            <div class="status-badge-large status-{{ session.status|lower }}">
+                {{ session.get_status_display }}
+            </div>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if session.duration %}
+            <div class="h2 mb-1">{{ session.duration }}</div>
+            <small class="opacity-75">Total Duration</small>
+            {% else %}
+            <div class="h2 mb-1">{{ session.started_at|timesince }}</div>
+            <small class="opacity-75">Running Time</small>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Session Information -->
+    <div class="col-lg-4 mb-4">
+        <div class="card info-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Session Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="bi bi-calendar3"></i>
+                        Started At
+                    </span>
+                    <span class="info-value">{{ session.started_at|date:"M j, Y H:i" }}</span>
+                </div>
+                
+                {% if session.completed_at %}
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="bi bi-calendar-check"></i>
+                        Completed At
+                    </span>
+                    <span class="info-value">{{ session.completed_at|date:"M j, Y H:i" }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="bi bi-server"></i>
+                        Server Address
+                    </span>
+                    <span class="info-value">{{ session.server_address }}</span>
+                </div>
+                
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="bi bi-database"></i>
+                        Dataset ID
+                    </span>
+                    <span class="info-value">{{ session.dataset_id|default:"N/A" }}</span>
+                </div>
+                
+                {% if session.process_id %}
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="bi bi-cpu"></i>
+                        Process ID
+                    </span>
+                    <span class="info-value">{{ session.process_id }}</span>
+                </div>
+                {% endif %}
+                <!-- Model Configuration -->
+                <div class="info-item ">
+                    <span class="info-label">
+                        <i class="bi bi-gear"></i>
+                        Model Configuration
+                    </span>
+                    <button class="btn btn-primary btn-sm" type="button" 
+                            data-bs-toggle="modal" data-bs-target="#configModal">
+                        <i class="bi bi-eye me-1"></i>
+                        View Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Progress and Metrics -->
+    <div class="col-lg-8 mb-4">
+        <!-- Training Progress -->
+        <div class="card info-card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-bar-chart me-2"></i>
+                    Training Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="fw-medium">Overall Progress</span>
+                    <span class="badge bg-primary" id="progressPercentage">{{ session.progress_percentage|floatformat:1 }}%</span>
+                </div>
+                
+                <div class="progress progress-enhanced mb-3">
+                    <div class="progress-bar" role="progressbar" 
+                         style="width: {{ session.progress_percentage }}%"
+                         id="progressBar"></div>
+                </div>
+                
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <div class="fw-bold text-primary h4" id="currentRound">{{ session.current_round }}</div>
+                        <small class="text-muted">Current Round</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold text-info h4">{{ session.total_rounds }}</div>
+                        <small class="text-muted">Total Rounds</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold text-success h4">{{ rounds.count }}</div>
+                        <small class="text-muted">Completed Rounds</small>
+                    </div>
+                </div>
+                
+                <!-- Clean Progress Header with Settings -->
+                <div class="border-top pt-2 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="progress-info">
+                            <small class="text-muted d-flex align-items-center">
+                                <i class="bi bi-arrow-clockwise me-1" style="font-size: 0.8rem;"></i>
+                                <span id="refreshStatus">Auto-refresh: <span id="nextRefresh">15s</span></span>
+                            </small>
+                        </div>
+                        
+                        <!-- Settings Button (Opens Modal) -->
+                        <button class="btn btn-sm btn-ghost" 
+                                type="button"
+                                title="Refresh settings"
+                                id="settingsBtn">
+                            <i class="bi bi-gear"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resource Usage -->
+                {% if session.cpu_usage or session.memory_usage %}
+                <div class="border-top pt-3">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-cpu me-1"></i>
+                        Resource Usage
+                    </h6>
+                    <div class="row">
+                        {% if session.cpu_usage %}
+                        <div class="col-6">
+                            <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, #dc3545 0%, #e57373 100%); color: white;">
+                                <div class="h4 mb-1" id="cpuUsage">{{ session.cpu_usage|floatformat:1 }}%</div>
+                                <small>CPU Usage</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if session.memory_usage %}
+                        <div class="col-6">
+                            <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, #007bff 0%, #42a5f5 100%); color: white;">
+                                <div class="h4 mb-1" id="memoryUsage">{{ session.memory_usage|floatformat:0 }} MB</div>
+                                <small>Memory Usage</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Final Metrics -->
+        {% if session.final_accuracy or session.final_loss or session.final_precision or session.final_recall or session.final_f1 %}
+        <div class="card info-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-trophy me-2"></i>
+                    Final Training Metrics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if session.final_accuracy %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <div class="h3 text-success mb-1">{{ session.final_accuracy|floatformat:4 }}</div>
+                            <small class="text-muted">Accuracy</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if session.final_loss %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <div class="h3 text-danger mb-1">{{ session.final_loss|floatformat:4 }}</div>
+                            <small class="text-muted">Loss</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if session.final_f1 %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <div class="h3 text-primary mb-1">{{ session.final_f1|floatformat:4 }}</div>
+                            <small class="text-muted">F1 Score</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if session.final_precision %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <div class="h3 text-info mb-1">{{ session.final_precision|floatformat:4 }}</div>
+                            <small class="text-muted">Precision</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if session.final_recall %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <div class="h3 text-warning mb-1">{{ session.final_recall|floatformat:4 }}</div>
+                            <small class="text-muted">Recall</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Training Rounds -->
+{% if rounds %}
+<div class="card rounds-table mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list-ol me-2"></i>
+            Training Rounds ({{ rounds.count }})
+        </h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th><i class="bi bi-arrow-repeat me-2"></i>Round</th>
+                    <th><i class="bi bi-graph-down-arrow me-2"></i>Loss</th>
+                    <th><i class="bi bi-bullseye me-2"></i>Accuracy</th>
+                    <th><i class="bi bi-crosshair me-2"></i>Precision</th>
+                    <th><i class="bi bi-check-circle me-2"></i>Recall</th>
+                    <th><i class="bi bi-star me-2"></i>F1 Score</th>
+                    <th><i class="bi bi-stopwatch me-2"></i>Duration</th>
+                    <th><i class="bi bi-cpu me-2"></i>Resources</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for round in rounds %}
+                <tr>
+                    <td>
+                        <span class="fw-bold text-primary">#{{ round.round_number }}</span>
+                    </td>
+                    <td>
+                        {% if round.loss %}
+                            <span class="metric-badge loss">
+                                {{ round.loss|floatformat:4 }}
+                            </span>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if round.accuracy %}
+                            <span class="metric-badge accuracy">
+                                {{ round.accuracy|floatformat:4 }}
+                            </span>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if round.precision %}
+                            <span class="metric-badge precision">
+                                {{ round.precision|floatformat:4 }}
+                            </span>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if round.recall %}
+                            <span class="metric-badge recall">
+                                {{ round.recall|floatformat:4 }}
+                            </span>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if round.f1_score %}
+                            <span class="metric-badge f1">
+                                {{ round.f1_score|floatformat:4 }}
+                            </span>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if round.duration %}
+                            <small class="text-muted">{{ round.duration }}</small>
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            {% if round.cpu_usage %}
+                            <span class="badge bg-danger" style="font-size: 0.7rem;">
+                                CPU: {{ round.cpu_usage|floatformat:0 }}%
+                            </span>
+                            {% endif %}
+                            {% if round.memory_usage %}
+                            <span class="badge bg-info" style="font-size: 0.7rem;">
+                                Mem: {{ round.memory_usage|floatformat:0 }}MB
+                            </span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Model Configuration Modal -->
+<div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="configModalLabel">
+                    <i class="bi bi-gear me-2"></i>
+                    Model Configuration
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="config-json-modal">
+                    <pre><code>{{ session.formatted_model_config|default:"No configuration available" }}</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Information -->
+{% if session.error_message %}
+<div class="error-card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            Error Information
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="error-message">{{ session.error_message }}</div>
+        {% if session.error_traceback %}
+        <details class="mt-3">
+            <summary class="fw-bold">Full Traceback</summary>
+            <div class="error-message mt-2">{{ session.error_traceback }}</div>
+        </details>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Refresh Settings Modal -->
+<div class="refresh-modal-overlay" id="refreshModalOverlay">
+    <div class="refresh-modal">
+        <div class="refresh-modal-header">
+            <h5 class="refresh-modal-title">
+                <i class="bi bi-gear me-2"></i>
+                Auto Refresh Settings
+            </h5>
+            <button class="refresh-modal-close" id="closeModalBtn">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        
+        <div class="refresh-modal-body">
+            <!-- Current Status -->
+            <div class="current-status">
+                <div class="status-item">
+                    <i class="bi bi-clock me-2"></i>
+                    <span>Current: <strong id="currentIntervalDisplay">15 seconds</strong></span>
+                </div>
+                <div class="status-item">
+                    <i class="bi bi-activity me-2"></i>
+                    <span id="statusDisplay">Active</span>
+                </div>
+            </div>
+            
+            <!-- Interval Selection -->
+            <div class="setting-section">
+                <h6 class="setting-title">Select Refresh Interval</h6>
+                <div class="interval-grid">
+                    <button class="interval-card refresh-option" data-interval="5">
+                        <i class="bi bi-lightning-fill"></i>
+                        <span class="interval-time">5s</span>
+                        <span class="interval-label">Fast</span>
+                    </button>
+                    <button class="interval-card refresh-option active" data-interval="15">
+                        <i class="bi bi-clock"></i>
+                        <span class="interval-time">15s</span>
+                        <span class="interval-label">Default</span>
+                    </button>
+                    <button class="interval-card refresh-option" data-interval="30">
+                        <i class="bi bi-clock-history"></i>
+                        <span class="interval-time">30s</span>
+                        <span class="interval-label">Moderate</span>
+                    </button>
+                    <button class="interval-card refresh-option" data-interval="60">
+                        <i class="bi bi-stopwatch"></i>
+                        <span class="interval-time">60s</span>
+                        <span class="interval-label">Slow</span>
+                    </button>
+                </div>
+                
+                <!-- Manual Mode - Prominente y centrado -->
+                <div class="manual-mode-section">
+                    <button class="manual-mode-card refresh-option" data-interval="manual">
+                        <i class="bi bi-pause-circle-fill"></i>
+                        <span class="manual-title">Manual Refresh Only</span>
+                        <span class="manual-description">Disable auto-refresh completely</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="refresh-modal-footer">
+            <div class="footer-actions">
+                <button class="modal-btn secondary" id="pauseModalBtn" onclick="togglePause()">
+                    <i class="bi bi-pause-fill me-2"></i><span id="pauseText">Pause Auto-refresh</span>
+                </button>
+                <button class="modal-btn info" onclick="refreshSession()">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Refresh Now
+                </button>
+                <button class="modal-btn primary" id="applyChangesBtn" onclick="applyIntervalChanges()">
+                    <i class="bi bi-check-lg me-2"></i>Apply Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Training Modal -->
+{% if can_cancel %}
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                    Cancel Training Session
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this training session?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone. All training progress will be lost.
+                </div>
+                <div class="mb-3">
+                    <strong>Session:</strong> {{ session.session_id|truncatechars:8 }}<br>
+                    <strong>Dataset:</strong> {{ session.dataset_name }}<br>
+                    <strong>Progress:</strong> {{ session.current_round }}/{{ session.total_rounds }} rounds ({{ session.progress_percentage|floatformat:1 }}%)
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Training</button>
+                <form method="post" action="{% url 'trainings:cancel_session' session.session_id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-stop-circle me-1"></i>
+                        Cancel Training
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let refreshCountdown = parseInt(localStorage.getItem('training_session_refresh_interval') || '15');
+    let currentInterval = refreshCountdown;
+    let countdownInterval;
+    let isPaused = localStorage.getItem('training_session_refresh_paused') === 'true';
+    
+    // Pending changes state
+    let pendingInterval = null;
+    let hasChanges = false;
+    
+    const refreshIndicator = document.getElementById('refreshIndicator');
+    const countdownElement = document.getElementById('countdown');
+    const refreshText = document.getElementById('refreshText');
+    const nextRefreshElement = document.getElementById('nextRefresh');
+    // pauseBtn removed in dropdown redesign
+    
+    // Initialize refresh control
+    initializeRefreshControl();
+    
+    // Modal functionality (zero conflicts)
+    const settingsBtn = document.getElementById('settingsBtn');
+    const modalOverlay = document.getElementById('refreshModalOverlay');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const refreshModal = document.querySelector('.refresh-modal');
+    
+    // Open modal
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openRefreshModal();
+        });
+    }
+    
+    // Close modal
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeRefreshModal);
+    }
+    
+    // Close on overlay click
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', function(e) {
+            if (e.target === modalOverlay) {
+                closeRefreshModal();
+            }
+        });
+    }
+    
+    // Prevent modal content clicks from closing modal
+    if (refreshModal) {
+        refreshModal.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modalOverlay.classList.contains('show')) {
+            closeRefreshModal();
+        }
+    });
+    
+    function openRefreshModal() {
+        modalOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden'; // Prevent background scroll
+        
+        // Reset pending state when opening
+        pendingInterval = null;
+        hasChanges = false;
+        
+        updateModalStatus();
+        updateIntervalSelection();
+        updateApplyButton();
+    }
+    
+    function closeRefreshModal() {
+        modalOverlay.classList.remove('show');
+        document.body.style.overflow = ''; // Restore scroll
+    }
+    
+    function updateModalStatus() {
+        const currentIntervalDisplay = document.getElementById('currentIntervalDisplay');
+        const statusDisplay = document.getElementById('statusDisplay');
+        
+        if (currentIntervalDisplay) {
+            if (currentInterval === 0) {
+                currentIntervalDisplay.textContent = 'Manual only';
+            } else {
+                currentIntervalDisplay.textContent = currentInterval + ' seconds';
+            }
+        }
+        
+        if (statusDisplay) {
+            if (isPaused) {
+                statusDisplay.textContent = 'Paused';
+                statusDisplay.style.color = '#ffc107';
+            } else if (currentInterval === 0) {
+                statusDisplay.textContent = 'Manual';
+                statusDisplay.style.color = '#6c757d';
+            } else {
+                statusDisplay.textContent = 'Active';
+                statusDisplay.style.color = '#28a745';
+            }
+        }
+    }
+    
+    function initializeRefreshControl() {
+        // Set up interval buttons - clear all active states first
+        const intervalButtons = document.querySelectorAll('.refresh-option');
+        
+        // Clear all active states first
+        intervalButtons.forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Then set correct active state and add listeners
+        intervalButtons.forEach(btn => {
+            const interval = btn.dataset.interval;
+            if (interval == currentInterval || (interval === 'manual' && currentInterval === 0)) {
+                btn.classList.add('active');
+            }
+            
+            btn.addEventListener('click', function() {
+                selectInterval(interval);
+            });
+        });
+        
+        // Set up pause button
+        // Pause functionality integrated into dropdown
+        updatePauseButton();
+        
+        // Load saved state
+        if (isPaused || currentInterval === 0) {
+            clearInterval(countdownInterval);
+            if (currentInterval === 0) {
+                refreshText.textContent = 'Manual refresh mode';
+                nextRefreshElement.textContent = 'Manual';
+            } else {
+                refreshText.textContent = 'Auto-refresh paused';
+                nextRefreshElement.textContent = 'Paused';
+            }
+        }
+    }
+    
+    function selectInterval(interval) {
+        // Mark as pending change
+        pendingInterval = interval;
+        hasChanges = (pendingInterval !== (currentInterval === 0 ? 'manual' : currentInterval.toString()));
+        
+        // Update UI to show pending selection
+        updateIntervalSelection();
+        updateApplyButton();
+    }
+    
+    function updateIntervalSelection() {
+        // Clear all states first
+        document.querySelectorAll('.refresh-option').forEach(btn => {
+            btn.classList.remove('active', 'pending');
+        });
+        
+        // Show current active state
+        const currentValue = currentInterval === 0 ? 'manual' : currentInterval.toString();
+        const currentBtn = document.querySelector(`[data-interval="${currentValue}"]`);
+        if (currentBtn) {
+            currentBtn.classList.add('active');
+        }
+        
+        // Show pending state if different
+        if (pendingInterval && pendingInterval !== currentValue) {
+            const pendingBtn = document.querySelector(`[data-interval="${pendingInterval}"]`);
+            if (pendingBtn) {
+                pendingBtn.classList.add('pending');
+            }
+        }
+    }
+    
+    function updateApplyButton() {
+        const applyBtn = document.getElementById('applyChangesBtn');
+        if (applyBtn) {
+            // Always enabled - let user click even if no changes
+            applyBtn.disabled = false;
+            
+            if (hasChanges) {
+                applyBtn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Apply Changes';
+                applyBtn.classList.remove('no-changes');
+            } else {
+                applyBtn.innerHTML = '<i class="bi bi-check-lg me-2"></i>Apply Changes';
+                applyBtn.classList.add('no-changes');
+            }
+        }
+    }
+    
+    function applyIntervalChanges() {
+        // If no changes, just close modal quietly
+        if (!hasChanges || !pendingInterval) {
+            closeRefreshModal();
+            return;
+        }
+        
+        // Clear existing interval
+        clearInterval(countdownInterval);
+        
+        if (pendingInterval === 'manual') {
+            currentInterval = 0;
+            refreshCountdown = 0;
+            refreshText.textContent = 'Manual refresh mode';
+            nextRefreshElement.textContent = 'Manual';
+            localStorage.setItem('training_session_refresh_interval', '0');
+        } else {
+            currentInterval = parseInt(pendingInterval);
+            refreshCountdown = currentInterval;
+            isPaused = false;
+            localStorage.setItem('training_session_refresh_interval', pendingInterval);
+            localStorage.removeItem('training_session_refresh_paused');
+            startCountdown();
+        }
+        
+        // Reset pending state
+        pendingInterval = null;
+        hasChanges = false;
+        
+        // Update UI
+        updateIntervalSelection();
+        updateApplyButton();
+        updatePauseButton();
+        updateModalStatus();
+        
+        // Close modal after applying
+        closeRefreshModal();
+    }
+    
+    function togglePause() {
+        if (currentInterval === 0) return; // Can't pause manual mode
+        
+        isPaused = !isPaused;
+        
+        if (isPaused) {
+            clearInterval(countdownInterval);
+            refreshText.textContent = 'Auto-refresh paused';
+            nextRefreshElement.textContent = 'Paused';
+            localStorage.setItem('training_session_refresh_paused', 'true');
+        } else {
+            refreshCountdown = currentInterval;
+            localStorage.removeItem('training_session_refresh_paused');
+            startCountdown();
+        }
+        
+        updatePauseButton();
+    }
+    
+    function updatePauseButton() {
+        const pauseModalBtn = document.getElementById('pauseModalBtn');
+        const pauseText = document.getElementById('pauseText');
+        
+        if (pauseModalBtn && pauseText) {
+            if (currentInterval === 0) {
+                // Manual mode - hide pause button
+                pauseModalBtn.style.display = 'none';
+            } else {
+                // Auto-refresh mode - show pause button
+                pauseModalBtn.style.display = 'flex';
+                const icon = pauseModalBtn.querySelector('i');
+                
+                if (isPaused) {
+                    icon.className = 'bi bi-play-fill me-2';
+                    pauseText.textContent = 'Resume Auto-refresh';
+                } else {
+                    icon.className = 'bi bi-pause-fill me-2';
+                    pauseText.textContent = 'Pause Auto-refresh';
+                }
+            }
+        }
+        
+        // Also update modal status when open
+        updateModalStatus();
+    }
+    
+    function startCountdown() {
+        countdownInterval = setInterval(updateCountdown, 1000);
+        updateCountdownDisplay();
+    }
+    
+    function updateCountdownDisplay() {
+        if (currentInterval === 0) {
+            countdownElement.textContent = 'Manual';
+            nextRefreshElement.textContent = 'Manual';
+        } else if (isPaused) {
+            countdownElement.textContent = 'Paused';
+            nextRefreshElement.textContent = 'Paused';
+        } else {
+            countdownElement.textContent = refreshCountdown;
+            nextRefreshElement.textContent = refreshCountdown + 's';
+        }
+    }
+    
+    function updateCountdown() {
+        updateCountdownDisplay();
+        refreshCountdown--;
+        
+        if (refreshCountdown < 0) {
+            refreshCountdown = currentInterval;
+            refreshSessionStatus();
+        }
+    }
+    
+    function refreshSessionStatus() {
+        refreshIndicator.classList.add('updating');
+        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Updating...';
+        nextRefreshElement.textContent = 'Updating...';
+        
+        fetch(`/trainings/api/session-status/{{ session.session_id }}/`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                }
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    return response.json().then(data => {
+                        if (data.error === 'Session expired') {
+                            alert(data.message || 'Tu sesión ha expirado');
+                            window.location.href = data.redirect || '/auth/login/';
+                        }
+                        throw new Error(data.error || 'Unauthorized');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                updateSessionStatus(data);
+                refreshIndicator.classList.remove('updating');
+                
+                // If session is no longer active or starting, stop auto-refresh
+                if (!data.is_active && data.status !== 'STARTING') {
+                    refreshIndicator.style.display = 'none';
+                    document.getElementById('refreshControlPanel').style.display = 'none';
+                    clearInterval(countdownInterval);
+                    location.reload(); // Reload to show final state
+                } else {
+                    if (currentInterval === 0) {
+                        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Manual refresh mode';
+                        nextRefreshElement.textContent = 'Manual';
+                    } else if (isPaused) {
+                        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh paused';
+                        nextRefreshElement.textContent = 'Paused';
+                    } else {
+                        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh in <span id="countdown">' + refreshCountdown + '</span>s';
+                        nextRefreshElement.textContent = refreshCountdown + 's';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing session status:', error);
+                refreshIndicator.classList.remove('updating');
+                refreshText.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Refresh failed';
+                nextRefreshElement.textContent = 'Error';
+            });
+    }
+    
+    function updateSessionStatus(data) {
+        // Update progress
+        const progressBar = document.getElementById('progressBar');
+        const progressPercentage = document.getElementById('progressPercentage');
+        const currentRound = document.getElementById('currentRound');
+        
+        if (progressBar) {
+            progressBar.style.width = data.progress_percentage + '%';
+        }
+        if (progressPercentage) {
+            progressPercentage.textContent = data.progress_percentage.toFixed(1) + '%';
+        }
+        if (currentRound) {
+            currentRound.textContent = data.current_round;
+        }
+        
+        // Update resources
+        const cpuUsage = document.getElementById('cpuUsage');
+        const memoryUsage = document.getElementById('memoryUsage');
+        
+        if (cpuUsage && data.cpu_usage) {
+            cpuUsage.textContent = data.cpu_usage.toFixed(1) + '%';
+        }
+        if (memoryUsage && data.memory_usage) {
+            memoryUsage.textContent = Math.round(data.memory_usage) + ' MB';
+        }
+        
+        // Update training rounds if new rounds are available
+        if (data.rounds_count) {
+            updateTrainingRoundsTable(data.rounds_count);
+        }
+    }
+    
+    function updateTrainingRoundsTable(roundsCount) {
+        // Check if we need to reload the page for new rounds
+        const currentTableRows = document.querySelectorAll('.rounds-table tbody tr').length;
+        
+        if (roundsCount > currentTableRows) {
+            // New rounds available - reload page to show complete table
+            console.log(`New training rounds detected: ${roundsCount} vs ${currentTableRows}, reloading page...`);
+            location.reload();
+        }
+    }
+    
+    // Start countdown if not paused and not manual
+    if (!isPaused && currentInterval > 0) {
+        startCountdown();
+    }
+    
+    // Toggle panel and manual refresh on click
+    refreshIndicator.addEventListener('click', function(e) {
+        // Toggle panel visibility
+        const panel = document.getElementById('refreshControlPanel');
+        const isOpen = panel.classList.contains('show');
+        
+        if (isOpen) {
+            panel.classList.remove('show');
+            refreshIndicator.classList.remove('panel-open');
+        } else {
+            panel.classList.add('show');
+            refreshIndicator.classList.add('panel-open');
+        }
+        
+        e.stopPropagation(); // Prevent bubbling
+    });
+    
+    // Close panel when clicking outside
+    document.addEventListener('click', function(e) {
+        const panel = document.getElementById('refreshControlPanel');
+        const indicator = document.getElementById('refreshIndicator');
+        
+        if (!panel.contains(e.target) && !indicator.contains(e.target)) {
+            panel.classList.remove('show');
+            refreshIndicator.classList.remove('panel-open');
+        }
+    });
+    
+    // Make functions globally available
+    window.refreshSession = refreshSessionStatus;
+    window.refreshSessionStatus = refreshSessionStatus;
+    window.togglePause = togglePause;
+    window.applyIntervalChanges = applyIntervalChanges;
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (countdownInterval) clearInterval(countdownInterval);
+    });
+});
+</script>
+{% endblock %}

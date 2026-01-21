@@ -1,0 +1,400 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}System Audit Logs - MediNet{% endblock %}
+
+{% block page_title %}System Audit Logs{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>
+    Back to Dashboard
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filters Card -->
+<div class="modern-card mb-4">
+    <div class="card-header bg-transparent border-0 px-4 py-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <div class="filter-icon-wrapper me-3">
+                    <i class="bi bi-funnel-fill text-primary"></i>
+                </div>
+                <div>
+                    <h5 class="card-title fw-bold mb-0">Search & Filter Logs</h5>
+                    <small class="text-muted">Find specific audit entries</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                {% if request.GET %}
+                <span class="text-success fw-medium small">
+                    <i class="bi bi-check-circle me-1"></i>
+                    {{ page_obj.paginator.count }} filtered
+                </span>
+                {% endif %}
+                <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                    {{ total_logs }} total logs
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card-body px-4 py-3">
+        <form method="get" class="filter-form">
+            <!-- Primary Filters Row -->
+            <div class="filter-section mb-4">
+                <div class="row g-3 align-items-end">
+                    <!-- User Search -->
+                    <div class="col-xl-4 col-lg-4 col-md-6">
+                        <label class="form-label text-muted fw-medium mb-2 small">
+                            <i class="bi bi-person me-1"></i>User
+                        </label>
+                        <div class="input-group">
+                            <input type="text" name="user" class="form-control border-end-0" 
+                                   placeholder="Search username..." 
+                                   value="{{ current_filters.user }}">
+                            <span class="input-group-text bg-transparent border-start-0">
+                                <i class="bi bi-search text-muted"></i>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Filter -->
+                    <div class="col-xl-2 col-lg-3 col-md-6">
+                        <label class="form-label text-muted fw-medium mb-2 small">
+                            <i class="bi bi-activity me-1"></i>Action
+                        </label>
+                        <select name="action" class="form-select">
+                            <option value="">All actions</option>
+                            {% for action in available_actions %}
+                                <option value="{{ action }}" {% if current_filters.action == action %}selected{% endif %}>
+                                    {{ action|capfirst }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Status Filter -->
+                    <div class="col-xl-2 col-lg-2 col-md-6">
+                        <label class="form-label text-muted fw-medium mb-2 small">
+                            <i class="bi bi-check-circle me-1"></i>Status
+                        </label>
+                        <select name="success" class="form-select">
+                            <option value="">All status</option>
+                            <option value="true" {% if current_filters.success == 'true' %}selected{% endif %}>Success</option>
+                            <option value="false" {% if current_filters.success == 'false' %}selected{% endif %}>Failed</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="col-xl-4 col-lg-3 col-md-6">
+                        <div class="d-flex gap-2 justify-content-end">
+                            {% if request.GET %}
+                            <a href="{% url 'system_audit_logs' %}" 
+                               class="btn btn-outline-secondary d-flex align-items-center" 
+                               title="Clear Filters">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                <span class="d-none d-sm-inline">Clear Filters</span>
+                            </a>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary d-flex align-items-center px-4">
+                                <i class="bi bi-search me-2"></i>
+                                Search Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Date Range Section -->
+            <div class="filter-section">
+                <div class="date-range-toggle mb-3">
+                    <button type="button" 
+                            class="btn btn-link text-decoration-none p-0 d-flex align-items-center text-muted fw-medium" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#dateFilters" 
+                            aria-expanded="{% if current_filters.date_from or current_filters.date_to %}true{% else %}false{% endif %}">
+                        <i class="bi bi-calendar-range me-2"></i>
+                        Date Range Filter
+                        <i class="bi bi-chevron-down ms-2 collapse-icon transition-transform"></i>
+                    </button>
+                </div>
+                
+                <div class="collapse {% if current_filters.date_from or current_filters.date_to %}show{% endif %}" id="dateFilters">
+                    <div class="date-filters-container bg-light bg-opacity-30 rounded-3 p-3">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted fw-medium mb-2 small">
+                                    <i class="bi bi-calendar-event me-1"></i>From Date
+                                </label>
+                                <input type="date" name="date_from" class="form-control" 
+                                       value="{{ current_filters.date_from }}"
+                                       max="{% now 'Y-m-d' %}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted fw-medium mb-2 small">
+                                    <i class="bi bi-calendar-check me-1"></i>To Date
+                                </label>
+                                <input type="date" name="date_to" class="form-control" 
+                                       value="{{ current_filters.date_to }}"
+                                       max="{% now 'Y-m-d' %}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- System Logs Table -->
+<div class="modern-card">
+    <div class="card-header bg-transparent border-0 p-4 pb-0">
+        <h5 class="card-title fw-bold mb-0">
+            <i class="bi bi-journal-text me-2"></i>System Audit Trail
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if page_obj %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="border-0 fw-semibold px-4 py-3">Date & Time</th>
+                        <th class="border-0 fw-semibold">User</th>
+                        <th class="border-0 fw-semibold">Action</th>
+                        <th class="border-0 fw-semibold">Resource</th>
+                        <th class="border-0 fw-semibold">Status</th>
+                        <th class="border-0 fw-semibold">IP Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in page_obj %}
+                    <tr class="border-bottom border-light">
+                        <td class="px-4 py-3">
+                            <div class="fw-semibold">{{ log.timestamp|date:"F d, Y" }}</div>
+                            <small class="text-muted">{{ log.timestamp|date:"H:i T" }}</small>
+                        </td>
+                        <td class="py-3">
+                            <div class="d-flex align-items-center">
+                                <div class="user-avatar bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px; font-size: 0.75rem;">
+                                    {% if log.user %}{{ log.user.username|slice:":1"|upper }}{% else %}S{% endif %}
+                                </div>
+                                <div>
+                                    <div class="fw-medium">{% if log.user %}{{ log.user.username }}{% else %}System{% endif %}</div>
+                                    {% if log.user.role %}
+                                    <small class="text-muted">{{ log.user.role.name }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3">
+                            <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                <i class="bi bi-activity me-1"></i>{{ log.action|capfirst }}
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            <span class="text-muted">{{ log.resource|default:"—" }}</span>
+                        </td>
+                        <td class="py-3">
+                            {% if log.success %}
+                                <span class="badge bg-success bg-opacity-10 text-success px-2 py-1">
+                                    <i class="bi bi-check-circle me-1"></i>Success
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1">
+                                    <i class="bi bi-x-circle me-1"></i>Failed
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3">
+                            <code class="bg-light px-2 py-1 rounded text-muted small">{{ log.ip_address|default:"—" }}</code>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 80px; height: 80px;">
+                <i class="bi bi-journal-x display-5"></i>
+            </div>
+            <h5 class="fw-semibold text-dark mb-2">No Logs Found</h5>
+            <p class="text-muted">No audit logs match your current filters.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Logs pagination" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Filter Section Styling */
+.filter-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+}
+
+.filter-form .form-control,
+.filter-form .form-select {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.filter-form .form-control:focus,
+.filter-form .form-select:focus {
+    border-color: #42a5f5;
+    box-shadow: 0 0 0 0.2rem rgba(66, 165, 245, 0.15);
+}
+
+.filter-form .input-group .form-control {
+    border-radius: 8px 0 0 8px;
+}
+
+.filter-form .input-group-text {
+    border: 1px solid #e9ecef;
+    border-radius: 0 8px 8px 0;
+    background: transparent;
+}
+
+.filter-section {
+    position: relative;
+}
+
+.date-filters-container {
+    border: 1px solid rgba(66, 165, 245, 0.1);
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+    font-size: 12px;
+}
+
+.collapse-icon[aria-expanded="true"] {
+    transform: rotate(180deg);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+}
+
+.btn-outline-secondary {
+    border-radius: 8px;
+    border-color: #dee2e6;
+    color: #6c757d;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-secondary:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    color: #495057;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .filter-icon-wrapper {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .d-none.d-sm-inline {
+        display: none !important;
+    }
+    
+    .btn {
+        font-size: 0.875rem;
+        padding: 0.6rem 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .justify-content-end {
+        justify-content: stretch !important;
+    }
+    
+    .d-flex.gap-2 > * {
+        flex: 1;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle collapse icon rotation
+    const dateToggle = document.querySelector('[data-bs-target="#dateFilters"]');
+    const collapseElement = document.getElementById('dateFilters');
+    
+    if (dateToggle && collapseElement) {
+        collapseElement.addEventListener('shown.bs.collapse', function() {
+            dateToggle.setAttribute('aria-expanded', 'true');
+        });
+        
+        collapseElement.addEventListener('hidden.bs.collapse', function() {
+            dateToggle.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,567 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dataset Dashboard - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Dataset Dashboard Specific Styles */
+    .metric-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        transition: all 0.3s ease;
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--primary-gradient);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-hover);
+    }
+
+    .metric-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+        opacity: 0.8;
+    }
+
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--primary-dark);
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+
+    .chart-container {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        position: relative;
+        height: 350px;
+    }
+
+    .chart-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-section {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .dataset-item {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        display: flex;
+        justify-content: between;
+        align-items: center;
+    }
+
+    .dataset-item:last-child {
+        border-bottom: none;
+    }
+
+    .dataset-info h6 {
+        margin: 0 0 0.25rem 0;
+        font-weight: 600;
+        color: var(--primary-dark);
+    }
+
+    .dataset-info small {
+        color: #6c757d;
+    }
+
+    .access-badge {
+        background: var(--primary-light);
+        color: var(--primary-color);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .domain-tag {
+        background: rgba(66, 165, 245, 0.1);
+        color: var(--primary-color);
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: capitalize;
+    }
+
+    .quick-actions {
+        background: var(--primary-light);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .btn-action {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 500;
+        margin-right: 0.75rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-action:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 15px rgba(66, 165, 245, 0.3);
+        color: white;
+    }
+
+    .btn-action.secondary {
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--primary-color);
+        border: 1px solid rgba(66, 165, 245, 0.2);
+    }
+
+    .btn-action.secondary:hover {
+        background: white;
+        color: var(--primary-dark);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+        color: var(--primary-color);
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+
+    .status-indicator.healthy {
+        background: #28a745;
+    }
+
+    .status-indicator.warning {
+        background: #ffc107;
+    }
+
+    .status-indicator.success {
+        background: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="dashboard-hero">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="bi bi-database me-2"></i>
+                    Dataset Management
+                </h1>
+                <p class="mb-0 opacity-90">
+                    Overview and metrics for medical dataset administration
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'dataset:upload' %}" class="btn btn-light">
+                    <i class="bi bi-cloud-upload me-2"></i>
+                    Upload Dataset
+                </a>
+                <a href="{% url 'dataset:list' %}" class="btn btn-outline-light">
+                    <i class="bi bi-list-ul me-2"></i>
+                    View All
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-database"></i>
+                </div>
+                <div class="metric-value">{{ total_datasets }}</div>
+                <div class="metric-label">Total Datasets</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-hdd"></i>
+                </div>
+                <div class="metric-value">{{ total_size_formatted }}</div>
+                <div class="metric-label">Storage Used</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+                <div class="metric-value">{{ active_researchers }}</div>
+                <div class="metric-label">Active Researchers</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div class="metric-value">{{ total_assignments }}</div>
+                <div class="metric-label">Access Assignments</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions mb-4">
+        <div class="section-title">
+            <i class="bi bi-lightning"></i>
+            Quick Actions
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'dataset:upload' %}" class="btn-action">
+                <i class="bi bi-cloud-upload"></i>
+                Upload New Dataset
+            </a>
+            <a href="{% url 'dataset:list' %}" class="btn-action secondary">
+                <i class="bi bi-list-ul"></i>
+                Manage All Datasets
+            </a>
+            <a href="#" class="btn-action secondary">
+                <i class="bi bi-graph-up"></i>
+                Advanced Analytics
+            </a>
+            <a href="#" class="btn-action secondary">
+                <i class="bi bi-gear"></i>
+                System Settings
+            </a>
+        </div>
+    </div>
+
+    <!-- Charts & Lists Section -->
+    <div class="row mb-4">
+        <!-- Medical Domain Distribution -->
+        <div class="col-lg-4">
+            <div class="chart-container" style="height: 400px;">
+                <div class="chart-title">
+                    <i class="bi bi-pie-chart"></i>
+                    Medical Domains
+                </div>
+                <canvas id="domainsChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+        
+        <!-- Recent Datasets -->
+        <div class="col-lg-4">
+            <div class="info-section" style="height: 400px; display: flex; flex-direction: column;">
+                <div class="section-title">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Datasets
+                    <span class="badge bg-primary ms-2">{{ recent_datasets|length }}</span>
+                </div>
+                <div class="flex-grow-1" style="overflow-y: auto;">
+                    {% if recent_datasets %}
+                        {% for dataset in recent_datasets|slice:":3" %}
+                        <div class="dataset-item">
+                            <div class="d-flex align-items-center flex-grow-1">
+                                <i class="bi bi-file-earmark-medical me-3 text-primary"></i>
+                                <div class="dataset-info flex-grow-1">
+                                    <h6>{{ dataset.name|truncatechars:25 }}</h6>
+                                    <small>
+                                        <span class="domain-tag">{{ dataset.medical_domain|title }}</span>
+                                        <span class="text-muted ms-2">{{ dataset.uploaded_at|date:"M d, Y" }}</span>
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">{{ dataset.get_file_size_display }}</small>
+                                    <small class="text-muted">{{ dataset.file_format|upper }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if recent_datasets|length > 3 %}
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-three-dots"></i> Showing 3 of {{ recent_datasets|length }} datasets
+                            </small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <h5>No Recent Datasets</h5>
+                            <p class="text-muted">No datasets uploaded in the last 7 days</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Accessed Datasets -->
+        <div class="col-lg-4">
+            <div class="info-section" style="height: 400px; display: flex; flex-direction: column;">
+                <div class="section-title">
+                    <i class="bi bi-trophy"></i>
+                    Most Accessed Datasets
+                </div>
+                <div class="flex-grow-1" style="overflow-y: auto;">
+                    {% if top_datasets %}
+                        {% for dataset in top_datasets|slice:":3" %}
+                        <div class="dataset-item">
+                            <div class="d-flex align-items-center justify-content-between w-100">
+                                <div class="dataset-info">
+                                    <h6>{{ dataset.name|truncatechars:25 }}</h6>
+                                    <small class="text-muted">{{ dataset.medical_domain|title }}</small>
+                                </div>
+                                <div class="access-badge">
+                                    {{ dataset.access_count }} access{{ dataset.access_count|pluralize:"es" }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if top_datasets|length > 3 %}
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-three-dots"></i> Showing 3 of {{ top_datasets|length }} datasets
+                            </small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-graph-up"></i>
+                            <h5>No Access Statistics</h5>
+                            <p class="text-muted">Access statistics will appear here once datasets are used</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Chart color scheme matching the design system
+    const colors = {
+        primary: '#42a5f5',
+        primaryDark: '#1976d2',
+        primaryLight: '#e3f2fd',
+        success: '#4caf50',
+        warning: '#ff9800',
+        danger: '#f44336',
+        info: '#00bcd4'
+    };
+
+
+
+    // Medical domains chart
+    const domainsCtx = document.getElementById('domainsChart').getContext('2d');
+    const domainsData = [
+        {% for domain in datasets_by_domain %}
+        {
+            label: '{{ domain.display_name|title }}',
+            value: {{ domain.total_count }}
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Extended color palette for medical domains chart
+    const extendedColors = [
+        colors.primary,     // #42a5f5 - Blue
+        colors.success,     // #4caf50 - Green  
+        colors.warning,     // #ff9800 - Orange
+        colors.danger,      // #f44336 - Red
+        colors.info,        // #00bcd4 - Cyan
+        colors.primaryDark, // #1976d2 - Dark Blue
+        '#9c27b0',         // Purple
+        '#ff5722',         // Deep Orange
+        '#795548',         // Brown
+        '#607d8b',         // Blue Grey
+        '#e91e63',         // Pink
+        '#673ab7',         // Deep Purple
+        '#3f51b5',         // Indigo
+        '#009688',         // Teal
+        '#8bc34a',         // Light Green
+        '#ffeb3b',         // Yellow
+        '#ff6f00',         // Amber
+        '#6d4c41',         // Brown variant
+        '#455a64',         // Blue Grey variant
+        '#8e24aa'          // Purple variant
+    ];
+    
+    // Use modulo to cycle through colors if more domains than colors
+    const chartColors = domainsData.map((_, index) => extendedColors[index % extendedColors.length]);
+    
+    new Chart(domainsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: domainsData.map(item => item.label),
+            datasets: [{
+                data: domainsData.map(item => item.value),
+                backgroundColor: chartColors,
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                borderRadius: 8,
+                cutout: '65%',
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    bottom: 20,
+                    left: 20,
+                    right: 20
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    align: 'center',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: {
+                            size: 12,
+                            family: 'system-ui, -apple-system, sans-serif',
+                            weight: '500'
+                        },
+                        color: '#495057',
+                        boxWidth: 14,
+                        boxHeight: 14,
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    const backgroundColor = dataset.backgroundColor[i];
+                                    
+                                    return {
+                                        text: label,
+                                        fillStyle: backgroundColor,
+                                        strokeStyle: backgroundColor,
+                                        lineWidth: 0,
+                                        pointStyle: 'circle',
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    titleColor: '#495057',
+                    bodyColor: '#6c757d',
+                    borderColor: 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1,
+                    cornerRadius: 12,
+                    padding: 15,
+                    displayColors: true,
+                    usePointStyle: true,
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: ${context.raw} datasets (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 1000,
+                easing: 'easeOutCubic'
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

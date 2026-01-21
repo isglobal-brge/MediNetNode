@@ -1,0 +1,46 @@
+# Don't copy local .env to Docker image
+MediNetNode-main/.env
+
+# Don't copy local development files
+MediNetNode-main/__pycache__
+MediNetNode-main/*.pyc
+MediNetNode-main/*.pyo
+MediNetNode-main/*.pyd
+MediNetNode-main/.Python
+MediNetNode-main/venv/
+MediNetNode-main/env/
+MediNetNode-main/.venv/
+
+# Don't copy local databases
+MediNetNode-main/*.sqlite3
+MediNetNode-main/db.sqlite3
+
+# Don't copy local logs
+MediNetNode-main/logs/
+MediNetNode-main/*.log
+
+# Don't copy local media/static (should be in volumes)
+MediNetNode-main/media/
+MediNetNode-main/static/
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (optional, depends if you want docs in container)
+*.md
+!README.md
+
+# Testing
+MediNetNode-main/htmlcov/
+MediNetNode-main/.coverage
+MediNetNode-main/.pytest_cache/
+MediNetNode-main/.tox/

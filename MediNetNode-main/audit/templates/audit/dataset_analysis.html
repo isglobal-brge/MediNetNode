@@ -1,0 +1,500 @@
+{% extends 'audit/base_auditor.html' %}
+{% load static %}
+
+{% block title %}Dataset Analysis - MediNet{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    /* Dataset analysis specific styling */
+    .dataset-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .dataset-card:hover {
+        box-shadow: var(--shadow-hover);
+    }
+    
+    /* Sensitivity level colors */
+    .sensitivity-1 { background-color: #4caf50; }
+    .sensitivity-2 { background-color: #8bc34a; }
+    .sensitivity-3 { background-color: #ffeb3b; color: #333; }
+    .sensitivity-4 { background-color: #ff9800; }
+    .sensitivity-5 { background-color: #f44336; }
+    
+    /* Hourly heatmap */
+    .heatmap-hour {
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .heatmap-hour:hover {
+        transform: scale(1.1);
+        z-index: 10;
+        position: relative;
+    }
+    
+    /* Heat levels - Audit Theme */
+    .heat-0 { background-color: #f8f9fa; color: #6c757d; }
+    .heat-1 { background-color: #fff3e0; color: var(--audit-dark); }
+    .heat-2 { background-color: #ffcc80; color: var(--audit-dark); }
+    .heat-3 { background-color: #ffab40; color: white; }
+    .heat-4 { background-color: var(--audit-primary); color: white; }
+    .heat-5 { background-color: var(--audit-dark); color: white; }
+    
+    /* Pattern alerts */
+    .pattern-alert {
+        border-left: 4px solid #ff5722;
+        background: rgba(255, 87, 34, 0.05);
+    }
+    
+    /* Chart container */
+    .chart-container {
+        position: relative;
+        height: 300px;
+    }
+    
+    /* Medical domain badges - Audit Theme */
+    .domain-badge {
+        background: var(--audit-gradient);
+        border-radius: 20px;
+        padding: 0.5rem 1rem;
+        color: white;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Audit theme for primary elements */
+    .btn-primary {
+        background-color: var(--audit-primary);
+        border-color: var(--audit-primary);
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--audit-dark);
+        border-color: var(--audit-dark);
+    }
+    
+    .text-primary {
+        color: var(--audit-primary) !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Dataset Access Analysis{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-calendar3 me-1"></i>
+            Last {{ days }} days
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="?days=7">Last 7 days</a></li>
+            <li><a class="dropdown-item" href="?days=30">Last 30 days</a></li>
+            <li><a class="dropdown-item" href="?days=90">Last 90 days</a></li>
+        </ul>
+    </div>
+    <a href="{% url 'audit:auditor_dashboard' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+    <a href="{% url 'audit:export_audit_report' %}?category=DATA_ACCESS&days={{ days }}" class="btn btn-outline-success">
+        <i class="bi bi-download me-1"></i>
+        Export Data Access Report
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filter Form -->
+<div class="dataset-card p-4 mb-4">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label for="days" class="form-label">Time Period</label>
+            <select class="form-select" id="days" name="days" onchange="this.form.submit()">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="medical_domain" class="form-label">Medical Domain</label>
+            <select class="form-select" id="medical_domain" name="medical_domain">
+                <option value="">All Domains</option>
+                {% for domain in available_domains %}
+                    <option value="{{ domain }}" {% if current_filters.medical_domain == domain %}selected{% endif %}>
+                        {{ domain|title }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel me-1"></i>
+                Apply Filters
+            </button>
+            <a href="{% url 'audit:dataset_analysis' %}?days={{ days }}" class="btn btn-outline-warning">
+                <i class="bi bi-x-circle me-1"></i>
+                Clear Filters
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="dataset-card p-4 text-center">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-database text-primary fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ total_accesses|floatformat:0 }}</div>
+                    <small class="text-muted">Total Accesses</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="dataset-card p-4 text-center">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-people text-info fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ unique_users }}</div>
+                    <small class="text-muted">Unique Users</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="dataset-card p-4 text-center">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-collection text-success fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ unique_datasets }}</div>
+                    <small class="text-muted">Unique Datasets</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="dataset-card p-4 text-center">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-graph-up text-warning fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ domain_stats|length }}</div>
+                    <small class="text-muted">Medical Domains</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Main Analysis Panel -->
+    <div class="col-lg-8">
+        <!-- Top Datasets -->
+        <div class="dataset-card p-4 mb-4">
+            <h5 class="card-title mb-3">Most Accessed Datasets</h5>
+            {% if top_datasets %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Dataset</th>
+                            <th>Access Count</th>
+                            <th>Unique Users</th>
+                            <th>Activity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dataset in top_datasets %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold">{{ dataset.resource_display|truncatechars:40 }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ dataset.access_count }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ dataset.unique_users }}</span>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-success" 
+                                         style="width: {% widthratio dataset.access_count top_datasets.0.access_count 100 %}%">
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No dataset access data available for the selected period.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Medical Domains -->
+        <div class="dataset-card p-4 mb-4">
+            <h5 class="card-title mb-3">Access by Medical Domain</h5>
+            {% if domain_stats %}
+            <div class="row">
+                {% for domain in domain_stats %}
+                <div class="col-md-6 mb-3">
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                        <div>
+                            <div class="domain-badge mb-2">{{ domain.medical_domain|default:"Unknown" }}</div>
+                            <div class="small text-muted">
+                                Avg Sensitivity: 
+                                <span class="badge sensitivity-{{ domain.avg_sensitivity|floatformat:0 }}">
+                                    Level {{ domain.avg_sensitivity|floatformat:0 }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="h5 mb-0">{{ domain.access_count }}</div>
+                            <div class="small text-muted">accesses</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">No medical domain data available.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Hourly Access Heatmap -->
+        <div class="dataset-card p-4">
+            <h5 class="card-title mb-3">
+                <i class="bi bi-clock-history me-2" style="color: var(--audit-primary);"></i>
+                Access Patterns by Hour
+            </h5>
+            <p class="text-muted small mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                This chart shows how many times datasets were accessed during each hour of the day over the past {{ days }} days. 
+                Hover over each hour block to see the exact number.
+            </p>
+            <div class="mb-3">
+                <small class="text-muted">
+                    <strong>Color Legend:</strong>
+                    <span class="badge heat-0 me-1">0</span>
+                    <span class="badge heat-1 me-1">1-5</span>
+                    <span class="badge heat-2 me-1">6-10</span>
+                    <span class="badge heat-3 me-1">11-20</span>
+                    <span class="badge heat-4 me-1">21-50</span>
+                    <span class="badge heat-5">50+</span>
+                    dataset accesses
+                </small>
+            </div>
+            <div class="row g-1">
+                {% for hour, count in hourly_access.items %}
+                <div class="col-1">
+                    <div class="heatmap-hour 
+                        {% if count == 0 %}heat-0
+                        {% elif count <= 5 %}heat-1
+                        {% elif count <= 10 %}heat-2
+                        {% elif count <= 20 %}heat-3
+                        {% elif count <= 50 %}heat-4
+                        {% else %}heat-5
+                        {% endif %}" 
+                        title="Hour {{ hour }}:00-{{ hour|add:1 }}:00: {{ count }} dataset accesses">
+                        <div>{{ hour|stringformat:"02d" }}</div>
+                        <div class="small">{{ count }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-2">
+                <small class="text-muted d-flex justify-content-between">
+                    <span>00:00</span>
+                    <span>06:00</span>
+                    <span>12:00</span>
+                    <span>18:00</span>
+                    <span>23:00</span>
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Suspicious Patterns -->
+        {% if suspicious_data_patterns %}
+        <div class="dataset-card p-4 mb-4 pattern-alert">
+            <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-exclamation-triangle text-danger me-2 fs-5"></i>
+                <h6 class="mb-0">Suspicious Data Patterns</h6>
+            </div>
+            {% for pattern in suspicious_data_patterns %}
+            <div class="alert alert-{% if pattern.severity == 'high' %}danger{% elif pattern.severity == 'medium' %}warning{% else %}info{% endif %} alert-sm py-2 mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small><strong>{{ pattern.title }}</strong></small>
+                    <span class="badge bg-{% if pattern.severity == 'high' %}danger{% elif pattern.severity == 'medium' %}warning{% else %}info{% endif %}">{{ pattern.count }}</span>
+                </div>
+            </div>
+            {% endfor %}
+            <a href="{% url 'audit:security_incidents' %}" class="btn btn-danger btn-sm mt-2">
+                <i class="bi bi-arrow-right me-1"></i>
+                View Security Incidents
+            </a>
+        </div>
+        {% endif %}
+        
+        <!-- Medical Domain Legend -->
+        <div class="dataset-card p-4 mb-4">
+            <h6 class="card-title mb-3">Data Sensitivity Levels</h6>
+            <div class="mb-2">
+                <span class="badge sensitivity-1 me-2">Level 1</span>
+                <small>Public health data</small>
+            </div>
+            <div class="mb-2">
+                <span class="badge sensitivity-2 me-2">Level 2</span>
+                <small>Demographic data</small>
+            </div>
+            <div class="mb-2">
+                <span class="badge sensitivity-3 me-2">Level 3</span>
+                <small>Clinical measurements</small>
+            </div>
+            <div class="mb-2">
+                <span class="badge sensitivity-4 me-2">Level 4</span>
+                <small>Medical history</small>
+            </div>
+            <div class="mb-2">
+                <span class="badge sensitivity-5 me-2">Level 5</span>
+                <small>Personal identifiers</small>
+            </div>
+        </div>
+        
+        <!-- Quick Stats -->
+        <div class="dataset-card p-4">
+            <h6 class="card-title mb-3">Quick Statistics</h6>
+            <div class="row text-center">
+                <div class="col-6 mb-3">
+                    <div class="h4 text-primary mb-0">
+                        {% if days > 0 %}{% widthratio total_accesses days 1 %}{% else %}0{% endif %}
+                    </div>
+                    <small class="text-muted">Daily Avg</small>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="h4 text-success mb-0">
+                        {% if unique_users > 0 %}{% widthratio total_accesses unique_users 1 %}{% else %}0{% endif %}
+                    </div>
+                    <small class="text-muted">Per User</small>
+                </div>
+                <div class="col-6">
+                    <div class="h4 text-warning mb-0">
+                        {% if unique_datasets > 0 %}{% widthratio total_accesses unique_datasets 1 %}{% else %}0{% endif %}
+                    </div>
+                    <small class="text-muted">Per Dataset</small>
+                </div>
+                <div class="col-6">
+                    <div class="h4 text-info mb-0">
+                        {% if domain_stats %}{{ domain_stats|length }}{% else %}0{% endif %}
+                    </div>
+                    <small class="text-muted">Domains</small>
+                </div>
+            </div>
+            
+            <!-- Peak Activity -->
+            {% if hourly_access %}
+            <div class="border-top pt-3 mt-3">
+                <h6 class="small mb-2">Peak Activity Hours</h6>
+                {% for hour, count in hourly_access.items %}
+                    {% if count > 0 and forloop.counter0 < 3 %}
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>{{ hour }}:00 - {{ hour|add:1 }}:00</span>
+                        <span class="fw-bold">{{ count }} accesses</span>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Export Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="dataset-card p-4">
+            <h6 class="card-title mb-3">Export & Actions</h6>
+            <div class="row">
+                <div class="col-md-3">
+                    <a href="{% url 'audit:export_audit_report' %}?category=DATA_ACCESS&days={{ days }}{% if current_filters.medical_domain %}&medical_domain={{ current_filters.medical_domain }}{% endif %}" 
+                       class="btn btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-download me-2"></i>
+                        Export CSV
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'audit:audit_search' %}?category=DATA_ACCESS&days={{ days }}" 
+                       class="btn btn-info w-100 mb-2">
+                        <i class="bi bi-search me-2"></i>
+                        Advanced Search
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'audit:security_incidents' %}?search=DATA_ACCESS" 
+                       class="btn btn-danger w-100 mb-2">
+                        <i class="bi bi-shield-exclamation me-2"></i>
+                        Related Incidents
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'audit:auditor_dashboard' %}" 
+                       class="btn btn-outline-success w-100 mb-2">
+                        <i class="bi bi-speedometer2 me-2"></i>
+                        Main Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add tooltips to heatmap hours
+    const heatmapHours = document.querySelectorAll('.heatmap-hour');
+    heatmapHours.forEach(hour => {
+        const tooltip = new bootstrap.Tooltip(hour);
+    });
+    
+    // Auto-refresh data every 5 minutes if on current day
+    const refreshInterval = 5 * 60 * 1000; // 5 minutes
+    if ({{ days }} <= 1) {
+        setInterval(() => {
+            location.reload();
+        }, refreshInterval);
+    }
+});
+</script>
+{% endblock %}

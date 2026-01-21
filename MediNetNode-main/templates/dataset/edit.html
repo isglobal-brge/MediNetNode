@@ -1,0 +1,376 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .edit-section {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .edit-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--primary-gradient);
+    }
+
+    .form-section {
+        margin-bottom: 2rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .section-title i {
+        font-size: 1.3rem;
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(66, 165, 245, 0.25);
+    }
+
+    .readonly-info {
+        background: rgba(66, 165, 245, 0.05);
+        border-radius: var(--border-radius-sm);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .readonly-info .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+    }
+
+    .readonly-info .info-label {
+        font-weight: 600;
+        color: #6c757d;
+    }
+
+    .readonly-info .info-value {
+        color: #495057;
+        font-family: 'Courier New', monospace;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        padding-top: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .btn-save {
+        background: var(--primary-gradient);
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-save:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(66, 165, 245, 0.3);
+    }
+
+    .btn-cancel {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-cancel:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+    }
+
+    .help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    .form-check-input:checked {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+
+    .alert-info {
+        background: rgba(66, 165, 245, 0.1);
+        border-left: 4px solid var(--primary-color);
+        color: #1976d2;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, rgba(66, 165, 245, 0.1) 0%, rgba(66, 165, 245, 0.05) 100%);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid rgba(66, 165, 245, 0.2);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .page-header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .page-header h1 i {
+        -webkit-text-fill-color: var(--primary-color);
+        font-size: 1.5rem;
+    }
+
+    .btn-back {
+        background: #495057;
+        color: white;
+        border: none;
+        padding: 0.5rem 1.25rem;
+        font-weight: 600;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-back:hover {
+        background: #343a40;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap">
+    <h1>
+        <i class="bi bi-pencil-square"></i>
+        Edit Dataset
+    </h1>
+    <div>
+        <a href="{% url 'dataset:list' %}" class="btn-back">
+            <i class="bi bi-arrow-left"></i>
+            Back to List
+        </a>
+    </div>
+</div>
+
+<div class="edit-section">
+    <!-- Dataset Info Alert -->
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Editing:</strong> {{ dataset.name }}
+    </div>
+
+    <!-- Readonly Info -->
+    <div class="readonly-info">
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-person me-1"></i>
+                Uploaded By:
+            </span>
+            <span class="info-value">{{ uploader_name }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-calendar me-1"></i>
+                Upload Date:
+            </span>
+            <span class="info-value">{{ dataset.uploaded_at|date:"M j, Y H:i" }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-file-earmark me-1"></i>
+                File Size:
+            </span>
+            <span class="info-value">{{ dataset.file_size|filesizeformat }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-hash me-1"></i>
+                Rows × Columns:
+            </span>
+            <span class="info-value">{{ dataset.rows_count|default:"N/A" }} × {{ dataset.columns_count|default:"N/A" }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-database me-1"></i>
+                Data Type:
+            </span>
+            <span class="info-value">{{ dataset.get_data_type_display }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">
+                <i class="bi bi-people me-1"></i>
+                Patient Count:
+            </span>
+            <span class="info-value">{{ dataset.patient_count|default:"N/A" }}</span>
+        </div>
+    </div>
+
+    <!-- Edit Form -->
+    <form method="post" id="editForm">
+        {% csrf_token %}
+
+        <!-- Basic Information Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="bi bi-info-circle-fill"></i>
+                Basic Information
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.name.id_for_label }}" class="form-label">
+                        Dataset Name <span class="text-danger">*</span>
+                    </label>
+                    {{ form.name }}
+                    {% if form.name.help_text %}
+                    <div class="help-text">{{ form.name.help_text }}</div>
+                    {% endif %}
+                    {% if form.name.errors %}
+                    <div class="text-danger mt-1">{{ form.name.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label for="{{ form.medical_domain.id_for_label }}" class="form-label">
+                        Medical Domain <span class="text-danger">*</span>
+                    </label>
+                    {{ form.medical_domain }}
+                    {% if form.medical_domain.help_text %}
+                    <div class="help-text">{{ form.medical_domain.help_text }}</div>
+                    {% endif %}
+                    {% if form.medical_domain.errors %}
+                    <div class="text-danger mt-1">{{ form.medical_domain.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.description.id_for_label }}" class="form-label">
+                    Description <span class="text-danger">*</span>
+                </label>
+                {{ form.description }}
+                {% if form.description.help_text %}
+                <div class="help-text">{{ form.description.help_text }}</div>
+                {% endif %}
+                {% if form.description.errors %}
+                <div class="text-danger mt-1">{{ form.description.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <div class="form-check">
+                    {{ form.anonymized }}
+                    <label class="form-check-label" for="{{ form.anonymized.id_for_label }}">
+                        Dataset is anonymized
+                    </label>
+                    {% if form.anonymized.help_text %}
+                    <div class="help-text">{{ form.anonymized.help_text }}</div>
+                    {% endif %}
+                </div>
+                {% if form.anonymized.errors %}
+                <div class="text-danger mt-1">{{ form.anonymized.errors.0 }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Machine Learning Configuration Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="bi bi-cpu-fill"></i>
+                Machine Learning Configuration
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.target_column.id_for_label }}" class="form-label">
+                    Target Column
+                </label>
+                {{ form.target_column }}
+                {% if form.target_column.help_text %}
+                <div class="help-text">{{ form.target_column.help_text }}</div>
+                {% endif %}
+                {% if form.target_column.errors %}
+                <div class="text-danger mt-1">{{ form.target_column.errors.0 }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{% url 'dataset:list' %}" class="btn btn-cancel">
+                <i class="bi bi-x-circle me-1"></i>
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-save">
+                <i class="bi bi-check-circle me-1"></i>
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('editForm');
+
+    form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Saving...';
+    });
+});
+</script>
+{% endblock %}

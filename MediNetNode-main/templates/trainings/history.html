@@ -1,0 +1,588 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+    }
+    
+    .filter-card .form-control, .filter-card .form-select {
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        backdrop-filter: blur(10px);
+    }
+    
+    .filter-card .form-control::placeholder {
+        color: rgba(255,255,255,0.8);
+    }
+    
+    .filter-card .form-control:focus, .filter-card .form-select:focus {
+        background: rgba(255,255,255,0.25);
+        border-color: rgba(255,255,255,0.5);
+        box-shadow: 0 0 0 0.2rem rgba(255,255,255,0.25);
+        color: white;
+    }
+    
+    .filter-card .form-select option {
+        background: #343a40;
+        color: white;
+    }
+    
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-starting { background: #ffc107; color: #856404; }
+    .status-active { background: #17a2b8; color: white; }
+    .status-completed { background: #28a745; color: white; }
+    .status-failed { background: #dc3545; color: white; }
+    .status-cancelled { background: #6c757d; color: white; }
+    
+    .session-row {
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
+    }
+    
+    .session-row:hover {
+        background-color: rgba(25, 118, 210, 0.05);
+        border-left-color: #1976d2;
+        transform: translateX(2px);
+    }
+    
+    .session-row.completed {
+        border-left-color: #28a745;
+    }
+    
+    .session-row.failed {
+        border-left-color: #dc3545;
+    }
+    
+    .session-row.active {
+        border-left-color: #00b894;
+        background-color: rgba(0, 184, 148, 0.05);
+    }
+    
+    .metric-chip {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin: 0 0.25rem;
+    }
+    
+    .duration-badge {
+        background: linear-gradient(45deg, #fd79a8, #fdcb6e);
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .export-btn {
+        background: linear-gradient(45deg, #42a5f5, #1976d2);
+        border: none;
+        transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+        background: linear-gradient(45deg, #1976d2, #42a5f5);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(66, 165, 245, 0.4);
+    }
+    
+    .pagination .page-link {
+        border-radius: 8px;
+        margin: 0 2px;
+        border: none;
+        color: #1976d2;
+        background: rgba(25, 118, 210, 0.1);
+    }
+    
+    .pagination .page-link:hover {
+        background: linear-gradient(45deg, #1976d2, #64b5f6);
+        color: white;
+        transform: translateY(-1px);
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(45deg, #1976d2, #64b5f6);
+        color: white;
+        border: none;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(25, 118, 210, 0.05);
+    }
+    
+    .progress-mini {
+        height: 4px;
+        border-radius: 2px;
+        background: #e9ecef;
+    }
+    
+    .progress-mini .progress-bar {
+        border-radius: 2px;
+    }
+    
+    .empty-state {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        border: 2px dashed #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-clock-history me-2 text-info"></i>
+        Training History
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{% url 'trainings:dashboard' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-speedometer2 me-1"></i>
+                Dashboard
+            </a>
+            <a href="{% url 'trainings:active_sessions' %}" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-activity me-1"></i>
+                Active Sessions
+            </a>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'trainings:export_history' %}?{{ request.GET.urlencode }}" 
+               class="btn btn-primary btn-sm export-btn">
+                <i class="bi bi-download me-1"></i>
+                Export CSV
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card filter-card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <label for="status" class="form-label fw-bold">
+                    <i class="bi bi-funnel me-1"></i>Status
+                </label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if current_filters.status == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+                <label for="user" class="form-label fw-bold">
+                    <i class="bi bi-person me-1"></i>User
+                </label>
+                <div class="position-relative">
+                    <input type="text" name="user" id="user" class="form-control" 
+                           placeholder="Type to search users..." 
+                           value="{{ current_filters.user_display|default:'' }}"
+                           autocomplete="off">
+                    <div id="userSuggestions" class="position-absolute w-100 bg-white border rounded shadow-sm" 
+                         style="top: 100%; z-index: 1000; max-height: 200px; overflow-y: auto; display: none;">
+                    </div>
+                </div>
+                <input type="hidden" name="user_id" id="userId" value="{{ current_filters.user }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="date_from" class="form-label fw-bold">
+                    <i class="bi bi-calendar me-1"></i>From
+                </label>
+                <input type="date" name="date_from" id="date_from" class="form-control" 
+                       value="{{ current_filters.date_from|date:'Y-m-d' }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="date_to" class="form-label fw-bold">
+                    <i class="bi bi-calendar me-1"></i>To
+                </label>
+                <input type="date" name="date_to" id="date_to" class="form-control" 
+                       value="{{ current_filters.date_to|date:'Y-m-d' }}">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="search" class="form-label fw-bold">
+                    <i class="bi bi-search me-1"></i>Search
+                </label>
+                <input type="text" name="search" id="search" class="form-control" 
+                       placeholder="Session ID, dataset, user..." 
+                       value="{{ current_filters.search }}">
+            </div>
+            
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-light btn-sm w-100 fw-bold">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </form>
+        
+        {% if current_filters.status or current_filters.user or current_filters.date_from or current_filters.date_to or current_filters.search %}
+        <div class="mt-3">
+            <a href="{% url 'trainings:history' %}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-x-circle me-1"></i>
+                Clear Filters
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Results -->
+{% if sessions %}
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list-ul me-2"></i>
+                Training Sessions
+            </h5>
+            <span class="badge bg-primary">{{ sessions.paginator.count }} total</span>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr style="background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);">
+                        <th class="text-white"><i class="bi bi-cpu me-1"></i>Session</th>
+                        <th class="text-white"><i class="bi bi-person me-1"></i>User</th>
+                        <th class="text-white"><i class="bi bi-database me-1"></i>Dataset</th>
+                        <th class="text-white"><i class="bi bi-activity me-1"></i>Status</th>
+                        <th class="text-white"><i class="bi bi-graph-up me-1"></i>Progress</th>
+                        <th class="text-white"><i class="bi bi-clock me-1"></i>Duration</th>
+                        <th class="text-white"><i class="bi bi-calendar me-1"></i>Started</th>
+                        <th class="text-white"><i class="bi bi-bullseye me-1"></i>Final Metrics</th>
+                        <th class="text-white"><i class="bi bi-gear me-1"></i>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                    <tr class="session-row {{ session.status|lower }}">
+                        <td>
+                            <div>
+                                <strong>{{ session.session_id|truncatechars:8 }}</strong>
+                                {% if session.client_id %}
+                                <br><small class="text-muted">{{ session.client_id }}</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <i class="bi bi-person-circle me-1 text-primary"></i>
+                            {{ session.user.username }}
+                        </td>
+                        <td>
+                            <span title="{{ session.dataset_name }}">
+                                {{ session.dataset_name|truncatechars:20 }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ session.status|lower }}">
+                                {{ session.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress progress-mini me-2" style="width: 60px;">
+                                    <div class="progress-bar 
+                                        {% if session.status == 'COMPLETED' %}bg-success{% elif session.status == 'FAILED' %}bg-danger{% else %}bg-primary{% endif %}" 
+                                         role="progressbar" style="width: {{ session.progress_percentage }}%"></div>
+                                </div>
+                                <small class="text-muted">
+                                    {{ session.current_round }}/{{ session.total_rounds }}
+                                    ({{ session.progress_percentage|floatformat:0 }}%)
+                                </small>
+                            </div>
+                        </td>
+                        <td>
+                            {% if session.duration %}
+                                <span class="duration-badge">
+                                    {{ session.duration }}
+                                </span>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ session.started_at|date:"M j, Y" }}<br>
+                                {{ session.started_at|time:"H:i" }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if session.final_accuracy or session.final_loss or session.final_f1 %}
+                                <div>
+                                    {% if session.final_accuracy %}
+                                        <span class="metric-chip">Acc: {{ session.final_accuracy|floatformat:3 }}</span>
+                                    {% endif %}
+                                    {% if session.final_f1 %}
+                                        <span class="metric-chip">F1: {{ session.final_f1|floatformat:3 }}</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <small class="text-muted">No metrics</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'trainings:session_detail' session.session_id %}" 
+                                   class="btn btn-outline-primary btn-sm" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if session.error_message and user.role.name == 'ADMIN' %}
+                                <button class="btn btn-outline-danger btn-sm" 
+                                        title="View Error" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#errorModal"
+                                        onclick="showError('{{ session.session_id }}', '{{ session.error_message|escapejs }}')">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if sessions.has_other_pages %}
+        <div class="card-footer">
+            <nav aria-label="Training sessions pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if sessions.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ sessions.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.user_id %}&user_id={{ request.GET.user_id }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in sessions.paginator.page_range %}
+                        {% if sessions.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > sessions.number|add:'-3' and num < sessions.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.user_id %}&user_id={{ request.GET.user_id }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if sessions.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ sessions.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.user_id %}&user_id={{ request.GET.user_id }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-search display-1 text-muted mb-4"></i>
+            <h3>No Training Sessions Found</h3>
+            <p class="text-muted mb-4">
+                {% if current_filters.status or current_filters.user or current_filters.date_from or current_filters.date_to or current_filters.search %}
+                    No sessions match your current filters. Try adjusting your search criteria.
+                {% else %}
+                    No training sessions have been recorded yet.
+                {% endif %}
+            </p>
+            <div class="d-flex justify-content-center gap-2">
+                {% if current_filters.status or current_filters.user or current_filters.date_from or current_filters.date_to or current_filters.search %}
+                <a href="{% url 'trainings:history' %}" class="btn btn-primary">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Clear Filters
+                </a>
+                {% endif %}
+                <a href="{% url 'trainings:dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-speedometer2 me-1"></i>
+                    Go to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>
+                    Training Error Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <strong>Session ID:</strong>
+                    <span id="errorSessionId" class="font-monospace"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Error Message:</strong>
+                    <div class="alert alert-danger mt-2">
+                        <pre id="errorMessage" class="mb-0"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Available users for autocomplete
+    const availableUsers = [
+        {% for user_info in available_users %}
+        {id: {{ user_info.id }}, username: '{{ user_info.username }}'},
+        {% endfor %}
+    ];
+
+    console.log('Available users for autocomplete:', availableUsers);
+
+    // User autocomplete functionality
+    const userInput = document.getElementById('user');
+    const userIdInput = document.getElementById('userId');
+    const suggestionsContainer = document.getElementById('userSuggestions');
+    
+    if (userInput && suggestionsContainer) {
+        userInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            
+            if (query.length === 0) {
+                suggestionsContainer.style.display = 'none';
+                userIdInput.value = '';
+                return;
+            }
+            
+            const matches = availableUsers.filter(user => 
+                user.username.toLowerCase().includes(query)
+            );
+            
+            if (matches.length > 0) {
+                suggestionsContainer.innerHTML = matches.map(user => `
+                    <div class="p-2 border-bottom cursor-pointer user-suggestion" 
+                         data-user-id="${user.id}" 
+                         data-username="${user.username}"
+                         style="cursor: pointer;">
+                        <i class="bi bi-person-circle me-2 text-primary"></i>
+                        ${user.username}
+                    </div>
+                `).join('');
+                
+                suggestionsContainer.style.display = 'block';
+                
+                // Add click handlers to suggestions
+                suggestionsContainer.querySelectorAll('.user-suggestion').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const username = this.dataset.username;
+                        const userId = this.dataset.userId;
+                        
+                        userInput.value = username;
+                        userIdInput.value = userId;
+                        suggestionsContainer.style.display = 'none';
+                        
+                        // Auto-submit form
+                        this.closest('form').submit();
+                    });
+                    
+                    item.addEventListener('mouseenter', function() {
+                        this.style.backgroundColor = '#f8f9fa';
+                    });
+                    
+                    item.addEventListener('mouseleave', function() {
+                        this.style.backgroundColor = 'white';
+                    });
+                });
+            } else {
+                suggestionsContainer.innerHTML = `
+                    <div class="p-2 text-muted">
+                        <i class="bi bi-search me-2"></i>
+                        No users found matching "${query}"
+                    </div>
+                `;
+                suggestionsContainer.style.display = 'block';
+            }
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!userInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+                suggestionsContainer.style.display = 'none';
+            }
+        });
+        
+        // Handle keyboard navigation
+        userInput.addEventListener('keydown', function(e) {
+            const suggestions = suggestionsContainer.querySelectorAll('.user-suggestion');
+            const visible = suggestionsContainer.style.display !== 'none';
+            
+            if (e.key === 'ArrowDown' && visible && suggestions.length > 0) {
+                e.preventDefault();
+                suggestions[0].focus();
+            } else if (e.key === 'Escape') {
+                suggestionsContainer.style.display = 'none';
+            }
+        });
+    }
+    
+    // Auto-submit form on filter changes (except search and user)
+    const filterSelects = document.querySelectorAll('#status');
+    const dateInputs = document.querySelectorAll('#date_from, #date_to');
+    
+    [...filterSelects, ...dateInputs].forEach(element => {
+        element.addEventListener('change', function() {
+            this.closest('form').submit();
+        });
+    });
+    
+    // Search on Enter key
+    document.getElementById('search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            this.closest('form').submit();
+        }
+    });
+});
+
+function showError(sessionId, errorMessage) {
+    document.getElementById('errorSessionId').textContent = sessionId;
+    document.getElementById('errorMessage').textContent = errorMessage;
+}
+</script>
+{% endblock %}

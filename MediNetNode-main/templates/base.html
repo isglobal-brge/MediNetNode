@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MediNet - Federated medical management system">
+    <title>{% block title %}MediNet{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            /* Modern Medical Blue Theme - #42a5f5 */
+            --primary-color: #42a5f5;
+            --primary-dark: #1976d2;
+            --primary-light: #e3f2fd;
+            --primary-gradient: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+            --primary-light-gradient: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            --success-gradient: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            --warning-gradient: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            --danger-gradient: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            --info-gradient: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+            --medical-blue: #42a5f5;
+            --medical-light-blue: #e3f2fd;
+            --medical-accent: #1976d2;
+            --card-bg: rgba(255, 255, 255, 0.98);
+            --shadow-soft: 0 10px 30px rgba(66, 165, 245, 0.08);
+            --shadow-hover: 0 20px 40px rgba(66, 165, 245, 0.12);
+            --border-radius: 16px;
+            --border-radius-sm: 12px;
+            --spacing-xl: 2rem;
+            --glass-bg: rgba(255, 255, 255, 0.25);
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 1rem 0;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: var(--shadow-soft);
+            width: 240px;
+            transition: width 0.3s ease;
+        }
+        
+        .sidebar.mini {
+            width: 70px;
+        }
+        
+        .sidebar-sticky {
+            position: relative;
+            top: 0;
+            height: calc(100vh - 56px);
+            padding-top: 0.5rem;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            margin-left: 240px;
+            width: calc(100% - 240px);
+            padding-top: 72px;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+            transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+        
+        .main-content.mini-mode {
+            margin-left: 70px;
+            width: calc(100% - 70px);
+        }
+        
+        .sidebar-toggle {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            z-index: 1001;
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary-color);
+            border: 1px solid rgba(66, 165, 245, 0.2);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 6px 18px rgba(66, 165, 245, 0.3);
+        }
+        
+        .sidebar.mini .sidebar-toggle {
+            position: absolute;
+            top: 0.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: var(--primary-color);
+            border: 1px solid rgba(66, 165, 245, 0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sidebar-header {
+            position: relative;
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            margin-bottom: 0.25rem;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .sidebar.mini .sidebar-header {
+            justify-content: center;
+            padding: 0.75rem 0.25rem;
+        }
+        
+        .sidebar.mini .sidebar-header .sidebar-icon {
+            display: none;
+        }
+        
+        .sidebar.mini .sidebar-header .sidebar-text {
+            display: none;
+        }
+        
+        /* Mini sidebar styles */
+        .sidebar.mini .nav-link {
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            margin: 0.25rem;
+            position: relative;
+        }
+        
+        .sidebar.mini .nav-link .nav-text {
+            display: none;
+        }
+        
+        .sidebar.mini .nav-link i {
+            font-size: 1.2rem;
+            margin-right: 0 !important;
+        }
+        
+        .sidebar.mini .badge {
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            transform: scale(0.8);
+        }
+        
+        .sidebar.mini .sidebar-heading {
+            display: none;
+        }
+
+        /* enforce hiding of headings inside mini sidebar */
+        #sidebarMenu.mini .sidebar-heading { display: none !important; }
+        
+        .sidebar.mini .sidebar-brand-text {
+            display: none;
+        }
+        
+        /* Tooltips for mini sidebar */
+        .sidebar.mini .nav-link {
+            position: relative;
+        }
+
+        /* Cleaner hover in mini mode: no translate, subtle highlight */
+        .sidebar.mini .nav-link:hover {
+            background: rgba(25, 118, 210, 0.12);
+            color: #1976d2 !important;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .sidebar.mini .nav-link:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            z-index: 1000;
+            opacity: 0;
+            animation: fadeIn 0.2s ease forwards;
+        }
+
+        /* Submenu styles */
+        .nav-submenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: rgba(66, 165, 245, 0.05);
+            border-radius: 0 0 8px 8px;
+            margin-top: 0.25rem;
+        }
+
+        .nav-submenu.show {
+            max-height: 200px;
+        }
+
+        .nav-submenu .nav-link {
+            padding: 0.5rem 1rem 0.5rem 3rem;
+            font-size: 0.875rem;
+            color: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            margin: 0.125rem 0.5rem;
+        }
+
+        .nav-submenu .nav-link:hover {
+            background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+            color: white !important;
+            transform: translateX(8px);
+            box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
+        }
+
+        .nav-submenu .nav-link.active {
+            background: rgba(66, 165, 245, 0.15);
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .nav-toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .nav-toggle-icon.rotated {
+            transform: rotate(90deg);
+        }
+        
+        .nav-toggle-icon.expanded {
+            transform: rotate(90deg);
+        }
+
+        /* Hide submenu in mini sidebar */
+        .sidebar.mini .nav-submenu {
+            display: none;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: #fff !important;
+        }
+        
+        .navbar {
+            background: var(--primary-gradient) !important;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(10px);
+        }
+        
+        @media (max-width: 767.98px) {
+            .sidebar {
+                position: static;
+                height: auto;
+                padding: 0;
+                background: var(--card-bg);
+                width: 100%;
+                transform: none !important;
+            }
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+                padding-top: 56px;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .sidebar-toggle {
+                display: none;
+            }
+        }
+        
+        /* Modern Dashboard Components */
+        .dashboard-hero {
+            background: var(--primary-gradient);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .dashboard-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 200px;
+            background: var(--glass-bg);
+            border-radius: 50%;
+            transform: translate(50%, -50%);
+        }
+
+        .modern-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-soft);
+            border: none;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .modern-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .stat-card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: var(--border-radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 1rem;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .activity-item {
+            padding: 1rem;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .activity-item:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+        }
+
+        .activity-icon > div {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-item {
+            padding: 0.75rem;
+            border-radius: var(--border-radius-sm);
+            transition: all 0.3s ease;
+        }
+
+        .status-item:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .status-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hero-stats {
+            background: var(--glass-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            border-radius: var(--border-radius-sm);
+        }
+
+        /* Enhanced sidebar styling - Original Beautiful Design */
+        .nav-link {
+            border-radius: var(--border-radius-sm);
+            margin: 0.25rem 0.75rem;
+            transition: all 0.3s ease;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+            color: white !important;
+            transform: translateX(8px);
+            box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
+        }
+
+        .nav-link.active {
+            background: transparent;
+            color: inherit !important;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .nav-link.active:hover {
+            background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+            color: white !important;
+            transform: translateX(8px);
+        }
+        
+        .nav-link i {
+            color: inherit;
+        }
+        
+        .nav-link .badge {
+            background: rgba(255, 255, 255, 0.2) !important;
+            color: white !important;
+        }
+        
+        .nav-link:hover .badge {
+            background: rgba(255, 255, 255, 0.25) !important;
+            color: white !important;
+        }
+
+        /* Legacy support for existing cards */
+        .audit-badge {
+            font-size: 0.75rem;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .stats-card {
+            border-left: 4px solid;
+        }
+        
+        .stats-card.primary { border-left-color: #0d6efd; }
+        .stats-card.success { border-left-color: #198754; }
+        .stats-card.warning { border-left-color: #ffc107; }
+        .stats-card.danger { border-left-color: #dc3545; }
+
+        /* Enhanced buttons */
+        .btn {
+            border-radius: var(--border-radius-sm);
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        /* Glass morphism for dropdowns */
+        .dropdown-menu {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--border-radius-sm);
+            box-shadow: var(--shadow-soft);
+        }
+
+        /* Enhanced badges */
+        .badge {
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-50%) translateX(-5px); }
+            to { opacity: 1; transform: translateY(-50%) translateX(0); }
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'admin_dashboard' %}">
+                <i class="bi bi-hospital"></i>
+                MediNet
+            </a>
+            
+            <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            {% if is_admin_role %}
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                        <div class="user-avatar bg-light rounded-circle d-flex align-items-center justify-content-center me-2">
+                            <i class="bi bi-person-fill text-primary"></i>
+                        </div>
+                        <span class="text-white">{{ user.username|title }}</span>
+                        <span class="badge bg-secondary ms-1">
+                            {% if user.is_superuser %}
+                                ADMIN
+                            {% elif user.role %}
+                                {{ user.role.name }}
+                            {% else %}
+                                NO ROLE
+                            {% endif %}
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a></li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            {% if is_admin_role %}
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                <div class="sidebar-sticky">
+                    <!-- Sidebar Header -->
+                     <div class="sidebar-header d-none d-md-block position-relative">
+                        <button id="sidebarToggle" class="sidebar-toggle">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                       
+                        <span class="ms-2 fw-semibold text-dark sidebar-text">Menu</span>
+                    </div>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" 
+                               href="{% url 'admin_dashboard' %}" 
+                               data-tooltip="Dashboard">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                <span class="nav-text">Dashboard</span>
+                            </a>
+                        </li>
+                        
+                        {% if user.is_superuser or user.role.name == 'ADMIN' or user.role.name == 'AUDITOR' %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="#" 
+                               data-tooltip="Users"
+                               onclick="toggleSubmenu('usersSubmenu', this); return false;">
+                                <i class="bi bi-people me-2"></i>
+                                <span class="nav-text">Users</span>
+                                <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
+                            </a>
+                            <div class="nav-submenu" id="usersSubmenu">
+                                <a class="nav-link {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}" 
+                                   href="{% url 'user_list' %}">
+                                    <i class="bi bi-list-ul me-2"></i>
+                                    User List
+                                </a>
+                                {% if user.is_superuser or user.role.name == 'ADMIN' %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'create_user' %}active{% endif %}" 
+                                   href="{% url 'create_user' %}">
+                                    <i class="bi bi-person-plus me-2"></i>
+                                    Create User
+                                </a>
+                                <a class="nav-link {% if request.resolver_match.url_name == 'system_audit_logs' %}active{% endif %}" 
+                                   href="{% url 'system_audit_logs' %}">
+                                    <i class="bi bi-journal-check me-2"></i>
+                                    Activity Logs
+                                </a>
+                                <a class="nav-link" href="{% url 'export_users_csv' %}">
+                                    <i class="bi bi-download me-2"></i>
+                                    Export Users
+                                </a>
+                                {% endif %}
+                            </div>
+                        </li>
+                        {% endif %}
+                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'dataset' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="#" 
+                               data-tooltip="Datasets"
+                               onclick="toggleSubmenu('datasetsSubmenu', this); return false;">
+                                <i class="bi bi-database me-2"></i>
+                                <span class="nav-text">Datasets</span>
+                                <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
+                            </a>
+                            <div class="nav-submenu" id="datasetsSubmenu">
+                                {% if user.is_superuser or user.role.name == 'ADMIN' %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                                   href="{% url 'dataset:dashboard' %}">
+                                    <i class="bi bi-speedometer2 me-2"></i>
+                                    Dashboard
+                                </a>
+                                {% endif %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}" 
+                                   href="{% url 'dataset:list' %}">
+                                    <i class="bi bi-list-ul me-2"></i>
+                                    Dataset List
+                                </a>
+                                {% if user.is_superuser or user.role.name == 'ADMIN' or user.role.name == 'RESEARCHER' %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}" 
+                                   href="{% url 'dataset:upload' %}">
+                                    <i class="bi bi-cloud-upload me-2"></i>
+                                    Upload Dataset
+                                </a>
+                                {% endif %}
+                            </div>
+                        </li>
+                        
+                        {% if user.role.name == 'ADMIN' or user.role.name == 'AUDITOR' %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'trainings' in request.resolver_match.namespace %}active{% endif %}" 
+                               href="#" 
+                               data-tooltip="Training Monitoring"
+                               onclick="toggleSubmenu('trainingsSubmenu', this); return false;">
+                                <i class="bi bi-graph-up me-2"></i>
+                                <span class="nav-text">Training</span>
+                                <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
+                            </a>
+                            <div class="nav-submenu" id="trainingsSubmenu">
+                                <a class="nav-link {% if request.resolver_match.url_name == 'trainings:dashboard' %}active{% endif %}" 
+                                   href="{% url 'trainings:dashboard' %}">
+                                    <i class="bi bi-speedometer2 me-2"></i>
+                                    Dashboard
+                                </a>
+                                <a class="nav-link {% if request.resolver_match.url_name == 'trainings:active_sessions' %}active{% endif %}" 
+                                   href="{% url 'trainings:active_sessions' %}">
+                                    <i class="bi bi-activity me-2"></i>
+                                    Active Sessions
+                                </a>
+                                <a class="nav-link {% if request.resolver_match.url_name == 'trainings:history' %}active{% endif %}" 
+                                   href="{% url 'trainings:history' %}">
+                                    <i class="bi bi-clock-history me-2"></i>
+                                    History
+                                </a>
+                            </div>
+                        </li>
+                        {% endif %}
+                        
+                        {% if user.role %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'audit' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'system_audit_logs' %}" 
+                               data-tooltip="Audit Logs">
+                                <i class="bi bi-journal-text me-2"></i>
+                                <span class="nav-text">Audit</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    
+                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Settings</span>
+                    </h6>
+                    <ul class="nav flex-column mb-2">
+                        {% if user.is_superuser or user.role.name == 'ADMIN' %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'system_settings' %}active{% endif %}"
+                               href="{% url 'system_settings' %}"
+                               data-tooltip="System Settings">
+                                <i class="bi bi-gear me-2"></i>
+                                <span class="nav-text">System</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-tooltip="Help & Support">
+                                <i class="bi bi-question-circle me-2"></i>
+                                <span class="nav-text">Help</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+            {% endif %}
+
+            <!-- Main content -->
+            <main class="px-md-4 main-content">
+                <!-- Alert Messages -->
+                {% if messages %}
+                <div class="mt-3">
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        <i class="bi bi-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' or message.tags == 'danger' %}exclamation-triangle{% elif message.tags == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Page Header -->
+                {% block page_header %}
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    
+                </div>
+                {% endblock %}
+
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
+
+                <!-- Footer -->
+                <footer class="mt-5 py-4 border-top text-center text-muted">
+                    <div class="row">
+                        <div class="col-md-6 text-start">
+                            <small>© 2025 MediNet - Federated Medical System</small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small>
+                                Session: <span class="text-primary">Active</span> |
+                                IP: <span class="text-secondary">{{ request.META.REMOTE_ADDR }}</span> |
+                                <span id="session-timer" class="text-warning"></span>
+                            </small>
+                        </div>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    
+    <!-- Session Timer & Sidebar Toggle -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Session Timer with Server Sync
+            const sessionTimeout = {{ settings.SESSION_IDLE_TIMEOUT|default:1800 }};
+            let lastActivity = Date.now();
+            let timerElement = document.getElementById('session-timer');
+            let sessionWarningShown = false;
+            
+            function updateTimer() {
+                const timeLeft = Math.max(0, sessionTimeout - Math.floor((Date.now() - lastActivity) / 1000));
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                
+                if (timerElement) {
+                    timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    if (timeLeft <= 300) { // 5 minutes warning
+                        timerElement.className = 'text-danger fw-bold';
+                        if (!sessionWarningShown) {
+                            sessionWarningShown = true;
+                            console.warn('Session will expire in 5 minutes');
+                        }
+                    } else if (timeLeft <= 600) { // 10 minutes warning
+                        timerElement.className = 'text-warning';
+                    } else {
+                        timerElement.className = 'text-success';
+                        sessionWarningShown = false;
+                    }
+                    
+                    if (timeLeft <= 0) {
+                        alert('Your session has expired. You will be redirected to login.');
+                        window.location.href = '/auth/login/';
+                    }
+                }
+            }
+            
+            // Update timer every second
+            setInterval(updateTimer, 1000);
+            
+            // Reset timer on activity and refresh session
+            function resetActivity() {
+                lastActivity = Date.now();
+                // Send a light request to refresh session activity on server
+                fetch(window.location.href, {
+                    method: 'HEAD',
+                    credentials: 'same-origin'
+                }).catch(() => {}); // Ignore errors, just attempt to refresh session
+            }
+            
+            document.addEventListener('click', resetActivity);
+            document.addEventListener('keypress', resetActivity);
+            document.addEventListener('scroll', resetActivity);
+            
+            // Mini Sidebar Toggle Functionality
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebarMenu');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = sidebarToggle ? sidebarToggle.querySelector('i') : null;
+            
+            if (sidebarToggle && sidebar && mainContent) {
+                // Check localStorage for saved state
+                const sidebarMini = localStorage.getItem('sidebarMini') === 'true';
+                if (sidebarMini) {
+                    sidebar.classList.add('mini');
+                    mainContent.classList.add('mini-mode');
+                    if (toggleIcon) toggleIcon.className = 'bi bi-chevron-right';
+                }
+                
+                sidebarToggle.addEventListener('click', function() {
+                    const isMini = sidebar.classList.contains('mini');
+                    
+                    if (isMini) {
+                        // Expand sidebar
+                        sidebar.classList.remove('mini');
+                        mainContent.classList.remove('mini-mode');
+                        if (toggleIcon) toggleIcon.className = 'bi bi-chevron-left';
+                        localStorage.setItem('sidebarMini', 'false');
+                    } else {
+                        // Minimize sidebar
+                        sidebar.classList.add('mini');
+                        mainContent.classList.add('mini-mode');
+                        if (toggleIcon) toggleIcon.className = 'bi bi-chevron-right';
+                        localStorage.setItem('sidebarMini', 'true');
+                    }
+                });
+                
+                // Update icon based on current state
+                if (toggleIcon) {
+                    const isMini = sidebar.classList.contains('mini');
+                    toggleIcon.className = isMini ? 'bi bi-chevron-right' : 'bi bi-chevron-left';
+                }
+            }
+
+            // Auto-expand submenu if we're on a dataset or user page
+            const currentPath = window.location.pathname;
+            if (currentPath.includes('/datasets/')) {
+                const datasetsSubmenu = document.getElementById('datasetsSubmenu');
+                const datasetsToggle = document.querySelector('[onclick*="datasetsSubmenu"] .nav-toggle-icon');
+                if (datasetsSubmenu && datasetsToggle) {
+                    datasetsSubmenu.classList.add('show');
+                    datasetsToggle.classList.add('rotated');
+                    datasetsToggle.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
+                }
+            }
+            
+            // Auto-expand submenu if we're on a user page
+            if (currentPath.includes('/users/') || currentPath.includes('/audit/')) {
+                const usersSubmenu = document.getElementById('usersSubmenu');
+                const usersToggle = document.querySelector('[onclick*="usersSubmenu"] .nav-toggle-icon');
+                if (usersSubmenu && usersToggle) {
+                    usersSubmenu.classList.add('show');
+                    usersToggle.classList.add('rotated');
+                    usersToggle.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
+                }
+            }
+            
+            // Auto-expand submenu if we're on a training page
+            if (currentPath.includes('/trainings/')) {
+                const trainingsSubmenu = document.getElementById('trainingsSubmenu');
+                const trainingsToggle = document.querySelector('[onclick*="trainingsSubmenu"] .nav-toggle-icon');
+                if (trainingsSubmenu && trainingsToggle) {
+                    trainingsSubmenu.classList.add('show');
+                    trainingsToggle.classList.add('rotated');
+                    trainingsToggle.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
+                }
+            }
+        });
+
+        // Submenu toggle functionality
+        function toggleSubmenu(submenuId, toggleElement) {
+            const submenu = document.getElementById(submenuId);
+            const toggleIcon = toggleElement.querySelector('.nav-toggle-icon');
+            
+            if (submenu && toggleIcon) {
+                const isOpen = submenu.classList.contains('show');
+                
+                // Close all other submenus
+                document.querySelectorAll('.nav-submenu.show').forEach(menu => {
+                    if (menu.id !== submenuId) {
+                        menu.classList.remove('show');
+                        const otherIcon = document.querySelector(`[onclick*="${menu.id}"] .nav-toggle-icon`);
+                        if (otherIcon) {
+                            otherIcon.classList.remove('rotated');
+                            otherIcon.className = 'bi bi-chevron-right ms-auto nav-toggle-icon';
+                        }
+                    }
+                });
+                
+                if (isOpen) {
+                    submenu.classList.remove('show');
+                    toggleIcon.classList.remove('rotated');
+                    toggleIcon.className = 'bi bi-chevron-right ms-auto nav-toggle-icon';
+                } else {
+                    submenu.classList.add('show');
+                    toggleIcon.classList.add('rotated');
+                    toggleIcon.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
+                }
+            }
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

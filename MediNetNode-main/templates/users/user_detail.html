@@ -1,0 +1,529 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}User: {{ user_detail.username }} - MediNet{% endblock %}
+
+{% block page_title %}User Profile: {{ user_detail.username }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'user_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to List
+    </a>
+    {% if request.user.is_superuser or can_edit %}
+    <a href="/users/{{ user_detail.id }}/edit/" class="btn btn-primary">
+        <i class="bi bi-pencil me-1"></i>
+        Edit User
+    </a>
+    {% endif %}
+    {% if request.user.is_superuser or can_edit %}
+    <a href="/users/{{ user_detail.id }}/password/" class="btn btn-outline-warning">
+        <i class="bi bi-key me-1"></i>
+        Change Password
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- User Profile Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="modern-card p-4">
+            <div class="d-flex align-items-center">
+                <div class="position-relative me-4">
+                    <div class="user-avatar bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 80px; height: 80px; font-size: 2rem; font-weight: 600;">
+                        {{ user_detail.username|slice:":1"|upper }}
+                    </div>
+                    {% if user_detail.is_active %}
+                    <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle" style="width: 20px; height: 20px;"></span>
+                    {% endif %}
+                </div>
+                <div class="flex-grow-1">
+                    <h4 class="fw-bold mb-1">{{ user_detail.get_full_name|default:user_detail.username }}</h4>
+                    <p class="text-muted mb-2">@{{ user_detail.username }}</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if user_detail.is_active %}
+                            <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                                <i class="bi bi-check-circle me-1"></i>Active Account
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2">
+                                <i class="bi bi-x-circle me-1"></i>Inactive Account
+                            </span>
+                        {% endif %}
+                        {% if user_detail.role %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                                <i class="bi bi-person-badge me-1"></i>{{ user_detail.role.name }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-warning bg-opacity-10 text-warning px-3 py-2">
+                                <i class="bi bi-exclamation-triangle me-1"></i>No Role Assigned
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Personal Information Card -->
+    <div class="col-lg-8">
+        <div class="modern-card h-100">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-person-circle text-primary me-2"></i>
+                    Personal Information
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Username</label>
+                            <div class="fw-semibold">{{ user_detail.username }}</div>
+                        </div>
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Email Address</label>
+                            <div class="fw-semibold">
+                                <i class="bi bi-envelope text-muted me-2"></i>{{ user_detail.email }}
+                            </div>
+                        </div>
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Full Name</label>
+                            <div class="fw-semibold">
+                                {% if user_detail.get_full_name %}
+                                    <i class="bi bi-person text-muted me-2"></i>{{ user_detail.get_full_name }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Not specified</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Account Created</label>
+                            <div class="fw-semibold">
+                                <i class="bi bi-calendar-plus text-muted me-2"></i>{{ user_detail.date_joined|date:"F d, Y" }}
+                                <div class="small text-muted">{{ user_detail.date_joined|date:"H:i T" }}</div>
+                            </div>
+                        </div>
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Last Login</label>
+                            <div class="fw-semibold">
+                                {% if user_detail.last_login %}
+                                    <i class="bi bi-clock-history text-muted me-2"></i>{{ user_detail.last_login|date:"F d, Y" }}
+                                    <div class="small text-muted">{{ user_detail.last_login|date:"H:i T" }}</div>
+                                {% else %}
+                                    <span class="text-warning fst-italic">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>Never logged in
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="info-group mb-4">
+                            <label class="small text-muted fw-medium mb-1">Created By</label>
+                            <div class="fw-semibold">
+                                {% if user_detail.created_by %}
+                                    <i class="bi bi-person-gear text-muted me-2"></i>{{ user_detail.created_by.username }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">
+                                        <i class="bi bi-cpu text-muted me-2"></i>System
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Security Status Card -->
+    <div class="col-lg-4">
+        <div class="modern-card h-100">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-shield-check text-primary me-2"></i>
+                    Security Status
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <!-- Account Lock Status -->
+                <div class="status-item d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex align-items-center">
+                        {% if is_locked %}
+                            <div class="status-icon bg-warning bg-opacity-10 text-warning rounded-circle p-2 me-3">
+                                <i class="bi bi-lock"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold">Account Locked</div>
+                                <small class="text-muted">Too many failed attempts</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-warning bg-opacity-10 text-warning">Locked</span>
+                        {% else %}
+                            <div class="status-icon bg-success bg-opacity-10 text-success rounded-circle p-2 me-3">
+                                <i class="bi bi-unlock"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold">Account Unlocked</div>
+                                <small class="text-muted">Normal access</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-success bg-opacity-10 text-success">Active</span>
+                        {% endif %}
+                </div>
+                
+                <!-- Session Status -->
+                <div class="status-item d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex align-items-center">
+                        {% if session_expired %}
+                            <div class="status-icon bg-info bg-opacity-10 text-info rounded-circle p-2 me-3">
+                                <i class="bi bi-clock"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold">Session Expired</div>
+                                <small class="text-muted">New login required</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-info bg-opacity-10 text-info">Expired</span>
+                        {% else %}
+                            <div class="status-icon bg-success bg-opacity-10 text-success rounded-circle p-2 me-3">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold">Valid Session</div>
+                                <small class="text-muted">Session active</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-success bg-opacity-10 text-success">Valid</span>
+                        {% endif %}
+                </div>
+                
+                <!-- Role Permissions -->
+                {% if user_detail.role %}
+                <div class="border-top pt-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-key text-primary me-2"></i>
+                        <h6 class="fw-semibold mb-0">Role Permissions</h6>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for perm, value in user_detail.role.permissions.items %}
+                            {% if value %}
+                                <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                    <i class="bi bi-check-square me-1"></i>{{ perm|capfirst }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Keys Section -->
+{% if user_detail.role.name == 'RESEARCHER' %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-key-fill text-warning me-2"></i>
+                    API Access
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                {% if api_keys %}
+                    {% for api_key in api_keys %}
+                    <div class="d-flex justify-content-between align-items-start p-3 border rounded bg-light">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-2">
+                                <h6 class="fw-semibold mb-0 me-2">{{ api_key.name }}</h6>
+                                {% if api_key.is_active %}
+                                    <span class="badge bg-success bg-opacity-10 text-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger">Inactive</span>
+                                {% endif %}
+                            </div>
+                            <div class="small text-muted mb-2">
+                                <i class="bi bi-calendar me-1"></i>
+                                Created: {{ api_key.created_at|date:"F d, Y H:i" }}
+                            </div>
+                            {% if api_key.last_used_at %}
+                            <div class="small text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                Last used: {{ api_key.last_used_at|date:"F d, Y H:i" }}
+                                {% if api_key.last_used_ip %}
+                                    from {{ api_key.last_used_ip }}
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="small text-warning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Never used
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="ms-3">
+                            <button class="btn btn-sm btn-outline-warning" disabled>
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Regenerate (Coming Soon)
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-key text-muted mb-3" style="font-size: 3rem;"></i>
+                        <h6 class="text-muted">No API keys found</h6>
+                        <p class="small text-muted">
+                            API keys are automatically generated for RESEARCHER users during account creation.
+                        </p>
+                    </div>
+                {% endif %}
+                
+                <!-- API Usage Info -->
+                <div class="border-top mt-4 pt-4">
+                    <h6 class="fw-semibold mb-3">
+                        <i class="bi bi-info-circle text-primary me-2"></i>
+                        API Usage Information
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold text-muted mb-2">Available Endpoints:</h6>
+                            <ul class="list-unstyled small">
+                                <li><code class="text-primary">/api/v1/ping</code> - Health check</li>
+                                <li><code class="text-primary">/api/v1/get-data-info</code> - Get datasets</li>
+                                <li><code class="text-primary">/api/v1/start-client</code> - Start training</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold text-muted mb-2">Required Headers:</h6>
+                            <ul class="list-unstyled small">
+                                <li><code class="text-secondary">X-API-Key</code>: Your API key</li>
+                                <li><code class="text-secondary">X-Client-IP</code>: Your IP address</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Password History -->
+{% if password_history %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-key text-primary me-2"></i>
+                    Password History (Last 5)
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 fw-semibold px-4 py-3">Change Date</th>
+                                <th class="border-0 fw-semibold">Password Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for history in password_history %}
+                            <tr class="border-bottom border-light">
+                                <td class="px-4 py-3">
+                                    <div class="fw-semibold">{{ history.created_at|date:"F d, Y" }}</div>
+                                    <small class="text-muted">{{ history.created_at|date:"H:i T" }}</small>
+                                </td>
+                                <td class="py-3">
+                                    <code class="bg-light px-2 py-1 rounded text-muted small">{{ history.password_hash|slice:":20" }}...</code>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Activity Logs -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">
+                        <i class="bi bi-activity text-primary me-2"></i>
+                        Recent Activity (Last 10 logs)
+                    </h5>
+                    <a href="{% url 'system_audit_logs' %}?user={{ user_detail.id }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-list-ul me-1"></i>
+                        View All Logs
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if user_logs %}
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 fw-semibold px-4 py-3">Date & Time</th>
+                                <th class="border-0 fw-semibold">Action</th>
+                                <th class="border-0 fw-semibold">Resource</th>
+                                <th class="border-0 fw-semibold">Status</th>
+                                <th class="border-0 fw-semibold">IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in user_logs %}
+                            <tr class="border-bottom border-light">
+                                <td class="px-4 py-3">
+                                    <div class="fw-semibold">{{ log.timestamp|date:"F d, Y" }}</div>
+                                    <small class="text-muted">{{ log.timestamp|date:"H:i T" }}</small>
+                                </td>
+                                <td class="py-3">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                        <i class="bi bi-activity me-1"></i>{{ log.action|capfirst }}
+                                    </span>
+                                </td>
+                                <td class="py-3">
+                                    <span class="text-muted">{{ log.resource|default:"—" }}</span>
+                                </td>
+                                <td class="py-3">
+                                    {% if log.success %}
+                                        <span class="badge bg-success bg-opacity-10 text-success px-2 py-1">
+                                            <i class="bi bi-check-circle me-1"></i>Success
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1">
+                                            <i class="bi bi-x-circle me-1"></i>Failed
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3">
+                                    <code class="bg-light px-2 py-1 rounded text-muted small">{{ log.ip_address|default:"—" }}</code>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 80px; height: 80px;">
+                        <i class="bi bi-journal-x display-5"></i>
+                    </div>
+                    <h5 class="fw-semibold text-dark mb-2">No Activity Recorded</h5>
+                    <p class="text-muted">There are no activity logs for this user yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Danger Zone - Only visible to superusers viewing other users -->
+{% if request.user.is_superuser and user_detail.id != request.user.id %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="modern-card border-danger border-opacity-25">
+            <div class="card-header bg-danger bg-opacity-10 border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0 text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Danger Zone
+                </h5>
+                <small class="text-muted">Only superusers can delete user accounts</small>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div class="flex-grow-1">
+                        <h6 class="fw-semibold text-danger mb-2">Delete User Account</h6>
+                        <p class="text-muted mb-0">
+                            This action will permanently delete the user account and all associated data.
+                            <strong class="text-danger">This action cannot be undone.</strong>
+                        </p>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <button type="button" 
+                                class="btn btn-danger" 
+                                onclick="confirmDelete({{ user_detail.id }}, '{{ user_detail.username }}')">
+                            <i class="bi bi-trash me-2"></i>
+                            Delete User
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 pb-0">
+                <div class="text-center w-100">
+                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 60px; height: 60px;">
+                        <i class="bi bi-exclamation-triangle fs-3"></i>
+                    </div>
+                    <h5 class="modal-title fw-bold" id="deleteModalLabel">
+                        Confirm User Deletion
+                    </h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="position: absolute; right: 1rem; top: 1rem;"></button>
+            </div>
+            <div class="modal-body text-center px-4">
+                <p class="text-muted mb-3">
+                    Are you sure you want to permanently delete user 
+                    <span class="fw-semibold text-dark" id="deleteUsername"></span>?
+                </p>
+                <div class="alert alert-warning bg-warning bg-opacity-10 border-warning border-opacity-25 text-warning-emphasis">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone. All user data will be permanently removed.
+                </div>
+            </div>
+            <div class="modal-footer border-0 justify-content-center gap-2 pt-0">
+                <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Cancel
+                </button>
+                <form id="deleteForm" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger px-4">
+                        <i class="bi bi-trash me-1"></i>
+                        Delete User
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(userId, username) {
+    document.getElementById('deleteUsername').textContent = username;
+    document.getElementById('deleteForm').action = `/users/${userId}/delete/`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

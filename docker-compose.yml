@@ -1,0 +1,54 @@
+services:
+  medinet-node:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: medinet-node
+    ports:
+      - "5001:5001"
+    volumes:
+      # Persist configuration across container restarts (SECRET_KEY, etc.)
+      - medinet-config:/usr/src/app/config
+      # Persist database directory (not individual files - Docker can't mount files that don't exist)
+      - medinet-db-volume:/usr/src/app/db
+      # Persist logs
+      - medinet-logs:/usr/src/app/logs
+      # Persist media files
+      - medinet-media:/usr/src/app/media
+      # Persist datasets
+      - medinet-datasets:/usr/src/app/datasets
+    env_file:
+      - .env.docker  # Load environment variables from .env.docker
+    environment:
+      # Override specific variables if needed
+      # These take precedence over .env.docker
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1,172.17.0.1, 172.25.0.0, 172.25.0.1, 172.25.0.2, 172.25.0.3
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - medinet-network
+volumes:
+  medinet-config:
+    driver: local
+  medinet-db-volume:
+    driver: local
+  medinet-logs:
+    driver: local
+  medinet-media:
+    driver: local
+  medinet-datasets:
+    driver: local
+networks:
+  medinet-network:
+    driver: bridge
+    name: medinet_shared_network
+    external: true
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

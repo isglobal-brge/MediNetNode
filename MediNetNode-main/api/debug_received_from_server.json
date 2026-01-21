@@ -1,0 +1,176 @@
+{
+  "client_id": "client_696fe345",
+  "server_address": "192.168.68.106:8080",
+  "dataset_name": "HR attack v2",
+  "session_id": "27bb30a1-acda-4bc0-9fca-5d21825bde99",
+  "timestamp": "2025-12-09 16:39:27.130101",
+  "model": {
+    "train": {
+      "epochs": 5,
+      "batch_size": 16,
+      "rounds": 10,
+      "metrics": [],
+      "flower_version": "1.6"
+    },
+    "federated": {
+      "name": "FedAvg",
+      "parameters": {
+        "fraction_fit": 1,
+        "fraction_eval": 0.3,
+        "min_fit_clients": 1,
+        "min_eval_clients": 1,
+        "min_available_clients": 1
+      }
+    },
+    "model": {
+      "metadata": {
+        "version": "1.0",
+        "created_at": "2025-12-09T15:32:41.264Z",
+        "model_type": "dl_linear",
+        "framework": "pytorch"
+      },
+      "basic_info": {
+        "name": "test2",
+        "description": ""
+      },
+      "architecture": {
+        "layers": [
+          {
+            "name": "Input Layer",
+            "type": "input",
+            "params": {
+              "features": 52
+            },
+            "readonly": true
+          },
+          {
+            "name": "Linear",
+            "type": "Linear",
+            "category": "linear",
+            "params": {
+              "in_features": 52,
+              "out_features": 64,
+              "bias": true,
+              "features": 64
+            }
+          },
+          {
+            "name": "ReLU",
+            "type": "ReLU",
+            "category": "activation",
+            "params": {
+              "features": 64
+            }
+          },
+          {
+            "name": "Linear",
+            "type": "Linear",
+            "category": "linear",
+            "params": {
+              "in_features": 64,
+              "out_features": 1,
+              "bias": true,
+              "features": 1
+            }
+          },
+          {
+            "name": "Output Layer",
+            "type": "output",
+            "params": {
+              "features": 1
+            },
+            "readonly": true
+          }
+        ]
+      },
+      "training": {
+        "optimizer": {
+          "type": "adam",
+          "learning_rate": 0.001,
+          "weight_decay": 0,
+          "differential_privacy": {
+            "noise_multiplier": 1,
+            "max_grad_norm": 1,
+            "random_seed": 42
+          }
+        },
+        "loss_function": "bce_with_logits",
+        "metrics": [
+          "accuracy",
+          "f1_score"
+        ],
+        "epochs": 10,
+        "batch_size": 32,
+        "rounds": 10
+      },
+      "dataset": {
+        "selected_datasets": [
+          {
+            "dataset_id": "1",
+            "dataset_name": "HR attack v2",
+            "features_info": {
+              "input_features": 52,
+              "feature_types": {
+                "numeric": 23,
+                "categorical": 30
+              }
+            },
+            "target_info": {
+              "name": "Heart Attack Risk",
+              "type": "classification",
+              "task_subtype": "binary_classification",
+              "data_type": "numeric",
+              "num_classes": 2,
+              "classes": [
+                0,
+                1
+              ],
+              "output_neurons": 1,
+              "recommended_activation": "sigmoid",
+              "recommended_loss": "BCEWithLogitsLoss"
+            },
+            "num_columns": 53,
+            "num_rows": 8762,
+            "size": 2526628,
+            "connection": {
+              "name": "canruti",
+              "ip": "127.0.0.1",
+              "port": "8000"
+            }
+          }
+        ]
+      }
+    },
+    "dataset": {
+      "selected_datasets": [
+        {
+          "dataset_name": "HR attack v2",
+          "features_info": {
+            "input_features": 52,
+            "feature_types": {
+              "numeric": 23,
+              "categorical": 30
+            }
+          },
+          "target_info": {
+            "name": "Heart Attack Risk",
+            "type": "classification",
+            "task_subtype": "binary_classification",
+            "data_type": "numeric",
+            "num_classes": 2,
+            "classes": [
+              0,
+              1
+            ],
+            "output_neurons": 1,
+            "recommended_activation": "sigmoid",
+            "recommended_loss": "BCEWithLogitsLoss"
+          },
+          "num_columns": 53,
+          "num_rows": 8762,
+          "size": 2526628
+        }
+      ]
+    }
+  }
+}

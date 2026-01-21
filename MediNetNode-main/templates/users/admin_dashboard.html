@@ -1,0 +1,704 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - MediNet{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    /* Dataset metrics purple color */
+    .bg-purple {
+        background-color: #9c27b0 !important;
+    }
+    .text-purple {
+        color: #9c27b0 !important;
+    }
+    .bg-purple.bg-opacity-10 {
+        background-color: rgba(156, 39, 176, 0.1) !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Admin Dashboard{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'create_user' %}" class="btn btn-primary">
+        <i class="bi bi-person-plus me-1"></i>
+        New User
+    </a>
+    <a href="{% url 'export_users_csv' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>
+        Export CSV
+    </a>
+    <a href="{% url 'dataset:dashboard' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-database me-1"></i>
+        Datasets
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Admin Summary Bar -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="modern-card p-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="bi bi-speedometer2 text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 fw-bold">System Overview</h6>
+                        <small class="text-muted">{{ total_users }} users • {{ active_sessions }} active sessions</small>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'create_user' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-person-plus me-1"></i>Add User
+                    </a>
+                    <a href="{% url 'user_list' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-list me-1"></i>All Users
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-xl col-lg-4 col-md-6">
+        <div class="modern-card h-100 p-4">
+            <div class="stat-card-icon bg-primary bg-opacity-10 text-primary">
+                <i class="bi bi-people"></i>
+            </div>
+            <h3 class="stat-number">{{ total_users }}</h3>
+            <p class="text-muted mb-0 fw-medium">Total Users</p>
+            <div class="mt-2">
+                <small class="text-success">
+                    <i class="bi bi-arrow-up"></i> +{{ recent_logins }} today
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl col-lg-4 col-md-6">
+        <div class="modern-card h-100 p-4">
+            <div class="stat-card-icon bg-success bg-opacity-10 text-success">
+                <i class="bi bi-person-check"></i>
+            </div>
+            <h3 class="stat-number">{{ active_users }}</h3>
+            <p class="text-muted mb-0 fw-medium">Active Users</p>
+            <div class="mt-2">
+                <small class="text-success">
+                    <i class="bi bi-check-circle"></i> Healthy
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl col-lg-4 col-md-6">
+        <div class="modern-card h-100 p-4">
+            <div class="stat-card-icon bg-info bg-opacity-10 text-info">
+                <i class="bi bi-activity"></i>
+            </div>
+            <h3 class="stat-number">{{ active_sessions }}</h3>
+            <p class="text-muted mb-0 fw-medium">Active Sessions</p>
+            <div class="mt-2">
+                <small class="text-info">
+                    <i class="bi bi-clock"></i> Real-time
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl col-lg-6 col-md-6">
+        <div class="modern-card h-100 p-4">
+            <div class="stat-card-icon bg-warning bg-opacity-10 text-warning">
+                <i class="bi bi-shield-exclamation"></i>
+            </div>
+            <h3 class="stat-number">{{ locked_accounts }}</h3>
+            <p class="text-muted mb-0 fw-medium">Locked Accounts</p>
+            <div class="mt-2">
+                {% if locked_accounts > 0 %}
+                <small class="text-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Attention needed
+                </small>
+                {% else %}
+                <small class="text-success">
+                    <i class="bi bi-check-circle"></i> All clear
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Dataset Metrics Card -->
+    <div class="col-xl col-lg-6 col-md-6">
+        <div class="modern-card h-100 p-4">
+            <div class="stat-card-icon bg-purple bg-opacity-10 text-purple">
+                <i class="bi bi-database"></i>
+            </div>
+            <h3 class="stat-number">{{ total_datasets|default:0 }}</h3>
+            <p class="text-muted mb-0 fw-medium">Total Datasets</p>
+            <div class="mt-2">
+                <small class="text-purple">
+                    <i class="bi bi-hdd"></i> {{ total_size_formatted|default:"0 MB" }}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Charts and Analytics -->
+<div class="row g-4 mb-4">
+    <!-- Users by Role Chart -->
+    <div class="col-xl-5">
+        <div class="modern-card h-100">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">User Status</h5>
+                    <small class="text-muted">System Health</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="userStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Activity Timeline -->
+    <div class="col-xl-3">
+        <div class="modern-card h-100">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">
+                        <i class="bi bi-activity me-2"></i>User Activity
+                    </h5>
+                    <small class="text-muted">30 Days</small>
+                </div>
+            </div>
+            <div class="card-body p-3">
+                <div class="chart-container" style="height: 300px; padding: 0;">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="col-xl-4">
+        <div class="modern-card h-100">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-speedometer2 me-2"></i>System Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="status-item d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="status-icon bg-success bg-opacity-10 text-success rounded-circle p-2 me-3">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <span class="fw-medium">Security</span>
+                    </div>
+                    <span class="badge bg-success">Optimal</span>
+                </div>
+                
+                <div class="status-item d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="status-icon bg-primary bg-opacity-10 text-primary rounded-circle p-2 me-3">
+                            <i class="bi bi-speedometer2"></i>
+                        </div>
+                        <span class="fw-medium">Performance</span>
+                    </div>
+                    <span class="badge bg-primary">Good</span>
+                </div>
+                
+                <div class="status-item d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="status-icon bg-info bg-opacity-10 text-info rounded-circle p-2 me-3">
+                            <i class="bi bi-database"></i>
+                        </div>
+                        <span class="fw-medium">Database</span>
+                    </div>
+                    <span class="badge bg-info">Connected</span>
+                </div>
+                
+                <div class="status-item d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex align-items-center">
+                        <div class="status-icon bg-purple bg-opacity-10 text-purple rounded-circle p-2 me-3">
+                            <i class="bi bi-hdd"></i>
+                        </div>
+                        <span class="fw-medium">Storage</span>
+                    </div>
+                    <span class="badge bg-purple">{{ total_size_formatted|default:"0 MB" }}</span>
+                </div>
+
+                <!-- Quick Stats Section -->
+                <div class="border-top pt-3 pb-2">
+                    <div class="row text-center">
+                        <div class="col-4 border-end">
+                            <div class="h5 fw-bold text-info mb-1">{{ recent_logins }}</div>
+                            <div class="small text-muted">Logins (24h)</div>
+                        </div>
+                        <div class="col-4 border-end">
+                            <div class="h5 fw-bold text-purple mb-1">{{ total_datasets|default:0 }}</div>
+                            <div class="small text-muted">Datasets</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="h5 fw-bold text-secondary mb-1">{{ inactive_users }}</div>
+                            <div class="small text-muted">Inactive</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 px-4 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">
+                        <i class="bi bi-activity me-2"></i>Recent Activity
+                        <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#recentActivityCollapse" aria-expanded="true" 
+                                aria-controls="recentActivityCollapse">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </h5>
+                    <a href="{% url 'system_audit_logs' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-list-ul me-1"></i>View All
+                    </a>
+                </div>
+            </div>
+            <div class="collapse show" id="recentActivityCollapse">
+                <div class="card-body p-0">
+                    <div style="max-height: 320px; overflow-y: auto;" class="px-4 py-3">
+                    {% for log in recent_logs|slice:":4" %}
+                    <div class="activity-item d-flex align-items-start {% if not forloop.last %}border-bottom{% endif %} pb-3 mb-3">
+                        <div class="activity-icon me-3 mt-1">
+                            {% if log.success %}
+                            <div class="bg-success bg-opacity-10 text-success rounded-circle p-2">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            {% else %}
+                            <div class="bg-danger bg-opacity-10 text-danger rounded-circle p-2">
+                                <i class="bi bi-x-circle-fill"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-medium mb-1">{{ log.action|capfirst }}</div>
+                            <div class="text-muted small">
+                                <i class="bi bi-person me-1"></i>{% if log.user %}{{ log.user.username }}{% else %}System{% endif %}
+                                <span class="mx-2">•</span>
+                                <i class="bi bi-clock me-1"></i>{{ log.timestamp|timesince }} ago
+                            </div>
+                        </div>
+                        <span class="badge bg-{{ log.success|yesno:'success,danger' }} bg-opacity-10 text-{{ log.success|yesno:'success,danger' }}">
+                            {{ log.success|yesno:'Success,Failed' }}
+                        </span>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-journal-x display-4 mb-3"></i>
+                        <p class="mb-0">No recent activity</p>
+                    </div>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Users Summary Table -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 px-4 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">
+                        <i class="bi bi-people-fill me-2"></i>Users by Role
+                        <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#usersByRoleCollapse" aria-expanded="true" 
+                                aria-controls="usersByRoleCollapse">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </h5>
+                    <a href="{% url 'user_list' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-list me-1"></i>
+                        View All Users
+                    </a>
+                </div>
+            </div>
+            <div class="collapse show" id="usersByRoleCollapse">
+                <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 fw-semibold">Role</th>
+                                <th class="border-0 fw-semibold">Users</th>
+                                <th class="border-0 fw-semibold">Distribution</th>
+                                <th class="border-0 fw-semibold text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for role_stat in users_by_role %}
+                            <tr class="border-bottom border-light">
+                                <td class="py-3">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                                        <i class="bi bi-person-badge me-1"></i>
+                                        {{ role_stat.role__name|default:"No Role" }}
+                                    </span>
+                                </td>
+                                <td class="py-3">
+                                    <span class="fw-semibold h6 mb-0">{{ role_stat.count }}</span>
+                                    <small class="text-muted ms-1">users</small>
+                                </td>
+                                <td class="py-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-3" style="height: 8px;">
+                                            {% widthratio role_stat.count total_users 100 as percentage %}
+                                            <div class="progress-bar bg-primary" role="progressbar" 
+                                                 style="width: {{ percentage }}%"
+                                                 aria-valuenow="{{ percentage }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted fw-medium">{{ percentage }}%</small>
+                                    </div>
+                                </td>
+                                <td class="py-3 text-center">
+                                    {% if role_stat.role_id %}
+                                    <a href="{% url 'user_list' %}?role={{ role_stat.role_id }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye me-1"></i>
+                                        View
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'user_list' %}?role=" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye me-1"></i>
+                                        View
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-5">
+                                    <i class="bi bi-people display-4 mb-3"></i>
+                                    <p class="mb-0">No users registered yet</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Modern Medical Blue Theme Colors - #42a5f5
+    const gradientColors = [
+        'rgba(66, 165, 245, 0.8)',  // Primary blue #42a5f5
+        'rgba(0, 188, 212, 0.8)',   // Cyan
+        'rgba(76, 175, 80, 0.8)',   // Green
+        'rgba(255, 152, 0, 0.8)',   // Orange
+        'rgba(96, 125, 139, 0.8)'   // Blue grey
+    ];
+    
+    const hoverColors = [
+        'rgba(66, 165, 245, 1)',    // Primary blue #42a5f5
+        'rgba(0, 188, 212, 1)', 
+        'rgba(76, 175, 80, 1)',
+        'rgba(255, 152, 0, 1)',
+        'rgba(96, 125, 139, 1)'
+    ];
+
+    // User Status Chart - shows system health metrics instead of duplicate role info
+    const statusCtx = document.getElementById('userStatusChart').getContext('2d');
+    
+    // User status data - more useful than duplicate role information
+    const statusData = [
+        {
+            label: 'Active Users',
+            data: {{ active_users }},
+            color: 'rgba(76, 175, 80, 0.8)',
+            hoverColor: 'rgba(76, 175, 80, 1)'
+        },
+        {
+            label: 'Inactive Users', 
+            data: {{ inactive_users }},
+            color: 'rgba(158, 158, 158, 0.8)',
+            hoverColor: 'rgba(158, 158, 158, 1)'
+        },
+        {
+            label: 'Locked Accounts',
+            data: {{ locked_accounts }},
+            color: 'rgba(244, 67, 54, 0.8)',
+            hoverColor: 'rgba(244, 67, 54, 1)'
+        },
+        {
+            label: 'Active Sessions',
+            data: {{ active_sessions }},
+            color: 'rgba(66, 165, 245, 0.8)',
+            hoverColor: 'rgba(66, 165, 245, 1)'
+        }
+    ];
+    
+    const userStatusChart = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: statusData.map(item => item.label),
+            datasets: [{
+                data: statusData.map(item => item.data),
+                backgroundColor: statusData.map(item => item.color),
+                hoverBackgroundColor: statusData.map(item => item.hoverColor),
+                borderWidth: 0,
+                hoverBorderWidth: 3,
+                hoverBorderColor: '#fff',
+                cutout: '65%',
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: {
+                            size: 12,
+                            family: 'system-ui, -apple-system, sans-serif',
+                            weight: '500'
+                        },
+                        color: '#6c757d',
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    const backgroundColor = dataset.backgroundColor[i];
+                                    const value = dataset.data[i];
+                                    
+                                    return {
+                                        text: `${label} (${value})`,
+                                        fillStyle: backgroundColor,
+                                        strokeStyle: backgroundColor,
+                                        lineWidth: 0,
+                                        pointStyle: 'circle',
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    titleColor: '#495057',
+                    bodyColor: '#6c757d',
+                    borderColor: 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1,
+                    cornerRadius: 12,
+                    padding: 15,
+                    displayColors: true,
+                    usePointStyle: true,
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                            let description = '';
+                            switch(context.label) {
+                                case 'Active Users': description = 'users ready to work'; break;
+                                case 'Inactive Users': description = 'users needing attention'; break;
+                                case 'Locked Accounts': description = 'accounts requiring unlock'; break;
+                                case 'Active Sessions': description = 'current system sessions'; break;
+                            }
+                            return `${context.label}: ${context.raw} ${description} (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 1200,
+                easing: 'easeOutCubic'
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
+    // User Activity Timeline Chart (30-day trend)
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    
+    // Get real activity data from backend
+    const activityData = [
+        {% for activity in activity_data %}
+        {
+            date: '{{ activity.date }}',
+            logins: {{ activity.logins }},
+            registrations: {{ activity.registrations }}
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Create gradient for activity chart
+    const activityGradient = activityCtx.createLinearGradient(0, 0, 0, 300);
+    activityGradient.addColorStop(0, 'rgba(66, 165, 245, 0.8)');
+    activityGradient.addColorStop(1, 'rgba(66, 165, 245, 0.1)');
+    
+    const activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: activityData.map(item => item.date),
+            datasets: [{
+                label: 'Daily Logins',
+                data: activityData.map(item => item.logins),
+                borderColor: 'rgba(66, 165, 245, 1)',
+                backgroundColor: activityGradient,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#ffffff',
+                pointBorderColor: 'rgba(66, 165, 245, 1)',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        color: '#6c757d',
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#6c757d',
+                        font: {
+                            size: 10
+                        },
+                        maxTicksLimit: 6
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    titleColor: '#495057',
+                    bodyColor: '#6c757d',
+                    borderColor: 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12,
+                    displayColors: true,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} login${context.parsed.y !== 1 ? 's' : ''}`;
+                        }
+                    }
+                }
+            },
+            animation: {
+                duration: 1500,
+                easing: 'easeOutCubic'
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
+    // Add hover effect to modern cards
+    const modernCards = document.querySelectorAll('.modern-card');
+    modernCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-8px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+
+    // Collapse animation improvements
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
+        const targetId = button.getAttribute('data-bs-target');
+        const target = document.querySelector(targetId);
+        const icon = button.querySelector('i');
+        
+        target.addEventListener('show.bs.collapse', function() {
+            icon.classList.remove('bi-chevron-down');
+            icon.classList.add('bi-chevron-up');
+        });
+        
+        target.addEventListener('hide.bs.collapse', function() {
+            icon.classList.remove('bi-chevron-up');
+            icon.classList.add('bi-chevron-down');
+        });
+    });
+
+    // Animate statistics numbers on load
+    const statNumbers = document.querySelectorAll('.stat-number');
+    statNumbers.forEach((element, index) => {
+        const finalValue = parseInt(element.textContent);
+        let currentValue = 0;
+        const increment = finalValue / 50;
+        const timer = setInterval(() => {
+            currentValue += increment;
+            if (currentValue >= finalValue) {
+                element.textContent = finalValue;
+                clearInterval(timer);
+            } else {
+                element.textContent = Math.floor(currentValue);
+            }
+        }, 30 + (index * 10)); // Stagger animations
+    });
+});
+</script>
+{% endblock %}

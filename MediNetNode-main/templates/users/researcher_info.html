@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Limited Access - MediNet{% endblock %}
+
+{% block page_title %}{% endblock %}
+
+{% block page_header %}
+<div class="pt-3 pb-2 mb-3 border-bottom">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="h2 m-0">Limited Access</h1>
+    <a href="{% url 'logout' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left-circle me-1"></i>
+      Back to Login
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="alert alert-warning d-flex align-items-start" role="alert">
+      <i class="bi bi-shield-lock me-2 fs-4"></i>
+      <div>
+        <h5 class="alert-heading">Web Access Restricted</h5>
+        <p class="mb-1">Your role <strong>RESEARCHER</strong> does not grant access to the web interface.</p>
+        <p class="mb-3">RESEARCHER users must access the system exclusively through API endpoints using proper authentication.</p>
+        <hr>
+        <p class="mb-0 small">
+          <strong>API Documentation:</strong> Check <code>API_RESEARCHER_DOCUMENTATION.md</code> in the project root for complete API usage examples.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-code-square me-2"></i>API Access Information
+      </div>
+      <div class="card-body">
+        <h6 class="mb-3">Available API Endpoints:</h6>
+        <ul class="mb-3">
+          <li><code>GET /api/v1/ping</code> - Health check and connectivity test</li>
+          <li><code>GET /api/v1/get-data-info</code> - Retrieve authorized dataset metadata</li>
+          <li><code>POST /api/v1/start-client</code> - Initiate federated learning training</li>
+        </ul>
+        
+        <h6 class="mb-3">Authentication Requirements:</h6>
+        <ul class="mb-3">
+          <li><strong>X-API-Key:</strong> Your assigned API key (contact admin)</li>
+          <li><strong>X-Client-IP:</strong> Your whitelisted IP address for IP-based authentication</li>
+          <li><strong>Content-Type:</strong> application/json (for POST requests)</li>
+        </ul>
+        <p class="small text-muted">Web interface access is restricted to RESEARCHER users - only API endpoints are available.</p>
+        
+        <div class="alert alert-info small mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Security:</strong> All API access is logged and monitored. Ensure your IP is whitelisted and use only your assigned API key.
+        </div>
+      </div>
+    </div>
+  </div>
+  
+</div>
+{% endblock %}
+
+

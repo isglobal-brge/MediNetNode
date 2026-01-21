@@ -1,0 +1,408 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create User - MediNet{% endblock %}
+
+{% block page_title %}Create New User{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'user_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>
+    Back to List
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Form Content -->
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 p-3 pb-0">
+                <div class="text-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 48px; height: 48px;">
+                        <i class="bi bi-person-plus fs-5"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">Create New User</h5>
+                    <p class="text-muted mb-0">Fill in the user information</p>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="{{ form.username.id_for_label }}" class="form-label fw-medium">
+                                Username <span class="text-danger">*</span>
+                            </label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.username.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text small">Min. 3 characters, letters/numbers only</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="{{ form.email.id_for_label }}" class="form-label fw-medium">
+                                Email <span class="text-danger">*</span>
+                            </label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.email.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="{{ form.first_name.id_for_label }}" class="form-label fw-medium">
+                                First Name <span class="text-danger">*</span>
+                            </label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.first_name.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="{{ form.last_name.id_for_label }}" class="form-label fw-medium">
+                                Last Name <span class="text-danger">*</span>
+                            </label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.last_name.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Role & Security -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="{{ form.role.id_for_label }}" class="form-label fw-medium">
+                                Role <span class="text-danger">*</span>
+                            </label>
+                            {{ form.role }}
+                            {% if form.role.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.role.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="{{ form.password1.id_for_label }}" class="form-label fw-medium">
+                                Password <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                {{ form.password1 }}
+                                <button type="button" class="btn btn-outline-primary" id="generate-password" title="Generate secure password">
+                                    <i class="bi bi-key"></i>
+                                </button>
+                            </div>
+                            {% if form.password1.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.password1.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                            <div class="password-feedback invalid-feedback" id="password-feedback" style="display: none;"></div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="{{ form.password2.id_for_label }}" class="form-label fw-medium">
+                                Confirm <span class="text-danger">*</span>
+                            </label>
+                            {{ form.password2 }}
+                            {% if form.password2.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.password2.errors|join:", " }}
+                                </div>
+                            {% endif %}
+                            <div class="password-match-feedback invalid-feedback" id="password-match-feedback" style="display: none;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Password Requirements -->
+                    <div class="bg-info bg-opacity-10 rounded p-3 mb-3">
+                        <div class="small text-info-emphasis">
+                            <div class="fw-semibold mb-2">
+                                <i class="bi bi-info-circle me-1"></i>Password Requirements
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    • Min. 10 characters<br>
+                                    • Include uppercase (A-Z)
+                                </div>
+                                <div class="col-md-6">
+                                    • Include lowercase (a-z)<br>
+                                    • Include numbers & symbols
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus me-1"></i>
+                            Create User
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get form elements
+    const form = document.querySelector('form');
+    const password1 = document.getElementById('{{ form.password1.id_for_label }}');
+    const password2 = document.getElementById('{{ form.password2.id_for_label }}');
+    const passwordFeedback = document.getElementById('password-feedback');
+    const passwordMatchFeedback = document.getElementById('password-match-feedback');
+    const username = document.getElementById('{{ form.username.id_for_label }}');
+    const email = document.getElementById('{{ form.email.id_for_label }}');
+    
+    // Email validation
+    if (email) {
+        email.addEventListener('input', function() {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            this.classList.remove('is-valid', 'is-invalid');
+            
+            if (this.value.trim() === '') {
+                return;
+            }
+            
+            if (emailRegex.test(this.value)) {
+                this.classList.add('is-valid');
+            } else {
+                this.classList.add('is-invalid');
+            }
+        });
+    }
+    
+    // Username validation
+    if (username) {
+        username.addEventListener('input', function() {
+            const usernameRegex = /^[a-zA-Z0-9]{3,}$/;
+            this.classList.remove('is-valid', 'is-invalid');
+            
+            if (this.value.trim() === '') {
+                return;
+            }
+            
+            if (usernameRegex.test(this.value) && this.value.length >= 3) {
+                this.classList.add('is-valid');
+            } else {
+                this.classList.add('is-invalid');
+            }
+        });
+    }
+    
+    // Secure password generator
+    function generateSecurePassword() {
+        const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const numbers = '0123456789';
+        const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+        
+        const allChars = lowercase + uppercase + numbers + symbols;
+        let password = '';
+        
+        // Ensure at least one character from each required category
+        password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+        password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+        password += numbers.charAt(Math.floor(Math.random() * numbers.length));
+        password += symbols.charAt(Math.floor(Math.random() * symbols.length));
+        
+        // Fill the rest of the password (minimum 12 characters total)
+        for (let i = 4; i < 12; i++) {
+            password += allChars.charAt(Math.floor(Math.random() * allChars.length));
+        }
+        
+        // Shuffle the password to avoid predictable patterns
+        return password.split('').sort(() => 0.5 - Math.random()).join('');
+    }
+
+    // Password validation function
+    function validatePassword(password) {
+        const errors = [];
+        
+        if (password.length < 10) {
+            errors.push('Must be at least 10 characters');
+        }
+        if (!/[a-z]/.test(password)) {
+            errors.push('Must contain lowercase letter');
+        }
+        if (!/[A-Z]/.test(password)) {
+            errors.push('Must contain uppercase letter');
+        }
+        if (!/\d/.test(password)) {
+            errors.push('Must contain number');
+        }
+        if (!/[^a-zA-Z\d]/.test(password)) {
+            errors.push('Must contain special character');
+        }
+        if (/^\d+$/.test(password)) {
+            errors.push('Cannot be entirely numeric');
+        }
+        
+        // Check against common passwords (simplified)
+        const commonPasswords = ['password', '12345678', 'qwerty', 'abc123', 'password123', '123456789', '1234567890'];
+        if (commonPasswords.includes(password.toLowerCase())) {
+            errors.push('Password is too common');
+        }
+        
+        return errors;
+    }
+    
+    // Real-time password validation
+    if (password1) {
+        password1.addEventListener('input', function() {
+            const password = this.value;
+            const errors = validatePassword(password);
+            
+            this.classList.remove('is-valid', 'is-invalid');
+            passwordFeedback.style.display = 'none';
+            
+            if (password.trim() === '') {
+                return;
+            }
+            
+            if (errors.length === 0) {
+                this.classList.add('is-valid');
+            } else {
+                this.classList.add('is-invalid');
+                passwordFeedback.innerHTML = errors.join('. ') + '.';
+                passwordFeedback.style.display = 'block';
+            }
+            
+            // Trigger password confirmation validation
+            if (password2 && password2.value) {
+                validatePasswordMatch();
+            }
+        });
+    }
+    
+    // Password confirmation validation
+    function validatePasswordMatch() {
+        if (!password1 || !password2) return;
+        
+        const password = password1.value;
+        const confirmPassword = password2.value;
+        
+        password2.classList.remove('is-valid', 'is-invalid');
+        passwordMatchFeedback.style.display = 'none';
+        
+        if (confirmPassword.trim() === '') {
+            return;
+        }
+        
+        if (password === confirmPassword) {
+            if (validatePassword(password).length === 0) {
+                password2.classList.add('is-valid');
+            } else {
+                password2.classList.add('is-invalid');
+                passwordMatchFeedback.innerHTML = 'Password must meet all requirements.';
+                passwordMatchFeedback.style.display = 'block';
+            }
+        } else {
+            password2.classList.add('is-invalid');
+            passwordMatchFeedback.innerHTML = 'Passwords do not match.';
+            passwordMatchFeedback.style.display = 'block';
+        }
+    }
+    
+    if (password2) {
+        password2.addEventListener('input', validatePasswordMatch);
+    }
+    
+    // Password generator button event handler
+    const generateButton = document.getElementById('generate-password');
+    if (generateButton) {
+        generateButton.addEventListener('click', function() {
+            const generatedPassword = generateSecurePassword();
+            
+            // Set password values
+            password1.value = generatedPassword;
+            password2.value = generatedPassword;
+            
+            // Trigger validation for both fields
+            const inputEvent = new Event('input', { bubbles: true });
+            password1.dispatchEvent(inputEvent);
+            password2.dispatchEvent(inputEvent);
+            
+            // Show a brief feedback that password was generated
+            this.innerHTML = '<i class="bi bi-check text-success"></i>';
+            setTimeout(() => {
+                this.innerHTML = '<i class="bi bi-key"></i>';
+            }, 1000);
+            
+            // Optional: Briefly highlight the password fields
+            password1.style.boxShadow = '0 0 0 0.2rem rgba(25, 135, 84, 0.25)';
+            password2.style.boxShadow = '0 0 0 0.2rem rgba(25, 135, 84, 0.25)';
+            setTimeout(() => {
+                password1.style.boxShadow = '';
+                password2.style.boxShadow = '';
+            }, 1500);
+        });
+    }
+    
+    // Form submission validation
+    form.addEventListener('submit', function(e) {
+        let hasErrors = false;
+        
+        // Validate all fields
+        const requiredInputs = form.querySelectorAll('input[required], select[required]');
+        requiredInputs.forEach(input => {
+            if (!input.value.trim()) {
+                input.classList.add('is-invalid');
+                hasErrors = true;
+            }
+        });
+        
+        // Validate passwords specifically
+        if (password1 && password1.value) {
+            const passwordErrors = validatePassword(password1.value);
+            if (passwordErrors.length > 0) {
+                password1.classList.add('is-invalid');
+                passwordFeedback.innerHTML = passwordErrors.join('. ') + '.';
+                passwordFeedback.style.display = 'block';
+                hasErrors = true;
+            }
+        }
+        
+        if (password2 && password1 && password1.value !== password2.value) {
+            password2.classList.add('is-invalid');
+            passwordMatchFeedback.innerHTML = 'Passwords do not match.';
+            passwordMatchFeedback.style.display = 'block';
+            hasErrors = true;
+        }
+        
+        if (hasErrors) {
+            e.preventDefault();
+            // Scroll to first error
+            const firstError = form.querySelector('.is-invalid');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstError.focus();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

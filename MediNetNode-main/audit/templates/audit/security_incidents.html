@@ -1,0 +1,756 @@
+{% extends 'audit/base_auditor.html' %}
+{% load static %}
+
+{% block title %}Security Incidents - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Incident management styling */
+    .incident-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .incident-card:hover {
+        box-shadow: var(--shadow-hover);
+    }
+    
+    /* Clickable rows styling */
+    .clickable-row {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .clickable-row:hover {
+        background-color: rgba(66, 165, 245, 0.08);
+        transform: scale(1.005);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        z-index: 2;
+    }
+    
+    .clickable-row:active {
+        transform: scale(0.995);
+    }
+    
+    /* Ensure dropdowns appear above everything */
+    .table-responsive {
+        overflow: visible;
+    }
+    
+    .dropdown.show {
+        z-index: 1070;
+    }
+    
+    /* Severity level styling */
+    .severity-1 { background-color: #4caf50; }
+    .severity-2 { background-color: #2196f3; }
+    .severity-3 { background-color: #ff9800; }
+    .severity-4 { background-color: #f44336; }
+    
+    /* State badges */
+    .state-open { background-color: #f44336; }
+    .state-investigating { background-color: #ff9800; }
+    .state-resolved { background-color: #4caf50; }
+    .state-closed { background-color: #9e9e9e; }
+    
+    /* Incident type styling */
+    .incident-type {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Quick filters - Audit Theme */
+    .filter-badge {
+        background-color: rgba(255, 87, 34, 0.1);
+        color: var(--audit-primary);
+        border: 1px solid rgba(255, 87, 34, 0.2);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .filter-badge:hover {
+        background-color: var(--audit-primary);
+        color: white;
+    }
+    
+    /* Enhanced Action Menu Styling */
+    .view-btn {
+        background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+        border: none;
+        color: white;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .view-btn:hover {
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(66, 165, 245, 0.4);
+        color: white;
+    }
+    
+    .action-dropdown {
+        position: relative;
+        z-index: 1050;
+    }
+    
+    .action-dropdown .dropdown-toggle {
+        background: linear-gradient(135deg, var(--audit-primary) 0%, #e64a19 100%);
+        border: none;
+        color: white;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(255, 87, 34, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .action-dropdown .dropdown-toggle:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(255, 87, 34, 0.4);
+    }
+    
+    .action-dropdown .dropdown-menu {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.95);
+        min-width: 220px;
+        margin-top: 5px;
+        z-index: 1080;
+        position: absolute;
+    }
+    
+    .action-dropdown .dropdown-item {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin: 4px 8px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+    
+    .action-dropdown .dropdown-item:hover {
+        background: rgba(255, 87, 34, 0.1);
+        transform: translateX(4px);
+    }
+    
+    .action-dropdown .dropdown-item i {
+        width: 20px;
+        margin-right: 8px;
+    }
+    
+    /* Custom Modal Styling */
+    .custom-confirm-modal .modal-content {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(20px);
+    }
+    
+    .custom-confirm-modal .modal-header {
+        background: linear-gradient(135deg, var(--audit-primary) 0%, #e64a19 100%);
+        color: white;
+        border-radius: 16px 16px 0 0;
+        border: none;
+        padding: 20px;
+    }
+    
+    .custom-confirm-modal .modal-body {
+        padding: 24px;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    
+    .custom-confirm-modal .modal-footer {
+        border: none;
+        padding: 20px 24px;
+        justify-content: space-between;
+    }
+    
+    .custom-confirm-modal .btn-confirm {
+        background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+        border: none;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        box-shadow: 0 4px 16px rgba(255, 87, 34, 0.3);
+    }
+    
+    .custom-confirm-modal .btn-cancel {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #6c757d;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    /* Audit theme for primary elements */
+    .btn-primary {
+        background-color: var(--audit-primary);
+        border-color: var(--audit-primary);
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--audit-dark);
+        border-color: var(--audit-dark);
+    }
+    
+    /* Action buttons */
+    .action-btn {
+        border: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    /* Stats cards - Audit Theme */
+    .stat-card {
+        background: var(--audit-gradient);
+        color: white;
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Security Incidents Management{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'audit:auditor_dashboard' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-funnel me-1"></i>
+            Quick Filters
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="?state=OPEN">Open Incidents</a></li>
+            <li><a class="dropdown-item" href="?state=INVESTIGATING">Under Investigation</a></li>
+            <li><a class="dropdown-item" href="?severity=4">Critical Severity</a></li>
+            <li><a class="dropdown-item" href="?severity=3">High Severity</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'audit:security_incidents' %}">Clear Filters</a></li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Statistics Overview -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-exclamation-triangle fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ incident_stats.total }}</div>
+                    <small>Total Incidents</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-shield-exclamation fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ incident_stats.open }}</div>
+                    <small>Open</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-search fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ incident_stats.investigating }}</div>
+                    <small>Investigating</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);">
+            <div class="d-flex align-items-center justify-content-center">
+                <div class="me-3">
+                    <i class="bi bi-check-circle fs-1"></i>
+                </div>
+                <div>
+                    <div class="h3 mb-0">{{ incident_stats.resolved }}</div>
+                    <small>Resolved</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="incident-card p-4 mb-4">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label for="state" class="form-label">State</label>
+            <select class="form-select" id="state" name="state" onchange="this.form.submit()">
+                <option value="" {% if not current_filters.state %}selected{% endif %}>Open & Investigating</option>
+                <option value="ALL" {% if current_filters.state == 'ALL' %}selected{% endif %}>All States</option>
+                {% for value, label in states %}
+                <option value="{{ value }}" {% if current_filters.state == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="severity" class="form-label">Severity</label>
+            <select class="form-select" id="severity" name="severity" onchange="this.form.submit()">
+                <option value="" {% if not current_filters.severity %}selected{% endif %}>All Severities</option>
+                {% for value, label in severity_levels %}
+                <option value="{{ value }}" {% if current_filters.severity == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="search" class="form-label">Search</label>
+            <input type="text" class="form-control" id="search" name="search" 
+                   value="{{ current_filters.search }}" 
+                   placeholder="Search in description...">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search me-1"></i>
+                Filter
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Active Filters Display -->
+{% if current_filters %}
+<div class="mb-3">
+    <small class="text-muted">Active Filters:</small>
+    {% for key, value in current_filters.items %}
+        {% if value and value != 'ALL' and value != '' %}
+        <span class="badge filter-badge me-1">{{ key }}: {{ value }}</span>
+        {% endif %}
+    {% endfor %}
+    {% if current_filters.items %}
+    <a href="{% url 'audit:security_incidents' %}" class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-x-circle me-1"></i>Clear All
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Incidents Table -->
+<div class="incident-card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>State</th>
+                    <th>Description</th>
+                    <th>Assigned To</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for incident in page_obj %}
+                <tr class="clickable-row" onclick="toggleIncidentDetails('{{ incident.id }}')">
+                    <td>
+                        <div class="fw-bold">#{{ incident.id }}</div>
+                        <div class="small text-muted">Risk: {{ incident.risk_score }}</div>
+                    </td>
+                    <td>
+                        <div class="incident-type">{{ incident.get_incident_type_display }}</div>
+                    </td>
+                    <td>
+                        <span class="badge severity-{{ incident.severity }}">
+                            {{ incident.get_severity_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge state-{{ incident.state|lower }}">
+                            {{ incident.get_state_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="fw-bold">{{ incident.description|truncatechars:60 }}</div>
+                        {% if incident.related_events.exists %}
+                        <div class="small text-muted">
+                            <i class="bi bi-link me-1"></i>
+                            {{ incident.related_events.count }} related event{{ incident.related_events.count|pluralize }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if incident.assigned_to %}
+                        <div class="fw-bold">{{ incident.assigned_to.username }}</div>
+                        {% else %}
+                        <span class="text-muted">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div>{{ incident.created_at|date:"M d, Y" }}</div>
+                        <div class="small text-muted">{{ incident.created_at|time:"H:i" }}</div>
+                    </td>
+                    <td onclick="event.stopPropagation()">
+                        {% if incident.state != 'CLOSED' %}
+                        <div class="dropdown action-dropdown">
+                            <button class="btn dropdown-toggle" 
+                                    type="button" data-bs-toggle="dropdown"
+                                    title="Update Incident State">
+                                <i class="bi bi-gear-fill me-1"></i> Actions
+                            </button>
+                                <ul class="dropdown-menu">
+                                    {% if incident.state != 'OPEN' %}
+                                    <li><a class="dropdown-item" href="#" onclick="updateIncidentState({{ incident.id }}, 'OPEN')">
+                                        <i class="bi bi-exclamation-circle text-danger"></i> Mark as Open
+                                    </a></li>
+                                    {% endif %}
+                                    {% if incident.state != 'INVESTIGATING' %}
+                                    <li><a class="dropdown-item" href="#" onclick="updateIncidentState({{ incident.id }}, 'INVESTIGATING')">
+                                        <i class="bi bi-search text-warning"></i> Mark as Investigating
+                                    </a></li>
+                                    {% endif %}
+                                    {% if incident.state != 'RESOLVED' %}
+                                    <li><a class="dropdown-item" href="#" onclick="updateIncidentState({{ incident.id }}, 'RESOLVED')">
+                                        <i class="bi bi-check-circle text-success"></i> Mark as Resolved
+                                    </a></li>
+                                    {% endif %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="#" onclick="updateIncidentState({{ incident.id }}, 'CLOSED')">
+                                        <i class="bi bi-x-circle text-muted"></i> Close Incident
+                                    </a></li>
+                                </ul>
+                        </div>
+                        {% else %}
+                        <span class="text-muted small">Closed</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <!-- Collapsible Details Row -->
+                <tr>
+                    <td colspan="8" class="p-0">
+                        <div class="collapse" id="incident-{{ incident.id }}">
+                            <div class="p-4 bg-light border-top">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h6>Incident Details</h6>
+                                        <p class="mb-3">{{ incident.description }}</p>
+                                        
+                                        {% if incident.resolution_notes %}
+                                        <h6>Resolution Notes</h6>
+                                        <p class="mb-3">{{ incident.resolution_notes }}</p>
+                                        {% endif %}
+                                        
+                                        {% if incident.related_events.exists %}
+                                        <h6>Related Events ({{ incident.related_events.count }})</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Timestamp</th>
+                                                        <th>Action</th>
+                                                        <th>User</th>
+                                                        <th>Risk</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for event in incident.related_events.all|slice:":5" %}
+                                                    <tr>
+                                                        <td class="small">{{ event.timestamp|date:"M d, H:i" }}</td>
+                                                        <td class="small">{{ event.action }}</td>
+                                                        <td class="small">{{ event.user.username|default:"Anonymous" }}</td>
+                                                        <td><span class="badge bg-secondary">{{ event.risk_score }}</span></td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                            {% if incident.related_events.count > 5 %}
+                                            <a href="{% url 'audit:audit_search' %}?search={{ incident.id }}" class="btn btn-sm btn-outline-primary">
+                                                View All {{ incident.related_events.count }} Events
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <h6>Incident Information</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>ID:</strong></td>
+                                                <td>#{{ incident.id }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Type:</strong></td>
+                                                <td>{{ incident.get_incident_type_display }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Severity:</strong></td>
+                                                <td><span class="badge severity-{{ incident.severity }}">{{ incident.get_severity_display }}</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>State:</strong></td>
+                                                <td><span class="badge state-{{ incident.state|lower }}">{{ incident.get_state_display }}</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Risk Score:</strong></td>
+                                                <td>{{ incident.risk_score }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Created:</strong></td>
+                                                <td>{{ incident.created_at|date:"M d, Y H:i" }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Updated:</strong></td>
+                                                <td>{{ incident.updated_at|date:"M d, Y H:i" }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Assigned:</strong></td>
+                                                <td>{{ incident.assigned_to.username|default:"Unassigned" }}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-4">
+                        <i class="bi bi-shield-check fs-1 text-muted"></i>
+                        <p class="text-muted">No security incidents found.</p>
+                        {% if current_filters.items %}
+                        <a href="{% url 'audit:security_incidents' %}" class="btn btn-outline-primary">Clear Filters</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex justify-content-between align-items-center p-3 border-top">
+        <div class="small text-muted">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} incidents
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page=1">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>
+                </li>
+                {% endif %}
+                
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                </li>
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.next_page_number }}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.paginator.num_pages }}">Last</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- CSRF Token for AJAX calls -->
+<input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+
+<script>
+function toggleIncidentDetails(incidentId) {
+    const detailsRow = document.getElementById('incident-' + incidentId);
+    const collapseInstance = bootstrap.Collapse.getInstance(detailsRow);
+    
+    if (collapseInstance) {
+        collapseInstance.toggle();
+    } else {
+        new bootstrap.Collapse(detailsRow, { toggle: true });
+    }
+}
+
+function updateIncidentState(incidentId, newState) {
+    // Set up custom modal
+    const stateLabels = {
+        'OPEN': 'Open',
+        'INVESTIGATING': 'Under Investigation', 
+        'RESOLVED': 'Resolved',
+        'CLOSED': 'Closed'
+    };
+    
+    const stateIcons = {
+        'OPEN': 'bi-exclamation-circle text-danger',
+        'INVESTIGATING': 'bi-search text-warning',
+        'RESOLVED': 'bi-check-circle text-success', 
+        'CLOSED': 'bi-x-circle text-muted'
+    };
+    
+    const message = `
+        <div class="text-center mb-3">
+            <i class="bi ${stateIcons[newState]} fs-1 mb-3"></i>
+        </div>
+        <p class="mb-0">Are you sure you want to change this incident status to <strong>"${stateLabels[newState]}"</strong>?</p>
+        <small class="text-muted">This action will be logged and may trigger notifications to relevant team members.</small>
+    `;
+    
+    document.getElementById('confirmMessage').innerHTML = message;
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+    modal.show();
+    
+    // Handle confirmation
+    document.getElementById('confirmButton').onclick = function() {
+        modal.hide();
+        
+        const csrfToken = document.getElementById('csrf-token').value;
+        
+        fetch(`/audit/incidents/${incidentId}/update-state/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken
+            },
+            body: `state=${newState}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show success toast instead of alert
+                showToast('Success!', `Incident marked as ${stateLabels[newState]}`, 'success');
+                // Reload the page to reflect changes
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Error', 'Failed to update incident: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Network Error', 'Failed to update incident. Please try again.', 'error');
+        });
+    };
+}
+
+// Toast notification function
+function showToast(title, message, type) {
+    const toastHTML = `
+        <div class="toast align-items-center text-bg-${type === 'success' ? 'success' : 'danger'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong>${title}</strong><br>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    const toastElement = toastContainer.lastElementChild;
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+    
+    // Remove toast element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+// Auto-refresh for open incidents every 2 minutes
+document.addEventListener('DOMContentLoaded', function() {
+    const openIncidents = {{ incident_stats.open }};
+    if (openIncidents > 0) {
+        setInterval(() => {
+            // Only refresh if user is still on the page
+            if (!document.hidden) {
+                location.reload();
+            }
+        }, 2 * 60 * 1000); // 2 minutes
+    }
+});
+</script>
+
+<!-- Custom Confirmation Modal -->
+<div class="modal fade custom-confirm-modal" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmModalLabel">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Confirm Action
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="confirmMessage">
+                    <!-- Message will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-confirm" id="confirmButton">
+                    <i class="bi bi-check-circle me-1"></i>
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

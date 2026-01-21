@@ -1,0 +1,615 @@
+{% extends 'audit/base_auditor.html' %}
+{% load static %}
+
+{% block title %}Audit Search - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Search form styling */
+    .search-form {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Risk score badges */
+    .risk-critical { background-color: #d32f2f; }
+    .risk-high { background-color: #f57c00; }
+    .risk-medium { background-color: #1976d2; }
+    .risk-low { background-color: #388e3c; }
+    
+    /* Event row styling */
+    .event-row {
+        border-left: 4px solid transparent;
+        transition: all 0.3s ease;
+    }
+    
+    .event-row:hover {
+        background-color: rgba(255, 87, 34, 0.05);
+        border-left-color: var(--audit-primary);
+    }
+    
+    .event-row.critical {
+        border-left-color: #d32f2f;
+        background-color: rgba(211, 47, 47, 0.02);
+    }
+    
+    .event-row.security {
+        border-left-color: #ff5722;
+        background-color: rgba(255, 87, 34, 0.02);
+    }
+    
+    /* Details collapse */
+    .details-content {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    
+    /* Filter badges - Audit Theme */
+    .filter-badge {
+        background-color: rgba(255, 87, 34, 0.1);
+        color: var(--audit-primary);
+        border: 1px solid rgba(255, 87, 34, 0.2);
+    }
+    
+    /* Audit theme for buttons and badges */
+    .btn-primary {
+        background-color: var(--audit-primary);
+        border-color: var(--audit-primary);
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--audit-dark);
+        border-color: var(--audit-dark);
+    }
+    
+    .badge.bg-primary {
+        background-color: var(--audit-primary) !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Advanced Audit Search{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'audit:auditor_dashboard' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i>
+            Export Options
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{% url 'audit:export_audit_report' %}{% if current_filters %}?{{ current_filters.urlencode }}{% endif %}">
+                <i class="bi bi-file-earmark-spreadsheet me-2"></i>Current Results (CSV)
+            </a></li>
+            <li><a class="dropdown-item" href="{% url 'audit:export_audit_report' %}{% if current_filters %}?{{ current_filters.urlencode }}&{% else %}?{% endif %}format=json">
+                <i class="bi bi-file-earmark-code me-2"></i>Current Results (JSON)
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#" onclick="openCustomExport()">
+                <i class="bi bi-calendar-range me-2"></i>Custom Date Range Export
+            </a></li>
+            <li><a class="dropdown-item" href="{% url 'audit:export_audit_report' %}?category=SECURITY&severity=CRITICAL">
+                <i class="bi bi-shield-exclamation me-2"></i>Security Events Only
+            </a></li>
+        </ul>
+    </div>
+    <a href="{% url 'audit:security_incidents' %}" class="btn btn-success">
+        <i class="bi bi-shield-check me-1"></i>
+        View Incidents
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search Form -->
+<div class="search-form p-4 mb-4">
+    <form method="get" class="row g-3">
+        <!-- Text Search -->
+        <div class="col-md-6">
+            <label for="search" class="form-label">Search Text</label>
+            <input type="text" class="form-control" id="search" name="search" 
+                   value="{{ current_filters.search }}" 
+                   placeholder="Search in action, resource, or details...">
+        </div>
+        
+        <!-- User Filter -->
+        <div class="col-md-6">
+            <label for="user" class="form-label">User</label>
+            <input type="text" class="form-control" id="user" name="user" 
+                   value="{{ current_filters.user }}" 
+                   placeholder="Username or email...">
+        </div>
+        
+        <!-- Category Filter -->
+        <div class="col-md-3">
+            <label for="category" class="form-label">Category</label>
+            <select class="form-select" id="category" name="category">
+                <option value="ALL" {% if current_filters.category == 'ALL' %}selected{% endif %}>All Categories</option>
+                {% for value, label in categories %}
+                <option value="{{ value }}" {% if current_filters.category == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Severity Filter -->
+        <div class="col-md-3">
+            <label for="severity" class="form-label">Severity</label>
+            <select class="form-select" id="severity" name="severity">
+                <option value="ALL" {% if current_filters.severity == 'ALL' %}selected{% endif %}>All Severities</option>
+                {% for value, label in severities %}
+                <option value="{{ value }}" {% if current_filters.severity == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- IP Address -->
+        <div class="col-md-3">
+            <label for="ip_address" class="form-label">IP Address</label>
+            <input type="text" class="form-control" id="ip_address" name="ip_address" 
+                   value="{{ current_filters.ip_address }}" 
+                   placeholder="IP address...">
+        </div>
+        
+        <!-- Min Risk Score -->
+        <div class="col-md-3">
+            <label for="min_risk" class="form-label">Min Risk Score</label>
+            <input type="number" class="form-control" id="min_risk" name="min_risk" 
+                   value="{{ current_filters.min_risk }}" min="0" max="100"
+                   placeholder="0-100">
+        </div>
+        
+        <!-- Start Date -->
+        <div class="col-md-3">
+            <label for="start_date" class="form-label">Start Date</label>
+            <input type="date" class="form-control" id="start_date" name="start_date" 
+                   value="{{ current_filters.start_date }}">
+        </div>
+        
+        <!-- End Date -->
+        <div class="col-md-3">
+            <label for="end_date" class="form-label">End Date</label>
+            <input type="date" class="form-control" id="end_date" name="end_date" 
+                   value="{{ current_filters.end_date }}">
+        </div>
+        
+        <!-- Order By -->
+        <div class="col-md-3">
+            <label for="order_by" class="form-label">Order By</label>
+            <select class="form-select" id="order_by" name="order_by">
+                <option value="-timestamp" {% if current_filters.order_by == '-timestamp' %}selected{% endif %}>Newest First</option>
+                <option value="timestamp" {% if current_filters.order_by == 'timestamp' %}selected{% endif %}>Oldest First</option>
+                <option value="-risk_score" {% if current_filters.order_by == '-risk_score' %}selected{% endif %}>Highest Risk</option>
+                <option value="risk_score" {% if current_filters.order_by == 'risk_score' %}selected{% endif %}>Lowest Risk</option>
+                <option value="category" {% if current_filters.order_by == 'category' %}selected{% endif %}>Category</option>
+                <option value="severity" {% if current_filters.order_by == 'severity' %}selected{% endif %}>Severity</option>
+            </select>
+        </div>
+        
+        <!-- Requires Review -->
+        <div class="col-md-3">
+            <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="requires_review" name="requires_review" value="true"
+                       {% if current_filters.requires_review == 'true' %}checked{% endif %}>
+                <label class="form-check-label" for="requires_review">
+                    Only events requiring review
+                </label>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search me-1"></i>
+                Search
+            </button>
+            <a href="{% url 'audit:audit_search' %}" class="btn btn-outline-warning">
+                <i class="bi bi-x-circle me-1"></i>
+                Clear Filters
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Active Filters -->
+{% if current_filters %}
+<div class="mb-3">
+    <small class="text-muted">Active Filters:</small>
+    {% for key, value in current_filters.items %}
+        {% if value and value != 'ALL' %}
+        <span class="badge filter-badge me-1">{{ key }}: {{ value }}</span>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Results Summary -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h6 class="mb-0">Search Results</h6>
+        <small class="text-muted">{{ total_results }} events found</small>
+    </div>
+    {% if total_results > 0 %}
+    <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-info" onclick="expandAll()">
+            <i class="bi bi-arrows-expand"></i> Expand All
+        </button>
+        <button class="btn btn-outline-info" onclick="collapseAll()">
+            <i class="bi bi-arrows-collapse"></i> Collapse All
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Results Table -->
+{% if page_obj %}
+<div class="modern-card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Category</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Risk</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in page_obj %}
+                <tr class="event-row {% if event.severity == 'CRITICAL' %}critical{% elif event.severity == 'SECURITY' %}security{% endif %}" 
+                    data-event-id="{{ event.id }}">
+                    <td>
+                        <div class="small">{{ event.timestamp|date:"M d, Y" }}</div>
+                        <div class="small text-muted">{{ event.timestamp|time:"H:i:s" }}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-primary">{{ event.get_category_display }}</span>
+                        <div class="small text-muted">{{ event.get_severity_display }}</div>
+                    </td>
+                    <td>
+                        <div class="fw-bold">{{ event.action }}</div>
+                        {% if event.resource %}
+                        <div class="small text-muted">{{ event.resource|truncatechars:30 }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.user %}
+                        <div class="fw-bold">{{ event.user.username }}</div>
+                        <div class="small text-muted">{{ event.user.role.name }}</div>
+                        {% else %}
+                        <span class="text-muted">Anonymous</span>
+                        {% endif %}
+                        {% if event.ip_address %}
+                        <div class="small text-muted">{{ event.ip_address }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge risk-{% if event.risk_score >= 80 %}critical{% elif event.risk_score >= 60 %}high{% elif event.risk_score >= 30 %}medium{% else %}low{% endif %}">
+                            {{ event.risk_score }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if event.success %}
+                        <span class="badge bg-success">Success</span>
+                        {% else %}
+                        <span class="badge bg-danger">Failed</span>
+                        {% endif %}
+                        {% if event.requires_review %}
+                        <div><span class="badge bg-warning">Review</span></div>
+                        {% endif %}
+                        {% if event.reviewed_at %}
+                        <div><span class="badge bg-info">Reviewed</span></div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#details-{{ event.id }}"
+                                    title="View Details">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            {% if event.requires_review and not event.reviewed_at %}
+                            <button class="btn btn-outline-success" type="button" 
+                                    onclick="markAsReviewed({{ event.id }})"
+                                    title="Mark as Reviewed">
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                            {% endif %}
+                            {% if event.security_incidents.exists %}
+                            <a href="{% url 'audit:security_incidents' %}?search={{ event.id }}" 
+                               class="btn btn-outline-danger" title="View Incidents">
+                                <i class="bi bi-shield-exclamation"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="7" class="p-0">
+                        <div class="collapse" id="details-{{ event.id }}">
+                            <div class="details-content p-4 m-3" style="max-height: 400px; overflow-y: auto;">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6><i class="bi bi-info-circle me-2"></i>Event Details</h6>
+                                        <table class="table table-sm table-striped">
+                                            <tr><td><strong>Session ID:</strong></td><td class="font-monospace">{{ event.session_id|default:"N/A" }}</td></tr>
+                                            <tr><td><strong>User Agent:</strong></td><td class="font-monospace" style="word-break: break-all;">{{ event.user_agent|default:"N/A" }}</td></tr>
+                                            <tr><td><strong>Request Size:</strong></td><td>{{ event.request_size|default:"N/A" }} bytes</td></tr>
+                                            <tr><td><strong>Duration:</strong></td><td>{{ event.request_duration_ms|default:"N/A" }} ms</td></tr>
+                                            <tr><td><strong>Category:</strong></td><td><span class="badge" style="background-color: var(--audit-primary);">{{ event.get_category_display }}</span></td></tr>
+                                            <tr><td><strong>Severity:</strong></td><td><span class="badge bg-secondary">{{ event.get_severity_display }}</span></td></tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6><i class="bi bi-code-square me-2"></i>Additional Information</h6>
+                                        {% if event.details %}
+                                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 1rem; max-height: 300px; overflow: auto;">
+                                            <pre class="small mb-0" style="white-space: pre-wrap; word-break: break-word;">{{ event.details|pprint }}</pre>
+                                        </div>
+                                        {% else %}
+                                        <p class="text-muted small">No additional details available.</p>
+                                        {% endif %}
+                                        
+                                        {% if event.reviewed_by %}
+                                        <div class="mt-3 p-2 rounded" style="background-color: rgba(40, 167, 69, 0.1); border-left: 3px solid #28a745;">
+                                            <small class="text-success">
+                                                <i class="bi bi-check-circle me-1"></i>
+                                                <strong>Reviewed</strong> by {{ event.reviewed_by.username }} on {{ event.reviewed_at|date:"M d, Y H:i" }}
+                                            </small>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="bi bi-search fs-1 text-muted"></i>
+                        <p class="text-muted">No events match your search criteria.</p>
+                        <a href="{% url 'audit:audit_search' %}" class="btn btn-outline-primary">Clear Filters</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex justify-content-between align-items-center p-3 border-top">
+        <div class="small text-muted">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} events
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page=1">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a>
+                </li>
+                {% endif %}
+                
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                </li>
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.next_page_number }}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?{{ current_filters.urlencode }}&page={{ page_obj.paginator.num_pages }}">Last</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<script>
+function expandAll() {
+    document.querySelectorAll('.collapse').forEach(el => {
+        const bsCollapse = new bootstrap.Collapse(el, {toggle: false});
+        bsCollapse.show();
+    });
+}
+
+function collapseAll() {
+    document.querySelectorAll('.collapse.show').forEach(el => {
+        const bsCollapse = bootstrap.Collapse.getInstance(el);
+        if (bsCollapse) {
+            bsCollapse.hide();
+        }
+    });
+}
+
+// Mark event as reviewed
+function markAsReviewed(eventId) {
+    if (confirm('Mark this event as reviewed?')) {
+        fetch(`/audit/events/${eventId}/mark-reviewed/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value || '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error marking event as reviewed: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while marking the event as reviewed.');
+        });
+    }
+}
+
+// Auto-submit form on some field changes
+document.addEventListener('DOMContentLoaded', function() {
+    const autoSubmitFields = ['category', 'severity', 'order_by'];
+    autoSubmitFields.forEach(fieldName => {
+        const field = document.getElementById(fieldName);
+        if (field) {
+            field.addEventListener('change', function() {
+                this.form.submit();
+            });
+        }
+    });
+});
+</script>
+
+<!-- Custom Export Modal -->
+<div class="modal fade" id="customExportModal" tabindex="-1" aria-labelledby="customExportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="customExportModalLabel">
+                    <i class="bi bi-calendar-range me-2"></i>
+                    Custom Date Range Export
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customExportForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="export_start_date" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="export_start_date" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_end_date" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="export_end_date" name="end_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_category" class="form-label">Category Filter</label>
+                            <select class="form-select" id="export_category" name="category">
+                                <option value="ALL">All Categories</option>
+                                {% for value, label in categories %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_severity" class="form-label">Severity Filter</label>
+                            <select class="form-select" id="export_severity" name="severity">
+                                <option value="ALL">All Severities</option>
+                                {% for value, label in severities %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_format" class="form-label">Export Format</label>
+                            <select class="form-select" id="export_format" name="format">
+                                <option value="csv">CSV (Excel compatible)</option>
+                                <option value="json">JSON (for analysis)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="export_limit" class="form-label">Record Limit</label>
+                            <select class="form-select" id="export_limit" name="limit">
+                                <option value="1000">1,000 records</option>
+                                <option value="5000" selected>5,000 records</option>
+                                <option value="10000">10,000 records</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="include_failed_events" name="include_failed" checked>
+                                <label class="form-check-label" for="include_failed_events">
+                                    Include failed events
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="only_security_events" name="security_only">
+                                <label class="form-check-label" for="only_security_events">
+                                    Security events only (High priority)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeCustomExport()">
+                    <i class="bi bi-download me-1"></i>
+                    Export Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openCustomExport() {
+    // Set default dates (last 30 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    
+    document.getElementById('export_end_date').value = endDate.toISOString().split('T')[0];
+    document.getElementById('export_start_date').value = startDate.toISOString().split('T')[0];
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('customExportModal')).show();
+}
+
+function executeCustomExport() {
+    const form = document.getElementById('customExportForm');
+    const formData = new FormData(form);
+    
+    // Build query string
+    const params = new URLSearchParams();
+    for (let [key, value] of formData) {
+        if (value && value !== 'ALL') {
+            params.append(key, value);
+        }
+    }
+    
+    // Add special filters
+    if (document.getElementById('only_security_events').checked) {
+        params.append('category', 'SECURITY');
+        params.append('severity', 'CRITICAL');
+    }
+    
+    if (!document.getElementById('include_failed_events').checked) {
+        params.append('success', 'true');
+    }
+    
+    // Create download URL
+    const exportUrl = "{% url 'audit:export_audit_report' %}?" + params.toString();
+    
+    // Hide modal and initiate download
+    bootstrap.Modal.getInstance(document.getElementById('customExportModal')).hide();
+    
+    // Start download
+    window.location.href = exportUrl;
+}
+</script>
+
+{% endblock %}

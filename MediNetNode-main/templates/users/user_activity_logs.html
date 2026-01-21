@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}User Activity Logs: {{ user_detail.username }} - MediNet{% endblock %}
+
+{% block page_title %}Activity Logs: {{ user_detail.username }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'user_detail' user_detail.id %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to Profile
+    </a>
+    <a href="{% url 'system_audit_logs' %}" class="btn btn-primary">
+        <i class="bi bi-journal-text me-1"></i>
+        All System Logs
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- User Info Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="modern-card p-3">
+            <div class="d-flex align-items-center">
+                <div class="user-avatar bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px; font-size: 1.2rem; font-weight: 600;">
+                    {{ user_detail.username|slice:":1"|upper }}
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-1">{{ user_detail.get_full_name|default:user_detail.username }}</h5>
+                    <p class="text-muted mb-0">@{{ user_detail.username }} • {{ user_detail.role.name|default:"No Role" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activity Logs Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-0 p-4 pb-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0">
+                        <i class="bi bi-activity text-primary me-2"></i>
+                        Complete Activity History
+                    </h5>
+                    <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                        {{ page_obj.paginator.count }} total logs
+                    </span>
+                </div>
+                <p class="text-muted mb-0 mt-2">All recorded activities for this user account</p>
+            </div>
+            <div class="card-body p-0">
+                {% if page_obj.object_list %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 fw-semibold px-4 py-3">Date & Time</th>
+                                <th class="border-0 fw-semibold">Action</th>
+                                <th class="border-0 fw-semibold">Resource</th>
+                                <th class="border-0 fw-semibold">Status</th>
+                                <th class="border-0 fw-semibold">IP Address</th>
+                                <th class="border-0 fw-semibold">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in page_obj.object_list %}
+                            <tr class="border-bottom border-light">
+                                <td class="px-4 py-3">
+                                    <div class="fw-semibold">{{ log.timestamp|date:"F d, Y" }}</div>
+                                    <small class="text-muted">{{ log.timestamp|date:"H:i T" }}</small>
+                                </td>
+                                <td class="py-3">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1">
+                                        <i class="bi bi-activity me-1"></i>{{ log.action|capfirst }}
+                                    </span>
+                                </td>
+                                <td class="py-3">
+                                    <span class="text-muted">{{ log.resource|default:"—" }}</span>
+                                </td>
+                                <td class="py-3">
+                                    {% if log.success %}
+                                        <span class="badge bg-success bg-opacity-10 text-success px-2 py-1">
+                                            <i class="bi bi-check-circle me-1"></i>Success
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-2 py-1">
+                                            <i class="bi bi-x-circle me-1"></i>Failed
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3">
+                                    <code class="bg-light px-2 py-1 rounded text-muted small">{{ log.ip_address|default:"—" }}</code>
+                                </td>
+                                <td class="py-3">
+                                    {% if log.details %}
+                                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#details-{{ log.id }}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% if log.details %}
+                            <tr class="collapse border-bottom border-light" id="details-{{ log.id }}">
+                                <td colspan="6" class="px-4 py-2 bg-light bg-opacity-50">
+                                    <div class="small">
+                                        <strong>Details:</strong>
+                                        <pre class="mb-0 mt-1 small text-muted">{{ log.details|default:"No additional details" }}</pre>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination if needed -->
+                {% if page_obj.paginator.num_pages > 1 %}
+                <div class="card-footer bg-transparent border-0 p-4">
+                    <nav aria-label="Activity logs pagination">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1">&laquo; First</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                                </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
+                            
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+                
+                {% else %}
+                <div class="text-center py-5">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 80px; height: 80px;">
+                        <i class="bi bi-journal-x display-5"></i>
+                    </div>
+                    <h5 class="fw-semibold text-dark mb-2">No Activity Recorded</h5>
+                    <p class="text-muted">There are no activity logs for this user yet.</p>
+                    <a href="{% url 'user_detail' user_detail.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        Back to Profile
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

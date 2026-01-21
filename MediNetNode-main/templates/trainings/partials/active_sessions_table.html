@@ -1,0 +1,68 @@
+<!-- Partial template for active sessions table refresh -->
+{% if active_sessions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr style="background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);">
+                    <th class="text-white"><i class="bi bi-cpu me-1"></i>Session</th>
+                    <th class="text-white"><i class="bi bi-person me-1"></i>User</th>
+                    <th class="text-white"><i class="bi bi-database me-1"></i>Dataset</th>
+                    <th class="text-white"><i class="bi bi-graph-up me-1"></i>Progress</th>
+                    <th class="text-white"><i class="bi bi-activity me-1"></i>Status</th>
+                    <th class="text-white"><i class="bi bi-clock me-1"></i>Duration</th>
+                    <th class="text-white"><i class="bi bi-gear me-1"></i>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in active_sessions %}
+                <tr data-session-id="{{ session.session_id }}">
+                    <td>
+                        <strong>{{ session.session_id|slice:":8" }}</strong><br>
+                        <small class="text-muted">{{ session.client_id|default:"No client ID" }}</small>
+                    </td>
+                    <td>
+                        <i class="bi bi-person-circle me-1"></i>
+                        {{ session.user.username }}
+                    </td>
+                    <td>{{ session.dataset_name }}</td>
+                    <td>
+                        <div class="progress progress-thin mb-1">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ session.progress_percentage }}%"></div>
+                        </div>
+                        <small class="text-muted">
+                            {{ session.current_round }}/{{ session.total_rounds }} rounds ({{ session.progress_percentage|floatformat:1 }}%)
+                        </small>
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ session.status|lower }}">
+                            {{ session.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <small class="text-muted">
+                            {% if session.duration %}
+                                {{ session.duration }}
+                            {% else %}
+                                Just started
+                            {% endif %}
+                        </small>
+                    </td>
+                    <td>
+                        <a href="{% url 'trainings:session_detail' session.session_id %}" 
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox display-1 mb-3"></i>
+        <h5>No Active Training Sessions</h5>
+        <p>All training sessions have completed or no sessions have been started yet.</p>
+    </div>
+{% endif %}

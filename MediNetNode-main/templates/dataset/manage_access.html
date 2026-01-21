@@ -1,0 +1,1109 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Access - {{ dataset.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Access Management Specific Styles - Safe Version */
+    .access-tabs {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+
+    .nav-tabs {
+        border-bottom: none;
+        background: rgba(66, 165, 245, 0.05);
+        padding: 0.5rem 1rem;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        color: var(--primary-color);
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius-sm);
+        margin: 0 0.25rem;
+        transition: all 0.3s ease;
+    }
+
+    .nav-tabs .nav-link:hover {
+        background: rgba(66, 165, 245, 0.1);
+        color: var(--primary-dark);
+    }
+
+    .nav-tabs .nav-link.active {
+        background: var(--primary-gradient);
+        color: white;
+        box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3);
+    }
+
+    .tab-content {
+        padding: 2rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+        color: var(--primary-color);
+    }
+
+    /* Safe User Card Styles - More specific selectors */
+    .access-tabs .user-card {
+        background: white;
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .access-tabs .user-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary-gradient);
+    }
+
+    .access-tabs .user-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(66, 165, 245, 0.15);
+        border-color: var(--primary-color);
+    }
+
+    .access-tabs .user-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .access-tabs .user-info {
+        flex-grow: 1;
+    }
+
+    .access-tabs .user-name {
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 0.25rem;
+    }
+
+    .access-tabs .user-role {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+
+    .access-tabs .role-admin {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .access-tabs .role-researcher {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+
+    .access-tabs .role-auditor {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+
+    .access-tabs .user-meta {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    /* Single Row Layout: User | Permissions | Action */
+    .access-tabs .user-card .d-flex {
+        gap: 1.5rem;
+        align-items: center;
+        width: 100%;
+        flex-wrap: nowrap;  /* Prevent wrapping to new lines */
+    }
+
+    /* Permission Cards Inline - Fixed Horizontal Layout */
+    .permission-cards-inline {
+        display: flex !important;
+        flex-direction: row !important;  /* Force horizontal layout */
+        flex-wrap: nowrap !important;  /* Prevent wrapping */
+        gap: 3rem !important;  /* More space between cards */
+        justify-content: left !important;  /* Distribute cards evenly across available space */
+        margin: 0 25rem 0 0rem;  /* More balanced margins */
+        align-items: center;
+        width: auto;
+    }
+
+    .permission-mini-card {
+        background: rgba(66, 165, 245, 0.03);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        border-radius: var(--border-radius-sm);
+        padding: 2rem;  /* More padding for better spacing */
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 400px;  /* Much wider cards for better text spacing */
+        max-width: 450px;
+        width: 400px;  /* Fixed width to ensure consistency */
+        transition: all 0.3s ease;
+        flex-shrink: 0;  /* Prevent shrinking */
+        white-space: nowrap;  /* Prevent text wrapping */
+    }
+
+    .permission-mini-card:hover {
+        background: rgba(66, 165, 245, 0.05);
+        border-color: rgba(66, 165, 245, 0.2);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(66, 165, 245, 0.1);
+    }
+
+    .permission-content {
+        display: flex;
+        align-items: center;
+        gap: 2rem;  /* More space between icon and text */
+        flex: 1;
+        margin-right: 3rem;  /* Much more space before toggle */
+        min-width: 0;  /* Allow proper flexbox behavior */
+    }
+
+    .permission-icon {
+        color: var(--primary-color);
+        font-size: 1.2rem;  /* Slightly larger icon */
+        flex-shrink: 0;
+    }
+
+    .permission-details {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .permission-title {
+        font-weight: 600;
+        color: var(--primary-dark);
+        font-size: 1rem;  /* Larger text for better readability */
+        line-height: 1.3;
+        margin-bottom: 0.25rem;
+    }
+
+    .permission-subtitle {
+        font-size: 0.8rem;
+        color: #6c757d;
+        line-height: 1.3;
+    }
+
+    /* Single Action Button */
+    .action-button-single {
+        margin-left: 1rem;
+        padding-left: 1rem;
+        border-left: 1px solid rgba(220, 53, 69, 0.2);
+    }
+
+    .btn-revoke-only {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        color: #dc3545;
+        padding: 0.6rem 1.25rem;
+        border-radius: var(--border-radius-sm);
+        font-size: 0.85rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+    }
+
+    .btn-revoke-only:hover {
+        background: #dc3545;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+        border-color: #dc3545;
+    }
+
+    /* Custom Switch Styles */
+    .access-tabs .custom-switch {
+        position: relative;
+        width: 64px;
+        height: 32px;
+    }
+
+    .access-tabs .custom-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .access-tabs .switch-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #e9ecef;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 32px;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .access-tabs .switch-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 3px;
+        bottom: 3px;
+        background: white;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .access-tabs input:checked + .switch-slider {
+        background: var(--primary-gradient);
+        box-shadow: inset 0 2px 4px rgba(66, 165, 245, 0.2);
+    }
+
+    .access-tabs input:checked + .switch-slider:before {
+        transform: translateX(32px);
+        box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+    }
+
+    .access-tabs .switch-slider:hover {
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15), 0 0 0 4px rgba(66, 165, 245, 0.1);
+    }
+
+    /* User Card Layout - Remove duplicate styles that might conflict */
+    .access-tabs .user-info {
+        flex-grow: 1;
+        min-width: 0; /* Allow text truncation */
+        flex-basis: 300px;  /* Give user info a base width */
+    }
+    
+    /* Ensure form doesn't interfere with layout */
+    .permission-form-inline {
+        display: contents;  /* Make form not affect layout */
+    }
+
+    .access-tabs .user-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    /* Stats Section */
+    .stats-section {
+        background: var(--primary-light);
+        padding: 1rem 2rem;
+        border-bottom: 1px solid rgba(66, 165, 245, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .stats-info {
+        color: var(--primary-dark);
+        font-weight: 500;
+    }
+
+    /* Grant Access Form Styles */
+    .grant-access-form {
+        background: linear-gradient(135deg, rgba(66, 165, 245, 0.03) 0%, rgba(66, 165, 245, 0.01) 100%);
+        border: 1px solid rgba(66, 165, 245, 0.15);
+        border-radius: var(--border-radius);
+        padding: 2.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(66, 165, 245, 0.08);
+    }
+
+    .user-search {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 3rem;
+        border: 1px solid rgba(66, 165, 245, 0.2);
+        border-radius: var(--border-radius-sm);
+        transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.25rem rgba(66, 165, 245, 0.15);
+        outline: none;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary-color);
+    }
+
+    .user-option {
+        display: block; /* Show by default - filter when search is active */
+        padding: 1rem;
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        border-radius: var(--border-radius-sm);
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .user-option:hover {
+        background: rgba(66, 165, 245, 0.05);
+        border-color: var(--primary-color);
+    }
+
+    .user-option.selected {
+        background: var(--primary-light);
+        border-color: var(--primary-color);
+    }
+
+    .permission-form {
+        background: white;
+        border: 2px solid rgba(66, 165, 245, 0.2);
+        border-radius: var(--border-radius);
+        padding: 2.5rem;
+        margin-top: 2rem;
+        display: none;
+        box-shadow: 0 8px 32px rgba(66, 165, 245, 0.12);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .permission-form::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--primary-gradient);
+    }
+
+    .permission-form.show {
+        display: block;
+        animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .permission-card {
+        background: rgba(66, 165, 245, 0.02);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        border-radius: var(--border-radius);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .permission-card:hover {
+        border-color: var(--primary-color);
+        box-shadow: 0 4px 16px rgba(66, 165, 245, 0.1);
+        transform: translateY(-2px);
+    }
+
+    .permission-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .permission-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+
+    .permission-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin: 0;
+    }
+
+    .permission-description {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin: 0.5rem 0 0 0;
+        line-height: 1.4;
+    }
+
+    .grant-btn {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .grant-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(66, 165, 245, 0.3);
+        color: white;
+    }
+
+    .grant-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* Responsive Styles for Tablets and Smaller Screens */
+    @media (max-width: 1400px) {
+        .permission-cards-inline {
+            gap: 1.5rem !important;
+            margin: 0 10rem 0 0 !important;
+        }
+
+        .permission-mini-card {
+            min-width: 300px;
+            width: 300px;
+            padding: 1.5rem;
+        }
+
+        .permission-content {
+            gap: 1.5rem;
+            margin-right: 2rem;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .permission-cards-inline {
+            gap: 1rem !important;
+            margin: 0 5rem 0 0 !important;
+        }
+
+        .permission-mini-card {
+            min-width: 250px;
+            width: 250px;
+            padding: 1.25rem;
+        }
+
+        .permission-content {
+            gap: 1rem;
+            margin-right: 1.5rem;
+        }
+
+        .permission-title {
+            font-size: 0.9rem;
+        }
+
+        .permission-subtitle {
+            font-size: 0.75rem;
+        }
+    }
+
+    /* Mobile Responsive Styles */
+    @media (max-width: 992px) {
+        .access-tabs .user-card {
+            padding: 1rem;
+        }
+
+        .access-tabs .user-avatar {
+            width: 50px;
+            height: 50px;
+            font-size: 1.2rem;
+        }
+
+        /* Stack everything vertically on mobile */
+        .access-tabs .user-card .d-flex {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 1rem;
+        }
+
+        .access-tabs .user-info {
+            flex-basis: auto;
+            width: 100%;
+        }
+
+        .permission-cards-inline {
+            flex-direction: column !important;
+            gap: 0.75rem !important;
+            margin: 0 !important;
+            width: 100%;
+        }
+
+        .permission-mini-card {
+            min-width: 100%;
+            width: 100%;
+            padding: 1rem;
+        }
+
+        .permission-content {
+            gap: 1rem;
+            margin-right: 1rem;
+        }
+
+        .permission-icon {
+            font-size: 1.1rem;
+        }
+
+        .permission-title {
+            font-size: 0.85rem;
+        }
+
+        .permission-subtitle {
+            font-size: 0.7rem;
+        }
+
+        .action-button-single {
+            margin-left: 0;
+            padding-left: 0;
+            border-left: none;
+            width: 100%;
+            border-top: 1px solid rgba(220, 53, 69, 0.2);
+            padding-top: 1rem;
+        }
+
+        .btn-revoke-only {
+            width: 100%;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.85rem;
+        }
+
+        .tab-content {
+            padding: 1rem;
+        }
+
+        .grant-access-form {
+            padding: 1.5rem;
+        }
+
+        .permission-form {
+            padding: 1.5rem;
+        }
+
+        .dashboard-hero .d-flex {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .dashboard-hero .d-flex > div:last-child {
+            width: 100%;
+        }
+
+        .dashboard-hero .d-flex .gap-2 {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-hero .btn {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .access-tabs .user-avatar {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+
+        .permission-mini-card {
+            padding: 0.875rem;
+        }
+
+        .permission-content {
+            gap: 0.75rem;
+            margin-right: 0.75rem;
+        }
+
+        .custom-switch {
+            width: 54px !important;
+            height: 28px !important;
+        }
+
+        .switch-slider:before {
+            height: 22px !important;
+            width: 22px !important;
+        }
+
+        input:checked + .switch-slider:before {
+            transform: translateX(26px) !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="dashboard-hero">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="bi bi-people me-2"></i>
+                    Access Management
+                </h1>
+                <p class="mb-0 opacity-90">
+                    Manage user permissions for "{{ dataset.name|truncatechars:40 }}"
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'dataset:detail' dataset.id %}" class="btn btn-light">
+                    <i class="bi bi-eye me-2"></i>
+                    View Dataset
+                </a>
+                <a href="{% url 'dataset:list' %}" class="btn btn-outline-light">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to List
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Info Banner -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="modern-card p-3">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="bi bi-file-earmark-medical text-primary fs-2"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-1">{{ dataset.name }}</h4>
+                        <p class="text-muted mb-0">{{ dataset.description|truncatechars:100 }}</p>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 mb-2">
+                            {{ dataset.medical_domain|title }}
+                        </div>
+                        <div class="small text-muted">
+                            <i class="bi bi-upload me-1"></i>{{ dataset.uploaded_at|date:"M d, Y" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="access-tabs">
+        <!-- Statistics Header -->
+        <div class="stats-section">
+            <div class="stats-info">
+                <strong>{{ total_access }}</strong> user{{ total_access|pluralize }} with access
+                • <strong>{{ available_users.count }}</strong> available user{{ available_users.count|pluralize }}
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="accessTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="current-tab" data-bs-toggle="tab" data-bs-target="#current-access" type="button" role="tab">
+                    <i class="bi bi-people me-2"></i>
+                    Current Access ({{ total_access }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="grant-tab" data-bs-toggle="tab" data-bs-target="#grant-access" type="button" role="tab">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Grant Access
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="accessTabContent">
+            <!-- Current Access Tab -->
+            <div class="tab-pane fade show active" id="current-access" role="tabpanel">
+                {% if current_access %}
+                    {% for item in current_access %}
+                    <div class="user-card">
+                        <div class="d-flex align-items-center">
+                            <!-- User Info Section - Left -->
+                            <div class="user-avatar">
+                                {{ item.user.first_name|first|default:item.user.username|first|upper }}{{ item.user.last_name|first|upper }}
+                            </div>
+                            <div class="user-info">
+                                <!--<div class="user-name">{{ item.user.get_full_name|default:item.user.username }}</div> -->
+                                <div class="user-name">{{item.user.username }}</div> 
+
+                                <div class="user-role role-{{ item.user.role.name|lower }}">
+                                    <i class="bi bi-person-badge me-1"></i>{{ item.user.role.name }}
+                                </div>
+                                <div class="user-meta">
+                                    <span class="user-name">{{ item.user.get_full_name|default:item.user.username }}</span>
+                                    <span><i class="bi bi-envelope me-1"></i>{{ item.user.email }}</span>
+                                    <span class="ms-3"><i class="bi bi-calendar me-1"></i>{{ item.access.assigned_at|date:"M d, Y" }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Permission Cards - Right Side (Yellow Line Area) -->
+                            <div class="permission-cards-inline">
+                                <form method="post" class="permission-form-inline" id="permission-form-{{ item.user.id }}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="update_permissions">
+                                    <input type="hidden" name="user_id" value="{{ item.user.id }}">
+                                    
+                                    <div class="permission-mini-card">
+                                        <div class="permission-content">
+                                            <i class="bi bi-cpu permission-icon"></i>
+                                            <div class="permission-details">
+                                                <div class="permission-title">Training</div>
+                                                <div class="permission-subtitle">Federated learning models</div>
+                                            </div>
+                                        </div>
+                                        <label class="custom-switch">
+                                            <input type="checkbox" name="can_train" {% if item.access.can_train %}checked{% endif %}>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="permission-mini-card">
+                                        <div class="permission-content">
+                                            <i class="bi bi-info-circle permission-icon"></i>
+                                            <div class="permission-details">
+                                                <div class="permission-title">Metadata</div>
+                                                <div class="permission-subtitle">Dataset statistics</div>
+                                            </div>
+                                        </div>
+                                        <label class="custom-switch">
+                                            <input type="checkbox" name="can_view_metadata" {% if item.access.can_view_metadata %}checked{% endif %}>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Action Button - Far Right -->
+                            <div class="action-button-single">
+                                <button type="button" class="btn-revoke-only" onclick="revokeAccess('{{ item.user.id }}', '{{ item.user.username }}')">
+                                    <i class="bi bi-trash me-2"></i>Revoke Access
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-people"></i>
+                        <h5>No Users Have Access</h5>
+                        <p class="text-muted">No users have been granted access to this dataset yet. Use the "Grant Access" tab to assign permissions.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Grant Access Tab -->
+            <div class="tab-pane fade" id="grant-access" role="tabpanel">
+                {% if available_users %}
+                    <div class="grant-access-form">
+                        <h5 class="mb-3">
+                            <i class="bi bi-person-plus me-2"></i>
+                            Grant Dataset Access
+                        </h5>
+                        
+                        <!-- User Search -->
+                        <div class="user-search">
+                            <i class="bi bi-search search-icon"></i>
+                            <input type="text" class="search-input" id="userSearch" placeholder="Search users by name, username, or email...">
+                        </div>
+
+                        <!-- User Options -->
+                        <div id="userOptions">
+                            <!-- Search prompt message (hidden by default) -->
+                            <div id="searchPrompt" class="text-center py-4 text-muted" style="display: none;">
+                                <i class="bi bi-search fs-2 mb-2 opacity-50"></i>
+                                <p class="mb-0">No users found matching your search...</p>
+                            </div>
+
+                            {% for user in available_users %}
+                            <div class="user-option" data-user-id="{{ user.id }}" data-search="{{ user.username|lower }} {{ user.get_full_name|lower }} {{ user.email|lower }}">
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-3" style="width: 40px; height: 40px; font-size: 1rem;">
+                                        {{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-semibold">{{ user.get_full_name|default:user.username }}</div>
+                                        <div class="small text-muted">
+                                            <span class="me-3">{{ user.email }}</span>
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary">{{ user.role.name }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <i class="bi bi-plus-circle text-primary"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Permission Form -->
+                        <form method="post" class="permission-form" id="permissionForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="grant_access">
+                            <input type="hidden" name="user_id" id="selectedUserId">
+                            
+                            <h5 class="mb-4 text-primary">
+                                <i class="bi bi-shield-lock me-2"></i>
+                                Set Permissions
+                            </h5>
+                            
+                            <div class="row g-4">
+                                <div class="col-12">
+                                    <div class="permission-card">
+                                        <div class="permission-header">
+                                            <div class="permission-icon">
+                                                <i class="bi bi-cpu"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="permission-title">Training Permissions</h6>
+                                                <p class="permission-description">
+                                                    Allow user to train federated learning models with this dataset
+                                                </p>
+                                            </div>
+                                            <label class="custom-switch">
+                                                <input type="checkbox" name="can_train" checked>
+                                                <span class="switch-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-12">
+                                    <div class="permission-card">
+                                        <div class="permission-header">
+                                            <div class="permission-icon">
+                                                <i class="bi bi-info-circle"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="permission-title">Metadata Access</h6>
+                                                <p class="permission-description">
+                                                    Allow user to view dataset statistics and metadata information
+                                                </p>
+                                            </div>
+                                            <label class="custom-switch">
+                                                <input type="checkbox" name="can_view_metadata" checked>
+                                                <span class="switch-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                                    <i class="bi bi-x me-1"></i>Cancel
+                                </button>
+                                <button type="submit" class="grant-btn">
+                                    <i class="bi bi-check me-1"></i>Grant Access
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-person-check"></i>
+                        <h5>All Users Have Access</h5>
+                        <p class="text-muted">All active users already have access to this dataset.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revoke Access Modal -->
+<div class="modal fade" id="revokeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Revoke Access</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to revoke access for <strong id="revokeUsername"></strong>?</p>
+                <p class="text-muted small">This action cannot be undone. The user will lose all permissions to this dataset.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="revoke_access">
+                    <input type="hidden" name="user_id" id="revokeUserId">
+                    <button type="submit" class="btn btn-danger">Revoke Access</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const userSearch = document.getElementById('userSearch');
+    const userOptions = document.querySelectorAll('.user-option');
+    const permissionForm = document.getElementById('permissionForm');
+    const selectedUserId = document.getElementById('selectedUserId');
+    
+    // User search functionality
+    if (userSearch) {
+        const searchPrompt = document.getElementById('searchPrompt');
+
+        userSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            let visibleCount = 0;
+
+            userOptions.forEach(option => {
+                const searchData = option.dataset.search;
+                // Show all users when search is empty, otherwise filter
+                if (searchTerm === '' || searchData.includes(searchTerm)) {
+                    option.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+
+            // Show "no results" message only when searching and no results found
+            if (searchPrompt) {
+                if (searchTerm !== '' && visibleCount === 0) {
+                    searchPrompt.style.display = 'block';
+                } else {
+                    searchPrompt.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    // User selection
+    userOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            console.log('User selected:', this.dataset.userId);
+            
+            // Remove selection from others
+            userOptions.forEach(opt => opt.classList.remove('selected'));
+            
+            // Add selection to clicked option
+            this.classList.add('selected');
+            
+            // Show permission form
+            if (permissionForm) {
+                permissionForm.classList.add('show');
+                selectedUserId.value = this.dataset.userId;
+                console.log('Selected user ID set to:', selectedUserId.value);
+            }
+        });
+    });
+    
+    // Auto-submit permission updates with compact buttons
+    document.querySelectorAll('.permission-form-inline input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // Small delay to show the switch animation
+            setTimeout(() => {
+                this.closest('form').submit();
+            }, 200);
+        });
+    });
+    
+    // No need for update button clicks since toggles auto-submit
+    
+    // Grant access form validation and submission
+    const grantForm = document.getElementById('permissionForm');
+    if (grantForm) {
+        grantForm.addEventListener('submit', function(e) {
+            console.log('Form submission triggered');
+            const userIdInput = document.getElementById('selectedUserId');
+            console.log('Selected user ID:', userIdInput.value);
+            
+            // Validate that a user is selected
+            if (!userIdInput.value) {
+                e.preventDefault();
+                alert('Please select a user first');
+                return false;
+            }
+            
+            // Log form data for debugging
+            const formData = new FormData(this);
+            console.log('Form data:', Object.fromEntries(formData));
+            
+            // Disable submit button to prevent double submission
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Processing...';
+            }
+        });
+    }
+});
+
+function resetForm() {
+    document.querySelectorAll('.user-option').forEach(opt => {
+        opt.classList.remove('selected');
+        opt.style.display = 'block'; // Show all users when resetting
+    });
+    document.getElementById('permissionForm').classList.remove('show');
+    document.getElementById('userSearch').value = '';
+    document.getElementById('selectedUserId').value = '';
+
+    // Hide search prompt when resetting
+    const searchPrompt = document.getElementById('searchPrompt');
+    if (searchPrompt) searchPrompt.style.display = 'none';
+}
+
+function revokeAccess(userId, username) {
+    document.getElementById('revokeUserId').value = userId;
+    document.getElementById('revokeUsername').textContent = username;
+    new bootstrap.Modal(document.getElementById('revokeModal')).show();
+}
+</script>
+{% endblock %}

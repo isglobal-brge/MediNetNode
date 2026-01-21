@@ -1,0 +1,618 @@
+{% extends 'audit/base_auditor.html' %}
+{% load static %}
+{% load audit_filters %}
+
+{% block title %}Real Dataset Analysis - AUDITOR ONLY - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* CRITICAL: Professional watermark styling - security without interference */
+    .watermark-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+        background-image: 
+            radial-gradient(
+                circle at 20% 50%, 
+                rgba(255, 0, 0, 0.02) 0%, 
+                transparent 50%
+            ),
+            radial-gradient(
+                circle at 80% 20%, 
+                rgba(255, 0, 0, 0.02) 0%, 
+                transparent 50%
+            ),
+            radial-gradient(
+                circle at 40% 80%, 
+                rgba(255, 0, 0, 0.02) 0%, 
+                transparent 50%
+            );
+    }
+    
+    /* Subtle corner watermarks */
+    .corner-watermark {
+        position: fixed;
+        font-size: 11px;
+        font-weight: bold;
+        color: rgba(255, 0, 0, 0.3);
+        z-index: 2;
+        pointer-events: none;
+        transform: rotate(-15deg);
+        font-family: 'Courier New', monospace;
+        text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+    }
+    
+    .corner-watermark.top-left {
+        top: 120px;
+        left: 20px;
+    }
+    
+    .corner-watermark.top-right {
+        top: 120px;
+        right: 20px;
+        transform: rotate(15deg);
+    }
+    
+    .corner-watermark.bottom-left {
+        bottom: 60px;
+        left: 20px;
+    }
+    
+    .corner-watermark.bottom-right {
+        bottom: 60px;
+        right: 20px;
+        transform: rotate(15deg);
+    }
+    
+    .watermark-info {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: rgba(255, 0, 0, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 10000;
+        pointer-events: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    .watermark-bottom {
+        position: fixed;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 0, 0, 0.9);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        z-index: 10000;
+        pointer-events: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    /* Real data table styling */
+    .real-data-table {
+        background: white;
+        border: 2px solid #d32f2f;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(211, 47, 47, 0.3);
+    }
+    
+    .real-data-header {
+        background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+        color: white;
+        padding: 15px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .data-preview-container {
+        max-height: 600px;
+        overflow: auto;
+        border: 3px solid #ff5722;
+        border-radius: 8px;
+        background: rgba(255, 87, 34, 0.05);
+    }
+    
+    .data-table {
+        font-size: 12px;
+        margin-bottom: 0;
+    }
+    
+    .data-table th {
+        background: #ffebee;
+        color: #b71c1c;
+        font-weight: bold;
+        border-bottom: 2px solid #d32f2f;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    
+    .data-table td {
+        border-bottom: 1px solid #ffcdd2;
+        font-family: monospace;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Compliance and analysis cards */
+    .analysis-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .analysis-card:hover {
+        box-shadow: var(--shadow-hover);
+    }
+    
+    /* Anonymization score colors */
+    .anon-excellent { color: #4caf50; }
+    .anon-good { color: #2196f3; }
+    .anon-fair { color: #ff9800; }
+    .anon-poor { color: #f44336; }
+    
+    /* Compliance level colors */
+    .compliance-excellent { background-color: #4caf50; }
+    .compliance-good { background-color: #2196f3; }
+    .compliance-fair { background-color: #ff9800; }
+    .compliance-poor { background-color: #f44336; }
+    
+    /* Warning alerts */
+    .security-alert {
+        border: 2px solid #d32f2f;
+        background: rgba(211, 47, 47, 0.1);
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+    }
+    
+    .anomaly-item {
+        background: rgba(255, 87, 34, 0.1);
+        border-left: 4px solid #ff5722;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+    
+    /* Dataset selector - Audit Theme */
+    .dataset-selector {
+        background: var(--audit-gradient);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    
+    .btn-danger-custom {
+        background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+        border: none;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .btn-danger-custom:hover {
+        background: linear-gradient(135deg, #b71c1c 0%, #8b0000 100%);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}
+MEDICAL DATASET ANALYSIS - AUDITOR ACCESS ONLY
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'audit:auditor_dashboard' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back to Dashboard
+    </a>
+    <a href="{% url 'audit:dataset_analysis' %}" class="btn btn-primary">
+        <i class="bi bi-bar-chart me-1"></i>
+        Access Analytics
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- WATERMARKING - ALWAYS VISIBLE -->
+{% if watermark_info %}
+<div class="watermark-overlay"></div>
+<div class="watermark-info">
+    AUDITOR: {{ watermark_info.auditor|upper }}<br>
+    {{ watermark_info.timestamp|date:"Y-m-d H:i:s" }}<br>
+    ID: {{ watermark_info.access_hash }}
+</div>
+<div class="watermark-bottom">
+    🔒 CONFIDENTIAL MEDICAL DATA - AUTHORIZED ACCESS ONLY - HASH: {{ watermark_info.access_hash }}
+</div>
+
+<!-- Professional corner watermarks -->
+<div class="corner-watermark top-left">CONFIDENTIAL</div>
+<div class="corner-watermark top-right">AUDITOR ONLY</div>
+<div class="corner-watermark bottom-left">{{ watermark_info.timestamp|date:"Y-m-d H:i" }}</div>
+<div class="corner-watermark bottom-right">MONITORED</div>
+{% endif %}
+
+<!-- Security Warning -->
+<div class="security-alert">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-shield-exclamation text-danger fs-2 me-3"></i>
+        <div>
+            <h5 class="text-danger mb-1">RESTRICTED ACCESS - MEDICAL DATA</h5>
+            <p class="mb-0">
+                You are accessing REAL patient data. This access is logged and monitored. 
+                Maximum 100 rows per dataset. All activity is recorded for compliance.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Dataset Selector -->
+<div class="dataset-selector">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-8">
+            <label for="dataset_id" class="form-label text-white">
+                <i class="bi bi-database me-2"></i>
+                Select Dataset for Real Data Analysis
+            </label>
+            <select class="form-select" id="dataset_id" name="dataset_id" onchange="this.form.submit()">
+                <option value="">Choose a dataset to analyze...</option>
+                {% for dataset in datasets %}
+                <option value="{{ dataset.id }}" 
+                        {% if selected_dataset_id == dataset.id|stringformat:"s" %}selected{% endif %}>
+                    {{ dataset.name }} - {{ dataset.medical_domain }} 
+                    ({{ dataset.get_file_size_display }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            {% if selected_dataset_id %}
+            <a href="{% url 'audit:medical_data_analysis' %}" class="btn btn-light">
+                <i class="bi bi-x-circle me-1"></i>
+                Clear Selection
+            </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Real Data Display -->
+{% if dataset_data %}
+    {% if dataset_data.error %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Error:</strong> {{ dataset_data.error }}
+    </div>
+    {% else %}
+    <!-- Data Preview -->
+    <div class="real-data-table mb-4">
+        <div class="real-data-header">
+            REAL MEDICAL DATA PREVIEW - LIMITED TO {{ max_preview_rows }} ROWS
+        </div>
+        
+        <!-- Dataset Info -->
+        <div class="p-3 bg-light border-bottom">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Rows Displayed:</strong> {{ dataset_data.row_count }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Total Rows in File:</strong> {{ dataset_data.total_rows_in_file }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Columns:</strong> {{ dataset_data.columns|length }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Watermark:</strong> {{ watermark_info.access_hash }}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Data Table -->
+        <div class="data-preview-container">
+            <table class="table table-bordered data-table">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width: 50px;">#</th>
+                        {% for col in dataset_data.columns %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in dataset_data.data_preview %}
+                    <tr>
+                        <td class="text-center text-muted">{{ forloop.counter }}</td>
+                        {% for col in dataset_data.columns %}
+                        <td title="{{ row|lookup:col }}">
+                            {% if row|lookup:col|length > 20 %}
+                                {{ row|lookup:col|truncatechars:20 }}
+                            {% else %}
+                                {{ row|lookup:col|default:"NULL" }}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Column Analysis -->
+        <div class="col-lg-6">
+            <div class="analysis-card p-4 mb-4">
+                <h5 class="card-title">Column Analysis</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th>Missing</th>
+                                <th>Unique</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for col in dataset_data.columns %}
+                            <tr>
+                                <td><strong>{{ col }}</strong></td>
+                                <td><code>{{ dataset_data.column_types|lookup:col }}</code></td>
+                                <td>
+                                    {% with missing=dataset_data.missing_values|lookup:col %}
+                                        {% if missing > 0 %}
+                                        <span class="badge bg-warning">{{ missing }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">0</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ dataset_data.unique_counts|lookup:col }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Anonymization Quality -->
+        <div class="col-lg-6">
+            {% if anonymization_score %}
+            <div class="analysis-card p-4 mb-4">
+                <h5 class="card-title">Anonymization Quality</h5>
+                <div class="text-center mb-3">
+                    <div class="h2 anon-{{ anonymization_score.level|lower }}">
+                        {{ anonymization_score.score }}/100
+                    </div>
+                    <div class="badge bg-{% if anonymization_score.level == 'EXCELLENT' %}success{% elif anonymization_score.level == 'GOOD' %}primary{% elif anonymization_score.level == 'FAIR' %}warning{% else %}danger{% endif %}">
+                        {{ anonymization_score.level }}
+                    </div>
+                </div>
+                <div class="small">
+                    <strong>Issues Detected:</strong>
+                    <ul class="mt-2">
+                        {% for issue in anonymization_score.issues %}
+                        <li>{{ issue }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Compliance Analysis -->
+    {% if compliance_analysis %}
+    <div class="analysis-card p-4 mb-4">
+        <div class="row">
+            <div class="col-md-8">
+                <h5 class="card-title">Medical Compliance Analysis</h5>
+                <div class="row">
+                    {% for check in compliance_analysis.checks %}
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between align-items-center p-2 
+                                    {% if check.status == 'PASS' %}bg-success bg-opacity-10 border-success{% else %}bg-danger bg-opacity-10 border-danger{% endif %} 
+                                    border rounded">
+                            <div class="small">{{ check.check }}</div>
+                            <div>
+                                {% if check.status == 'PASS' %}
+                                <i class="bi bi-check-circle text-success"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle text-danger"></i>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <div class="h2">{{ compliance_analysis.overall_score }}%</div>
+                    <div class="badge compliance-{{ compliance_analysis.compliance_level|lower }} p-2">
+                        {{ compliance_analysis.compliance_level }}
+                    </div>
+                    <div class="small text-muted mt-2">
+                        {{ compliance_analysis.total_points }}/{{ compliance_analysis.max_points }} points
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+{% endif %}
+
+<!-- Domain Usage Statistics -->
+{% if domain_usage_stats %}
+<div class="analysis-card p-4 mb-4">
+    <h5 class="card-title">Domain Usage Statistics (Last 90 Days)</h5>
+    <div class="row">
+        {% for domain in domain_usage_stats %}
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="p-3 bg-light rounded">
+                <div class="h6 text-primary">{{ domain.medical_domain|default:"Unknown Domain" }}</div>
+                <div class="small">
+                    <div>Accesses: <strong>{{ domain.access_count }}</strong></div>
+                    <div>Users: <strong>{{ domain.unique_users }}</strong></div>
+                    <div>Avg Sensitivity: 
+                        <span class="badge bg-{% if domain.avg_sensitivity >= 4 %}danger{% elif domain.avg_sensitivity >= 3 %}warning{% else %}success{% endif %}">
+                            {{ domain.avg_sensitivity|floatformat:1 }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Anomaly Detection -->
+{% if anomaly_detection %}
+<div class="analysis-card p-4 mb-4 mt-5">
+    <h5 class="card-title text-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        Anomalous Access Patterns Detected
+    </h5>
+    {% for anomaly in anomaly_detection %}
+    <div class="anomaly-item">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-bold">{{ anomaly.type|title }}</div>
+                <div class="small">{{ anomaly.description }}</div>
+            </div>
+            <div class="badge bg-{% if anomaly.severity == 'HIGH' %}danger{% elif anomaly.severity == 'MEDIUM' %}warning{% else %}info{% endif %}">
+                {{ anomaly.severity }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Policy Compliance Issues -->
+{% if policy_compliance %}
+<div class="analysis-card p-4 mb-4 mt-5">
+    <h5 class="card-title text-warning">
+        <i class="bi bi-shield-exclamation me-2"></i>
+        Policy Compliance Issues
+    </h5>
+    {% for issue in policy_compliance %}
+    <div class="alert alert-{% if issue.severity == 'HIGH' %}danger{% elif issue.severity == 'MEDIUM' %}warning{% else %}info{% endif %} py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-bold">{{ issue.type|title }}</div>
+                <div class="small">User: {{ issue.user }} - {{ issue.description }}</div>
+            </div>
+            <div class="badge bg-{% if issue.severity == 'HIGH' %}danger{% elif issue.severity == 'MEDIUM' %}warning{% else %}info{% endif %}">
+                {{ issue.severity }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Unused Datasets -->
+{% if unused_datasets %}
+<div class="analysis-card p-4">
+    <h5 class="card-title">Unused Datasets (No Access in 90+ Days)</h5>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Dataset</th>
+                    <th>Domain</th>
+                    <th>Days Unused</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dataset in unused_datasets|slice:":10" %}
+                <tr>
+                    <td>{{ dataset.name }}</td>
+                    <td>{{ dataset.medical_domain|default:"Unknown" }}</td>
+                    <td>{{ dataset.days_unused }}</td>
+                    <td>
+                        <span class="badge bg-{% if dataset.severity == 'HIGH' %}danger{% elif dataset.severity == 'MEDIUM' %}warning{% else %}info{% endif %}">
+                            {{ dataset.severity }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if unused_datasets|length > 10 %}
+        <div class="text-muted small">
+            Showing top 10 of {{ unused_datasets|length }} unused datasets
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Print CSS to maintain watermarks -->
+<style media="print">
+    .watermark-overlay,
+    .watermark-info,
+    .watermark-bottom {
+        display: block !important;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+    
+    .real-data-table {
+        border: 3px solid #d32f2f !important;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prevent right-click context menu on sensitive data
+    document.addEventListener('contextmenu', function(e) {
+        if (e.target.closest('.data-preview-container')) {
+            e.preventDefault();
+            alert('Right-click disabled on sensitive data for security reasons.');
+        }
+    });
+    
+    // Note: Removed annoying beforeunload warning as it doesn't add value
+    // Users can navigate freely - watermarks and logging already provide security
+    
+    // Add watermark to any printed version
+    window.addEventListener('beforeprint', function(e) {
+        const watermarkElements = document.querySelectorAll('.watermark-info, .watermark-bottom');
+        watermarkElements.forEach(el => {
+            el.style.position = 'fixed';
+            el.style.display = 'block';
+        });
+    });
+});
+</script>
+{% endblock %}

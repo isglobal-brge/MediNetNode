@@ -1,0 +1,480 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Training Dashboard Specific Styles - Matching Platform Style */
+    .metric-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        transition: all 0.3s ease;
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--primary-gradient);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-hover);
+    }
+
+    .metric-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+        opacity: 0.8;
+    }
+
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--primary-dark);
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+
+    .info-section {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-action {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 500;
+        margin-right: 0.75rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-action:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 15px rgba(66, 165, 245, 0.3);
+        color: white;
+    }
+
+    .btn-action.secondary {
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--primary-color);
+        border: 1px solid rgba(66, 165, 245, 0.2);
+    }
+
+    .btn-action.secondary:hover {
+        background: white;
+        color: var(--primary-dark);
+    }
+
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+        background-color: #e9ecef;
+    }
+
+    .progress-thin .progress-bar {
+        border-radius: 3px;
+    }
+
+    .session-item {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .session-item:last-child {
+        border-bottom: none;
+    }
+
+    .session-info {
+        flex: 1;
+    }
+
+    .session-title {
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 0.25rem;
+    }
+
+    .session-details {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-starting { background-color: #fff3cd; color: #856404; }
+    .status-active { background-color: #d1e7dd; color: #0f5132; }
+    .status-completed { background-color: #d1ecf1; color: #0c5460; }
+    .status-failed { background-color: #f8d7da; color: #721c24; }
+    .status-cancelled { background-color: #e2e3e5; color: #41464b; }
+
+    .auto-refresh-indicator {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(25, 118, 210, 0.9);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        z-index: 1000;
+        transition: all 0.3s ease;
+    }
+    
+    .auto-refresh-indicator.updating {
+        background: rgba(40, 167, 69, 0.9);
+        animation: pulse 1s ease-in-out infinite alternate;
+    }
+    
+    @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.05); }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+        color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Auto-refresh indicator -->
+    <div class="auto-refresh-indicator" id="refreshIndicator" style="display: none;">
+        <i class="bi bi-arrow-clockwise me-1"></i>
+        <span id="refreshText">Auto-refresh in <span id="countdown">30</span>s</span>
+    </div>
+
+    <!-- Header Section -->
+    <div class="dashboard-hero">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Training Monitoring
+                </h1>
+                <p class="mb-0 opacity-90">
+                    Real-time monitoring and analytics for federated learning sessions
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'trainings:active_sessions' %}" class="btn btn-light">
+                    <i class="bi bi-activity me-2"></i>
+                    Active Sessions
+                </a>
+                <a href="{% url 'trainings:history' %}" class="btn btn-outline-light">
+                    <i class="bi bi-clock-history me-2"></i>
+                    View History
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="border-left: 4px solid #28a745;">
+                <div class="metric-icon" style="color: #28a745;">
+                    <i class="bi bi-play-circle"></i>
+                </div>
+                <div class="metric-value" id="activeCount" style="color: #28a745;">{{ active_count }}</div>
+                <div class="metric-label">Active Trainings</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="border-left: 4px solid #007bff;">
+                <div class="metric-icon" style="color: #007bff;">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="metric-value" id="todayCompleted" style="color: #007bff;">{{ today_completed }}</div>
+                <div class="metric-label">Completed Today</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="border-left: 4px solid #20c997;">
+                <div class="metric-icon" style="color: #20c997;">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div class="metric-value" id="successRate" style="color: #20c997;">{{ success_rate }}%</div>
+                <div class="metric-label">Success Rate (7 Days)</div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="border-left: 4px solid #ffc107;">
+                <div class="metric-icon" style="color: #ffc107;">
+                    <i class="bi bi-clock"></i>
+                </div>
+                <div class="metric-value" style="font-size: 1.8rem; color: #ffc107;">{{ avg_duration }}</div>
+                <div class="metric-label">Avg Duration</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="info-section mb-4">
+        <div class="section-title">
+            <i class="bi bi-lightning-charge"></i>
+            Quick Actions
+        </div>
+        <div class="d-flex flex-wrap">
+            <a href="{% url 'trainings:active_sessions' %}" class="btn-action">
+                <i class="bi bi-activity"></i>
+                Manage Active Sessions
+            </a>
+            <a href="{% url 'trainings:history' %}" class="btn-action secondary">
+                <i class="bi bi-list-ul"></i>
+                Browse Training History
+            </a>
+            <a href="#" class="btn-action secondary" onclick="exportTrainingData()">
+                <i class="bi bi-download"></i>
+                Export Training Data
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Active Training Sessions -->
+        <div class="col-lg-8">
+            <div class="info-section">
+                <div class="section-title">
+                    <i class="bi bi-activity"></i>
+                    Active Training Sessions
+                    <span class="badge bg-primary ms-2">{{ active_sessions|length }} active</span>
+                </div>
+                
+                {% if active_sessions %}
+                    {% for session in active_sessions %}
+                    <div class="session-item">
+                        <div class="session-info">
+                            <div class="session-title">{{ session.session_id|truncatechars:12 }}</div>
+                            <div class="session-details">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ session.user.username }} • {{ session.dataset_name|truncatechars:25 }}
+                                <br>
+                                <small class="text-muted">
+                                    Round {{ session.current_round }}/{{ session.total_rounds }} 
+                                    ({{ session.progress_percentage|floatformat:1 }}%)
+                                </small>
+                            </div>
+                            <div class="progress progress-thin mt-2" style="width: 200px;">
+                                <div class="progress-bar bg-success" role="progressbar" 
+                                     style="width: {{ session.progress_percentage }}%"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="status-badge status-{{ session.status|lower }}">
+                                {{ session.get_status_display }}
+                            </span>
+                            <a href="{% url 'trainings:session_detail' session.session_id %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="text-center mt-3">
+                        <a href="{% url 'trainings:active_sessions' %}" class="btn btn-outline-primary">
+                            View All Active Sessions
+                            <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-inbox"></i>
+                        <h5>No Active Training Sessions</h5>
+                        <p>All training sessions have completed or no sessions have been started yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Recent Completed Sessions -->
+        <div class="col-lg-4">
+            <div class="info-section">
+                <div class="section-title">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Completed
+                </div>
+                
+                {% if recent_sessions %}
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        {% for session in recent_sessions %}
+                        <div class="session-item">
+                            <div class="session-info">
+                                <div class="session-title">{{ session.session_id|truncatechars:10 }}</div>
+                                <div class="session-details">
+                                    <i class="bi bi-person-circle me-1"></i>
+                                    {{ session.user.username }}
+                                    <br>
+                                    <small class="text-muted">
+                                        {{ session.dataset_name|truncatechars:20 }}
+                                        {% if session.completed_at %}
+                                        • {{ session.completed_at|timesince }} ago
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end">
+                                <span class="status-badge status-{{ session.status|lower }} mb-1">
+                                    {{ session.get_status_display }}
+                                </span>
+                                {% if session.final_accuracy %}
+                                <small class="text-success fw-bold">
+                                    {{ session.final_accuracy|floatformat:3 }} acc
+                                </small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <a href="{% url 'trainings:history' %}" class="btn btn-outline-secondary btn-sm">
+                            View Full History
+                            <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-clock"></i>
+                        <p>No recent completed sessions</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let refreshCountdown = 30;
+    let countdownInterval;
+    
+    const refreshIndicator = document.getElementById('refreshIndicator');
+    const countdownElement = document.getElementById('countdown');
+    const refreshText = document.getElementById('refreshText');
+    
+    // Show auto-refresh indicator
+    refreshIndicator.style.display = 'block';
+    
+    function updateCountdown() {
+        countdownElement.textContent = refreshCountdown;
+        refreshCountdown--;
+        
+        if (refreshCountdown < 0) {
+            refreshCountdown = 30;
+            refreshDashboard();
+        }
+    }
+    
+    function refreshDashboard() {
+        refreshIndicator.classList.add('updating');
+        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Updating...';
+        
+        // Fetch updated statistics
+        fetch('{% url "trainings:dashboard_stats_api" %}')
+            .then(response => response.json())
+            .then(data => {
+                // Update statistics
+                document.getElementById('activeCount').textContent = data.active_count;
+                document.getElementById('todayCompleted').textContent = data.today_completed;
+                document.getElementById('successRate').textContent = data.success_rate + '%';
+                
+                refreshIndicator.classList.remove('updating');
+                refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh in <span id="countdown">30</span>s';
+            })
+            .catch(error => {
+                console.error('Error refreshing dashboard:', error);
+                refreshIndicator.classList.remove('updating');
+                refreshText.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Refresh failed';
+            });
+    }
+    
+    // Start countdown
+    countdownInterval = setInterval(updateCountdown, 1000);
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (countdownInterval) clearInterval(countdownInterval);
+    });
+    
+    // Manual refresh on click
+    refreshIndicator.addEventListener('click', function() {
+        refreshCountdown = 30;
+        refreshDashboard();
+    });
+});
+
+function exportTrainingData() {
+    // Placeholder function for exporting training data
+    alert('Export functionality will be implemented in Phase 6');
+}
+</script>
+{% endblock %}

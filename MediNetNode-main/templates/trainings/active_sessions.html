@@ -1,0 +1,681 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .session-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        margin-bottom: 1.5rem;
+    }
+    
+    .session-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-starting { 
+        background: linear-gradient(45deg, #fff3cd, #ffeaa7); 
+        color: #856404; 
+    }
+    
+    .status-active { 
+        background: linear-gradient(45deg, #28a745, #20c997); 
+        color: white; 
+        animation: pulse-glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes pulse-glow {
+        from { box-shadow: 0 0 5px rgba(40, 167, 69, 0.5); }
+        to { box-shadow: 0 0 15px rgba(40, 167, 69, 0.8); }
+    }
+    
+    .progress-bar-custom {
+        height: 8px;
+        border-radius: 4px;
+        background: linear-gradient(45deg, #28a745, #20c997);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .progress-bar-custom::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    
+    .resource-gauge {
+        width: 60px;
+        height: 60px;
+        position: relative;
+        display: inline-block;
+    }
+    
+    .resource-gauge svg {
+        transform: rotate(-90deg);
+    }
+    
+    .resource-gauge .gauge-bg {
+        fill: none;
+        stroke: #e9ecef;
+        stroke-width: 4;
+    }
+    
+    .resource-gauge .gauge-fill {
+        fill: none;
+        stroke-width: 4;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.5s ease;
+    }
+    
+    .cpu-gauge .gauge-fill {
+        stroke: #ff7675;
+    }
+    
+    .memory-gauge .gauge-fill {
+        stroke: #74b9ff;
+    }
+    
+    .resource-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 10px;
+        font-weight: bold;
+        text-align: center;
+    }
+    
+    .auto-refresh-indicator {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(25, 118, 210, 0.95);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-size: 0.85rem;
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .auto-refresh-indicator:hover {
+        background: rgba(25, 118, 210, 1);
+        transform: scale(1.05);
+    }
+    
+    .auto-refresh-indicator.updating {
+        background: rgba(40, 167, 69, 0.95);
+        animation: pulse 1s ease-in-out infinite alternate;
+    }
+    
+    
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metric-label {
+        font-size: 0.8rem;
+        opacity: 0.9;
+    }
+    
+    .session-actions {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .session-card:hover .session-actions {
+        opacity: 1;
+    }
+    
+    @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.05); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-activity me-2 text-success"></i>
+        Active Training Sessions
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{% url 'trainings:dashboard' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-speedometer2 me-1"></i>
+                Dashboard
+            </a>
+            <a href="{% url 'trainings:history' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-clock-history me-1"></i>
+                History
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-refresh indicator -->
+<div class="auto-refresh-indicator" id="refreshIndicator">
+    <i class="bi bi-arrow-clockwise me-1"></i>
+    <span id="refreshText">Auto-refresh in <span id="countdown">10</span>s</span>
+</div>
+
+
+{% if active_sessions %}
+    <div class="row" id="sessionsContainer">
+        {% for session in active_sessions %}
+        <div class="col-lg-6 col-xl-4">
+            <div class="card session-card" data-session-id="{{ session.session_id }}">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-white">{{ session.client_id|default:"No client ID" }}</h6>
+                        <small class="text-white opacity-75">{{ session.session_id|slice:":12" }}</small>
+                    </div>
+                    <span class="status-badge status-{{ session.status|lower }}">
+                        {{ session.get_status_display }}
+                    </span>
+                </div>
+                
+                <div class="card-body">
+                    <!-- User and Dataset Info -->
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-person-circle text-primary me-2"></i>
+                                <span class="fw-medium">{{ session.user.username }}</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-database text-info me-2"></i>
+                                <span class="text-truncate" title="{{ session.dataset_name }}">
+                                    {{ session.dataset_name|truncatechars:15 }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="fw-medium">Training Progress</small>
+                            <small class="text-muted">{{ session.progress_percentage|floatformat:1 }}%</small>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar progress-bar-custom" role="progressbar" 
+                                 style="width: {{ session.progress_percentage }}%"
+                                 data-progress="{{ session.progress_percentage }}"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted">Round {{ session.current_round }}/{{ session.total_rounds }}</small>
+                            <small class="text-muted">
+                                {% if session.duration %}
+                                    {{ session.duration }}
+                                {% else %}
+                                    Just started
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Resource Usage -->
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="resource-gauge cpu-gauge">
+                                    <svg width="60" height="60">
+                                        <circle class="gauge-bg" cx="30" cy="30" r="26"></circle>
+                                        <circle class="gauge-fill" cx="30" cy="30" r="26" 
+                                                stroke-dasharray="0 164" 
+                                                data-value="{{ session.cpu_usage|default:0 }}"></circle>
+                                    </svg>
+                                    <div class="resource-label">
+                                        <div>{{ session.cpu_usage|default:0|floatformat:0 }}%</div>
+                                        <div>CPU</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="resource-gauge memory-gauge">
+                                    <svg width="60" height="60">
+                                        <circle class="gauge-bg" cx="30" cy="30" r="26"></circle>
+                                        <circle class="gauge-fill" cx="30" cy="30" r="26" 
+                                                stroke-dasharray="0 164"
+                                                data-value="{{ session.memory_usage|default:0 }}"></circle>
+                                    </svg>
+                                    <div class="resource-label">
+                                        <div>{{ session.memory_usage|default:0|floatformat:0 }}</div>
+                                        <div>MB</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Latest Metrics -->
+                    {% with latest_round=session.rounds.last %}
+                    {% if latest_round %}
+                    <div class="row">
+                        {% if latest_round.accuracy %}
+                        <div class="col-4">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                                <div class="metric-value">{{ latest_round.accuracy|floatformat:3 }}</div>
+                                <div class="metric-label">Accuracy</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if latest_round.loss %}
+                        <div class="col-4">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                                <div class="metric-value">{{ latest_round.loss|floatformat:3 }}</div>
+                                <div class="metric-label">Loss</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if latest_round.f1_score %}
+                        <div class="col-4">
+                            <div class="metric-card" style="background: linear-gradient(135deg, #007bff, #6f42c1);">
+                                <div class="metric-value">{{ latest_round.f1_score|floatformat:3 }}</div>
+                                <div class="metric-label">F1</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+                
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        Started {{ session.started_at|timesince }} ago
+                    </small>
+                    <div class="session-actions">
+                        <a href="{% url 'trainings:session_detail' session.session_id %}" 
+                           class="btn btn-outline-primary btn-sm me-1">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        {% if user.role.name == 'ADMIN' and session.is_active %}
+                        <button class="btn btn-outline-danger btn-sm" 
+                                onclick="confirmCancel('{{ session.session_id }}')">
+                            <i class="bi bi-stop-circle"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-inbox display-1 text-muted mb-4"></i>
+                    <h3>No Active Training Sessions</h3>
+                    <p class="text-muted mb-4">
+                        All training sessions have completed or no sessions have been started yet.
+                    </p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="{% url 'trainings:dashboard' %}" class="btn btn-primary">
+                            <i class="bi bi-speedometer2 me-1"></i>
+                            Go to Dashboard
+                        </a>
+                        <a href="{% url 'trainings:history' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-clock-history me-1"></i>
+                            View History
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Cancel Confirmation Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancel Training Session</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this training session?</p>
+                <p class="text-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    This action cannot be undone. All progress will be lost.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="cancelForm" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, Cancel Training</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let refreshCountdown = parseInt(localStorage.getItem('training_refresh_interval') || '10');
+    let currentInterval = refreshCountdown;
+    let countdownInterval;
+    let isPaused = localStorage.getItem('training_refresh_paused') === 'true';
+    
+    const refreshIndicator = document.getElementById('refreshIndicator');
+    const countdownElement = document.getElementById('countdown');
+    const refreshText = document.getElementById('refreshText');
+    const nextRefreshElement = document.getElementById('nextRefresh');
+    const pauseBtn = document.getElementById('pauseBtn');
+    
+    // Initialize resource gauges
+    initializeResourceGauges();
+    
+    // Initialize refresh control
+    initializeRefreshControl();
+    
+    function initializeRefreshControl() {
+        // Set up interval buttons
+        const intervalButtons = document.querySelectorAll('.refresh-interval-btn');
+        intervalButtons.forEach(btn => {
+            const interval = btn.dataset.interval;
+            if (interval == currentInterval || (interval === 'manual' && currentInterval === 0)) {
+                btn.classList.add('active');
+            }
+            
+            btn.addEventListener('click', function() {
+                setRefreshInterval(interval);
+            });
+        });
+        
+        // Set up pause button
+        pauseBtn.addEventListener('click', togglePause);
+        updatePauseButton();
+        
+        // Load saved state
+        if (isPaused || currentInterval === 0) {
+            clearInterval(countdownInterval);
+            if (currentInterval === 0) {
+                refreshText.textContent = 'Manual refresh mode';
+                nextRefreshElement.textContent = 'Manual';
+            } else {
+                refreshText.textContent = 'Auto-refresh paused';
+                nextRefreshElement.textContent = 'Paused';
+            }
+        }
+    }
+    
+    function setRefreshInterval(interval) {
+        // Clear existing interval
+        clearInterval(countdownInterval);
+        
+        // Update buttons
+        document.querySelectorAll('.refresh-interval-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-interval="${interval}"]`).classList.add('active');
+        
+        if (interval === 'manual') {
+            currentInterval = 0;
+            refreshCountdown = 0;
+            refreshText.textContent = 'Manual refresh mode';
+            nextRefreshElement.textContent = 'Manual';
+            localStorage.setItem('training_refresh_interval', '0');
+        } else {
+            currentInterval = parseInt(interval);
+            refreshCountdown = currentInterval;
+            isPaused = false;
+            localStorage.setItem('training_refresh_interval', interval);
+            localStorage.removeItem('training_refresh_paused');
+            startCountdown();
+        }
+        
+        updatePauseButton();
+    }
+    
+    function togglePause() {
+        if (currentInterval === 0) return; // Can't pause manual mode
+        
+        isPaused = !isPaused;
+        
+        if (isPaused) {
+            clearInterval(countdownInterval);
+            refreshText.textContent = 'Auto-refresh paused';
+            nextRefreshElement.textContent = 'Paused';
+            localStorage.setItem('training_refresh_paused', 'true');
+        } else {
+            refreshCountdown = currentInterval;
+            localStorage.removeItem('training_refresh_paused');
+            startCountdown();
+        }
+        
+        updatePauseButton();
+    }
+    
+    function updatePauseButton() {
+        if (currentInterval === 0) {
+            pauseBtn.style.display = 'none';
+        } else {
+            pauseBtn.style.display = 'block';
+            pauseBtn.innerHTML = isPaused ? 
+                '<i class="bi bi-play-fill"></i>' : 
+                '<i class="bi bi-pause-fill"></i>';
+            pauseBtn.title = isPaused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+        }
+    }
+    
+    function startCountdown() {
+        countdownInterval = setInterval(updateCountdown, 1000);
+        updateCountdownDisplay();
+    }
+    
+    function updateCountdown() {
+        updateCountdownDisplay();
+        refreshCountdown--;
+        
+        if (refreshCountdown < 0) {
+            refreshCountdown = currentInterval;
+            refreshActiveSessions();
+        }
+    }
+    
+    function updateCountdownDisplay() {
+        if (currentInterval === 0) {
+            countdownElement.textContent = 'Manual';
+            nextRefreshElement.textContent = 'Manual';
+        } else if (isPaused) {
+            countdownElement.textContent = 'Paused';
+            nextRefreshElement.textContent = 'Paused';
+        } else {
+            countdownElement.textContent = refreshCountdown;
+            nextRefreshElement.textContent = refreshCountdown + 's';
+        }
+    }
+    
+    function refreshActiveSessions() {
+        refreshIndicator.classList.add('updating');
+        refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Updating...';
+        nextRefreshElement.textContent = 'Updating...';
+        
+        fetch('{% url "trainings:active_sessions_api" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                }
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    return response.json().then(data => {
+                        if (data.error === 'Session expired') {
+                            alert(data.message || 'Tu sesión ha expirado');
+                            window.location.href = data.redirect || '/auth/login/';
+                        }
+                        throw new Error(data.error || 'Unauthorized');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                updateSessionCards(data.sessions);
+                refreshIndicator.classList.remove('updating');
+                
+                if (currentInterval === 0) {
+                    refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Manual refresh mode';
+                    nextRefreshElement.textContent = 'Manual';
+                } else if (isPaused) {
+                    refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh paused';
+                    nextRefreshElement.textContent = 'Paused';
+                } else {
+                    refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Auto-refresh in <span id="countdown">' + refreshCountdown + '</span>s';
+                    nextRefreshElement.textContent = refreshCountdown + 's';
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing sessions:', error);
+                refreshIndicator.classList.remove('updating');
+                refreshText.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Refresh failed';
+                nextRefreshElement.textContent = 'Error';
+            });
+    }
+    
+    function updateSessionCards(sessions) {
+        sessions.forEach(session => {
+            const card = document.querySelector(`[data-session-id="${session.session_id}"]`);
+            if (card) {
+                // Update progress bar
+                const progressBar = card.querySelector('.progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = session.progress_percentage + '%';
+                    progressBar.setAttribute('data-progress', session.progress_percentage);
+                }
+                
+                // Update progress text
+                const progressText = card.querySelector('.progress').nextElementSibling;
+                if (progressText) {
+                    const roundInfo = progressText.querySelector('small:first-child');
+                    const durationInfo = progressText.querySelector('small:last-child');
+                    
+                    if (roundInfo) {
+                        roundInfo.textContent = `Round ${session.current_round}/${session.total_rounds}`;
+                    }
+                    if (durationInfo && session.duration) {
+                        durationInfo.textContent = session.duration;
+                    }
+                }
+                
+                // Update resource gauges
+                updateResourceGauge(card, '.cpu-gauge .gauge-fill', session.cpu_usage || 0);
+                updateResourceGauge(card, '.memory-gauge .gauge-fill', Math.min((session.memory_usage || 0) / 1024 * 100, 100));
+                
+                // Update resource labels
+                const cpuLabel = card.querySelector('.cpu-gauge .resource-label div:first-child');
+                const memoryLabel = card.querySelector('.memory-gauge .resource-label div:first-child');
+                
+                if (cpuLabel) cpuLabel.textContent = Math.round(session.cpu_usage || 0) + '%';
+                if (memoryLabel) memoryLabel.textContent = Math.round(session.memory_usage || 0);
+            }
+        });
+    }
+    
+    function updateResourceGauge(card, selector, value) {
+        const gauge = card.querySelector(selector);
+        if (gauge) {
+            const circumference = 2 * Math.PI * 26; // r = 26
+            const strokeDasharray = (value / 100) * circumference;
+            gauge.style.strokeDasharray = strokeDasharray + ' ' + circumference;
+        }
+    }
+    
+    function initializeResourceGauges() {
+        document.querySelectorAll('.gauge-fill').forEach(gauge => {
+            const value = parseFloat(gauge.getAttribute('data-value')) || 0;
+            const circumference = 2 * Math.PI * 26;
+            let displayValue = value;
+            
+            // For memory gauge, convert MB to percentage of 1GB
+            if (gauge.closest('.memory-gauge')) {
+                displayValue = Math.min(value / 1024 * 100, 100);
+            }
+            
+            const strokeDasharray = (displayValue / 100) * circumference;
+            gauge.style.strokeDasharray = strokeDasharray + ' ' + circumference;
+        });
+    }
+    
+    // Start countdown if not paused and not manual
+    if (!isPaused && currentInterval > 0) {
+        startCountdown();
+    }
+    
+    // Manual refresh on click
+    refreshIndicator.addEventListener('click', function() {
+        if (currentInterval > 0 && !isPaused) {
+            refreshCountdown = currentInterval;
+        }
+        refreshActiveSessions();
+    });
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (countdownInterval) clearInterval(countdownInterval);
+    });
+    
+    // Make refreshActiveSessions globally available
+    window.refreshActiveSessions = refreshActiveSessions;
+});
+
+function confirmCancel(sessionId) {
+    const cancelForm = document.getElementById('cancelForm');
+    cancelForm.action = `/trainings/session/${sessionId}/cancel/`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('cancelModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

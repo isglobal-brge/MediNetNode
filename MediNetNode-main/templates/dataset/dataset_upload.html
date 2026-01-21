@@ -1,0 +1,1027 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dataset Upload - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Dataset Upload Specific Styles */
+    .upload-section {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .upload-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--primary-gradient);
+    }
+
+    .drag-drop-zone {
+        border: 3px dashed rgba(66, 165, 245, 0.3);
+        border-radius: var(--border-radius);
+        padding: 3rem 2rem;
+        text-align: center;
+        background: rgba(66, 165, 245, 0.02);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .drag-drop-zone:hover {
+        border-color: var(--primary-color);
+        background: rgba(66, 165, 245, 0.05);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(66, 165, 245, 0.15);
+    }
+
+    .drag-drop-zone.drag-over {
+        border-color: #4caf50;
+        background: rgba(76, 175, 80, 0.1);
+        transform: scale(1.02);
+        box-shadow: 0 12px 35px rgba(76, 175, 80, 0.2);
+    }
+
+    .drag-drop-zone.uploading {
+        border-color: #ff9800;
+        background: rgba(255, 152, 0, 0.1);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.01); }
+    }
+
+    .upload-icon {
+        font-size: 4rem;
+        color: var(--primary-color);
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        opacity: 0.8;
+    }
+
+    .drag-over .upload-icon {
+        color: #4caf50;
+        transform: scale(1.1);
+    }
+
+    .uploading .upload-icon {
+        color: #ff9800;
+        animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .file-input {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .file-info-card {
+        background: rgba(66, 165, 245, 0.05);
+        border: 1px solid rgba(66, 165, 245, 0.15);
+        border-radius: var(--border-radius-sm);
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        display: none;
+        position: relative;
+    }
+
+    .file-info-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary-gradient);
+        border-radius: 2px 0 0 2px;
+    }
+
+    .progress-section {
+        display: none;
+        margin-top: 1.5rem;
+        padding: 1.5rem;
+        background: rgba(66, 165, 245, 0.03);
+        border-radius: var(--border-radius-sm);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+    }
+
+    .progress-bar-container {
+        height: 12px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: rgba(66, 165, 245, 0.1);
+        position: relative;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: var(--primary-gradient);
+        border-radius: 6px;
+        transition: width 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.2),
+            transparent
+        );
+        animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    .form-section {
+        background: var(--card-bg);
+        border-radius: var(--border-radius);
+        padding: 2rem;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+        height: fit-content;
+        position: sticky;
+        top: 2rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: var(--primary-dark);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+    }
+
+    .form-control, .form-select {
+        border: 1px solid rgba(66, 165, 245, 0.2);
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.8);
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.25rem rgba(66, 165, 245, 0.15);
+        background: white;
+    }
+
+    .form-text {
+        color: #6c757d;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+
+    .btn-upload {
+        background: var(--primary-gradient);
+        border: none;
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 600;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-upload:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(66, 165, 245, 0.3);
+        color: white;
+    }
+
+    .btn-upload:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .btn-secondary-custom {
+        background: white;
+        border: 1px solid rgba(66, 165, 245, 0.2);
+        color: var(--primary-color);
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary-custom:hover {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border-color: var(--primary-color);
+    }
+
+    .security-info {
+        background: rgba(76, 175, 80, 0.05);
+        border: 1px solid rgba(76, 175, 80, 0.2);
+        border-radius: var(--border-radius-sm);
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .security-info h6 {
+        color: #2e7d32;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .security-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .security-list li {
+        padding: 0.25rem 0;
+        color: #4caf50;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .upload-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: var(--border-radius-sm);
+        border: 1px solid rgba(66, 165, 245, 0.1);
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--primary-dark);
+    }
+
+    .cancel-btn {
+        background: #dc3545;
+        border: none;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: var(--border-radius-sm);
+        font-weight: 500;
+        transition: all 0.3s ease;
+        display: none;
+    }
+
+    .cancel-btn:hover {
+        background: #c82333;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        color: white;
+    }
+
+    .format-chip {
+        background: rgba(66, 165, 245, 0.1);
+        color: var(--primary-color);
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+
+    .feature-highlight {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: var(--border-radius-sm);
+        padding: 1rem;
+        margin-top: 1rem;
+        text-align: center;
+    }
+
+    .feature-highlight i {
+        color: #ffc107;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .upload-section, .form-section {
+            padding: 1.5rem;
+        }
+        
+        .drag-drop-zone {
+            padding: 2rem 1rem;
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+        }
+        
+        .form-section {
+            position: static;
+            margin-top: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="dashboard-hero">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="bi bi-cloud-upload me-2"></i>
+                    Dataset Upload
+                </h1>
+                <p class="mb-0 opacity-90">
+                    Secure medical dataset upload with automated validation
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'dataset:list' %}" class="btn btn-light">
+                    <i class="bi bi-list-ul me-2"></i>
+                    View Datasets
+                </a>
+                <a href="{% url 'dataset:dashboard' %}" class="btn btn-outline-light">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container"></div>
+
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-8">
+            <div class="upload-section">
+                <h4 class="mb-3 d-flex align-items-center text-primary">
+                    <i class="bi bi-cloud-arrow-up me-2"></i>
+                    File Selection
+                </h4>
+                
+                <div class="drag-drop-zone" id="dropZone">
+                    <div class="upload-icon">
+                        <i class="bi bi-cloud-upload"></i>
+                    </div>
+                    <h5 class="mb-2">Drag your file here</h5>
+                    <p class="text-muted mb-3">or click to browse and select</p>
+                    <div class="mb-3">
+                        <span class="format-chip">CSV</span>
+                        <span class="format-chip">JSON</span>
+                        <span class="format-chip">Parquet</span>
+                        <span class="format-chip">H5</span>
+                        <span class="format-chip">NPY</span>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        No size limit for medical datasets
+                    </p>
+                    <input type="file" class="file-input" id="fileInput" 
+                           accept=".csv,.json,.parquet,.h5,.npy">
+                </div>
+
+                <!-- File Information Card -->
+                <div class="file-info-card" id="fileInfo">
+                    <h6 class="text-primary mb-3">
+                        <i class="bi bi-file-earmark-check me-2"></i>
+                        File Information
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="stat-item">
+                                <div class="stat-label">File Name</div>
+                                <div class="stat-value" id="fileName">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-item">
+                                <div class="stat-label">File Size</div>
+                                <div class="stat-value" id="fileSize">-</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-item">
+                                <div class="stat-label">File Type</div>
+                                <div class="stat-value" id="fileType">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="progress-section" id="progressContainer">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="text-primary mb-0">
+                            <i class="bi bi-arrow-up-circle me-2"></i>
+                            Upload Progress
+                        </h6>
+                        <span class="badge bg-primary" id="progressPercent">0%</span>
+                    </div>
+                    
+                    <div class="progress-bar-container mb-3">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+
+                    <div class="upload-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Status</div>
+                            <div class="stat-value" id="uploadStatus">Initializing...</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Time Remaining</div>
+                            <div class="stat-value" id="timeRemaining">Calculating...</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Upload Speed</div>
+                            <div class="stat-value" id="currentSpeed">0 KB/s</div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <button type="button" class="cancel-btn" id="cancelBtn">
+                            <i class="bi bi-x-circle me-2"></i>
+                            Cancel Upload
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Feature Highlight -->
+                <div class="feature-highlight">
+                    <i class="bi bi-lightning-charge"></i>
+                    <h6 class="mb-2">Automated Processing</h6>
+                    <p class="small mb-0 text-muted">
+                        Your dataset will be automatically validated, anonymized, and optimized for federated learning
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Section -->
+        <div class="col-lg-4">
+            <div class="form-section">
+                <h4 class="mb-3 d-flex align-items-center text-primary">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Dataset Information
+                </h4>
+                
+                <form id="uploadForm" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label for="datasetName" class="form-label">
+                            <i class="bi bi-tag"></i>
+                            Dataset Name *
+                        </label>
+                        <input type="text" class="form-control" id="datasetName" name="name" required
+                               placeholder="e.g., Cardiology Study 2024">
+                        <div class="form-text">Descriptive and unique name for identification</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description" class="form-label">
+                            <i class="bi bi-text-paragraph"></i>
+                            Description *
+                        </label>
+                        <textarea class="form-control" id="description" name="description" rows="3" required
+                                  placeholder="Describe the dataset content and research purpose..."></textarea>
+                        <div class="form-text">Detailed description of the dataset's content and purpose</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="medicalDomain" class="form-label">
+                            <i class="bi bi-heart-pulse"></i>
+                            Medical Domain *
+                        </label>
+                        <select class="form-select" id="medicalDomain" name="medical_domain" required>
+                            <option value="">Select medical domain...</option>
+                            <option value="cardiology">Cardiology</option>
+                            <option value="neurology">Neurology</option>
+                            <option value="oncology">Oncology</option>
+                            <option value="radiology">Radiology</option>
+                            <option value="pathology">Pathology</option>
+                            <option value="dermatology">Dermatology</option>
+                            <option value="ophthalmology">Ophthalmology</option>
+                            <option value="general">General Medicine</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dataType" class="form-label">
+                            <i class="bi bi-database"></i>
+                            Data Type
+                        </label>
+                        <select class="form-select" id="dataType" name="data_type">
+                            <option value="tabular">Tabular Data</option>
+                            <option value="image">Medical Images</option>
+                            <option value="time_series">Biomedical Signals</option>
+                            <option value="text">Medical Text</option>
+                            <option value="mixed">Mixed Data</option>
+                        </select>
+                        <div class="form-text">Type of medical data contained in the dataset</div>
+                    </div>
+
+                    <div class="form-group" id="targetColumnGroup" style="display: none;">
+                        <label for="targetColumn" class="form-label">
+                            <i class="bi bi-bullseye"></i>
+                            Target Column *
+                        </label>
+                        <select class="form-select" id="targetColumn" name="target_column">
+                            <option value="">Select target column...</option>
+                        </select>
+                        <div class="form-text">Column to predict in federated learning</div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn-upload" id="uploadBtn" disabled>
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            Upload Dataset
+                        </button>
+                        <a href="{% url 'dataset:dashboard' %}" class="btn-secondary-custom text-center">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Security Information -->
+            <div class="security-info">
+                <h6>
+                    <i class="bi bi-shield-check"></i>
+                    Security Validations
+                </h6>
+                <ul class="security-list">
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        File type verification
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Automatic PHI detection
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        K-anonymity validation (k≥5)
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Null value rejection
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        MD5/SHA256 checksums
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const progressContainer = document.getElementById('progressContainer');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const alertContainer = document.getElementById('alert-container');
+    
+    let currentFile = null;
+    let uploadInProgress = false;
+    let uploadSessionId = null;
+    let startTime = null;
+    
+    // Drag and drop handlers
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
+    
+    function highlight(e) {
+        dropZone.classList.add('drag-over');
+    }
+    
+    function unhighlight(e) {
+        dropZone.classList.remove('drag-over');
+    }
+    
+    // Handle dropped files
+    dropZone.addEventListener('drop', handleDrop, false);
+    fileInput.addEventListener('change', handleFileSelect, false);
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+    
+    function handleFileSelect(e) {
+        const files = e.target.files;
+        handleFiles(files);
+    }
+    
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            validateAndShowFile(file);
+        }
+    }
+    
+    async function validateAndShowFile(file) {
+        // Basic client-side validation
+        const allowedExtensions = ['.csv', '.json', '.parquet', '.h5', '.npy'];
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        
+        if (!allowedExtensions.includes(fileExtension)) {
+            showAlert('danger', 'File type not allowed. Accepted formats: CSV, JSON, Parquet, H5, NPY');
+            return;
+        }
+        
+        currentFile = file;
+        showFileInfo(file);
+        
+        // Show/hide target column selector based on file type and data type
+        updateTargetColumnVisibility();
+        
+        // Additional server-side validation
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('{% url "dataset:api_validate_file" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.valid) {
+                showAlert('danger', result.error);
+                uploadBtn.disabled = true;
+                return;
+            }
+            
+            showAlert('success', 'File validated successfully. Ready to upload.');
+            
+            // Detect columns for CSV files
+            if (fileExtension === '.csv') {
+                await detectColumns(file);
+            }
+            
+            updateUploadButtonState();
+            
+        } catch (error) {
+            console.error('Error validating file:', error);
+            showAlert('warning', 'Could not validate file on server, but you can continue.');
+            updateUploadButtonState();
+        }
+    }
+    
+    function showFileInfo(file) {
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatFileSize(file.size);
+        document.getElementById('fileType').textContent = file.type || 'Unknown';
+        fileInfo.style.display = 'block';
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        alertContainer.appendChild(alertDiv);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    // Form submission
+    uploadForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (!currentFile || uploadInProgress) return;
+        
+        uploadInProgress = true;
+        startTime = Date.now();
+        uploadSessionId = generateSessionId();
+        
+        showUploadProgress();
+        
+        const formData = new FormData(uploadForm);
+        formData.append('file', currentFile);
+        formData.append('session_id', uploadSessionId);
+        
+        try {
+            const response = await fetch('{% url "dataset:upload" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                showAlert('success', result.message || 'Dataset uploaded successfully!');
+                setTimeout(() => {
+                    window.location.href = '{% url "dataset:dashboard" %}';
+                }, 2000);
+            } else {
+                showAlert('danger', result.error || 'Error uploading dataset');
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            showAlert('danger', 'Connection error while uploading file');
+        } finally {
+            uploadInProgress = false;
+            hideUploadProgress();
+        }
+    });
+    
+    function showUploadProgress() {
+        progressContainer.style.display = 'block';
+        cancelBtn.style.display = 'inline-block';
+        dropZone.classList.add('uploading');
+        uploadBtn.disabled = true;
+        
+        // Simulate progress (in real implementation, this would come from server)
+        simulateProgress();
+    }
+    
+    function hideUploadProgress() {
+        progressContainer.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        dropZone.classList.remove('uploading');
+        uploadBtn.disabled = false;
+    }
+    
+    function simulateProgress() {
+        let progress = 0;
+        const interval = setInterval(() => {
+            if (!uploadInProgress) {
+                clearInterval(interval);
+                return;
+            }
+            
+            progress += Math.random() * 10;
+            if (progress > 100) progress = 100;
+            
+            updateProgress(progress);
+            
+            if (progress >= 100) {
+                clearInterval(interval);
+            }
+        }, 500);
+    }
+    
+    function updateProgress(percent) {
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        
+        progressBar.style.width = percent + '%';
+        progressPercent.textContent = Math.round(percent) + '%';
+        
+        // Calculate speed and remaining time (simulated)
+        if (startTime && currentFile) {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = (currentFile.size * percent / 100) / elapsed;
+            document.getElementById('currentSpeed').textContent = formatFileSize(speed) + '/s';
+            
+            if (percent > 0) {
+                const remaining = (elapsed * (100 - percent)) / percent;
+                document.getElementById('timeRemaining').textContent = formatTime(remaining);
+            }
+        }
+        
+        // Update status
+        if (percent < 25) {
+            document.getElementById('uploadStatus').textContent = 'Validating...';
+        } else if (percent < 75) {
+            document.getElementById('uploadStatus').textContent = 'Uploading...';
+        } else if (percent < 100) {
+            document.getElementById('uploadStatus').textContent = 'Processing...';
+        } else {
+            document.getElementById('uploadStatus').textContent = 'Completed';
+        }
+    }
+    
+    function formatTime(seconds) {
+        if (seconds < 60) return Math.round(seconds) + 's';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.round(seconds % 60);
+        return minutes + 'm ' + remainingSeconds + 's';
+    }
+    
+    // Cancel upload
+    cancelBtn.addEventListener('click', async function() {
+        if (uploadSessionId) {
+            try {
+                await fetch(`/datasets/api/cancel-upload/${uploadSessionId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+            } catch (error) {
+                console.error('Error canceling upload:', error);
+            }
+        }
+        
+        uploadInProgress = false;
+        hideUploadProgress();
+        showAlert('info', 'Upload cancelled');
+    });
+    
+    function generateSessionId() {
+        return 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    async function detectColumns(file) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('{% url "dataset:api_detect_columns" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                populateTargetColumnOptions(result.columns);
+                showAlert('info', result.message);
+            } else {
+                showAlert('warning', result.error);
+            }
+            
+        } catch (error) {
+            console.error('Error detecting columns:', error);
+            showAlert('warning', 'Could not detect columns from CSV file');
+        }
+    }
+    
+    function populateTargetColumnOptions(columns) {
+        const targetColumnSelect = document.getElementById('targetColumn');
+        
+        // Clear existing options except the first one
+        targetColumnSelect.innerHTML = '<option value="">Select target column...</option>';
+        
+        // Add columns as options
+        columns.forEach(column => {
+            const option = document.createElement('option');
+            option.value = column;
+            option.textContent = column;
+            targetColumnSelect.appendChild(option);
+        });
+    }
+    
+    function updateTargetColumnVisibility() {
+        const dataType = document.getElementById('dataType').value;
+        const targetColumnGroup = document.getElementById('targetColumnGroup');
+        const fileExtension = currentFile ? '.' + currentFile.name.split('.').pop().toLowerCase() : '';
+        
+        // Show target column selector for tabular CSV files
+        if (dataType === 'tabular' && fileExtension === '.csv') {
+            targetColumnGroup.style.display = 'block';
+        } else {
+            targetColumnGroup.style.display = 'none';
+        }
+        
+        updateUploadButtonState();
+    }
+    
+    function updateUploadButtonState() {
+        const dataType = document.getElementById('dataType').value;
+        const targetColumn = document.getElementById('targetColumn').value;
+        const targetColumnGroup = document.getElementById('targetColumnGroup');
+        const isTargetColumnVisible = targetColumnGroup.style.display !== 'none';
+        
+        // Enable upload button if file is selected and target column is selected (when required)
+        if (currentFile) {
+            if (isTargetColumnVisible && !targetColumn) {
+                uploadBtn.disabled = true;
+            } else {
+                uploadBtn.disabled = false;
+            }
+        } else {
+            uploadBtn.disabled = true;
+        }
+    }
+    
+    // Event listeners for dynamic updates
+    document.getElementById('dataType').addEventListener('change', updateTargetColumnVisibility);
+    document.getElementById('targetColumn').addEventListener('change', updateUploadButtonState);
+});
+</script>
+{% endblock %}

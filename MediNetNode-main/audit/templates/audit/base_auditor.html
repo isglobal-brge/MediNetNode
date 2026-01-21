@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MediNet - Audit Dashboard">
+    <title>{% block title %}Audit System - MediNet{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            /* Audit Theme Colors */
+            --audit-primary: #ff5722;
+            --audit-dark: #d84315;
+            --audit-light: #ffccbc;
+            --audit-gradient: linear-gradient(135deg, #ff5722 0%, #d84315 100%);
+            --medical-blue: #42a5f5;
+            --medical-blue-dark: #1976d2;
+            --card-bg: rgba(255, 255, 255, 0.98);
+            --shadow-soft: 0 10px 30px rgba(255, 87, 34, 0.08);
+            --shadow-hover: 0 20px 40px rgba(255, 87, 34, 0.12);
+            --border-radius: 16px;
+            --border-radius-sm: 12px;
+            --glass-bg: rgba(255, 255, 255, 0.25);
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 1rem 0;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: var(--shadow-soft);
+            width: 240px;
+            transition: width 0.3s ease;
+        }
+        
+        .sidebar.mini {
+            width: 70px;
+        }
+        
+        .sidebar-sticky {
+            position: relative;
+            top: 0;
+            height: calc(100vh - 56px);
+            padding-top: 0.5rem;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            margin-left: 240px;
+            width: calc(100% - 240px);
+            padding-top: 72px;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+            transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+        
+        .main-content.mini-mode {
+            margin-left: 70px;
+            width: calc(100% - 70px);
+        }
+        
+        /* Sidebar Components */
+        .sidebar-toggle {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            z-index: 1001;
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--audit-primary);
+            border: 1px solid rgba(255, 87, 34, 0.2);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--audit-primary);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 6px 18px rgba(255, 87, 34, 0.3);
+        }
+        
+        .sidebar.mini .sidebar-toggle {
+            position: absolute;
+            top: 0.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: var(--audit-primary);
+            border: 1px solid rgba(255, 87, 34, 0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sidebar-header {
+            position: relative;
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            margin-bottom: 0.25rem;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .sidebar.mini .sidebar-header {
+            justify-content: center;
+            padding: 0.75rem 0.25rem;
+        }
+        
+        .sidebar.mini .sidebar-header .sidebar-text {
+            display: none;
+        }
+        
+        /* Navigation Links */
+        .nav-link {
+            border-radius: var(--border-radius-sm);
+            margin: 0.25rem 0.75rem;
+            transition: all 0.3s ease;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: var(--audit-gradient);
+            color: white !important;
+            transform: translateX(8px);
+            box-shadow: 0 4px 15px rgba(255, 87, 34, 0.3);
+        }
+
+        .nav-link.active {
+            background: transparent;
+            color: var(--audit-primary) !important;
+            font-weight: 600;
+        }
+
+        .nav-link.active:hover {
+            background: var(--audit-gradient);
+            color: white !important;
+            transform: translateX(8px);
+        }
+        
+        /* Mini Sidebar Styles */
+        .sidebar.mini .nav-link {
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            margin: 0.25rem;
+            position: relative;
+        }
+        
+        .sidebar.mini .nav-link .nav-text {
+            display: none;
+        }
+        
+        .sidebar.mini .nav-link i {
+            font-size: 1.2rem;
+            margin-right: 0 !important;
+        }
+        
+        .sidebar.mini .badge {
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            transform: scale(0.8);
+        }
+        
+        .sidebar.mini .sidebar-heading {
+            display: none;
+        }
+        
+        /* Tooltips for mini sidebar */
+        .sidebar.mini .nav-link:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            z-index: 1000;
+            opacity: 0;
+            animation: fadeIn 0.2s ease forwards;
+        }
+        
+        /* Modern Components */
+        .modern-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-soft);
+            border: none;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .modern-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        
+        /* Better metric cards */
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-sm);
+            box-shadow: var(--shadow-soft);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            height: 100%;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                position: static;
+                height: auto;
+                padding: 0;
+                width: 100%;
+                transform: none !important;
+            }
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+                padding-top: 56px;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .sidebar-toggle {
+                display: none;
+            }
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-50%) translateX(-5px); }
+            to { opacity: 1; transform: translateY(-50%) translateX(0); }
+        }
+        
+        /* Navbar styling */
+        .navbar {
+            background: var(--audit-gradient) !important;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(10px);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: #fff !important;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'audit:auditor_dashboard' %}">
+                <i class="bi bi-shield-check"></i>
+                Audit System
+            </a>
+            
+            <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                        <div class="user-avatar bg-light rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px;">
+                            <i class="bi bi-person-fill" style="color: var(--audit-primary);"></i>
+                        </div>
+                        <span class="text-white">{{ user.username|title }}</span>
+                        <span class="badge bg-secondary ms-1">AUDITOR</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Audit Sidebar -->
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                <div class="sidebar-sticky">
+                    <!-- Sidebar Header -->
+                    <div class="sidebar-header d-none d-md-block position-relative">
+                        <button id="sidebarToggle" class="sidebar-toggle">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="ms-2 fw-semibold text-dark sidebar-text">Audit Menu</span>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'auditor_dashboard' %}active{% endif %}" 
+                               href="{% url 'audit:auditor_dashboard' %}" 
+                               data-tooltip="Dashboard">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                <span class="nav-text">Dashboard</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'audit_search' %}active{% endif %}" 
+                               href="{% url 'audit:audit_search' %}" 
+                               data-tooltip="Search Events">
+                                <i class="bi bi-search me-2"></i>
+                                <span class="nav-text">Search Events</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dataset_analysis' %}active{% endif %}" 
+                               href="{% url 'audit:dataset_analysis' %}" 
+                               data-tooltip="Dataset Analysis">
+                                <i class="bi bi-database me-2"></i>
+                                <span class="nav-text">Dataset Analysis</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'medical_data_analysis' %}active{% endif %}" 
+                               href="{% url 'audit:medical_data_analysis' %}" 
+                               data-tooltip="Live Medical Data"
+                               onclick="return confirm('WARNING: You are about to access LIVE medical data. This action is logged and monitored. Continue?')">
+                                <i class="bi bi-shield-lock me-2"></i>
+                                <span class="nav-text">Medical Data</span>
+                                <span class="badge bg-danger ms-auto">HIGH</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'security_incidents' %}active{% endif %}" 
+                               href="{% url 'audit:security_incidents' %}" 
+                               data-tooltip="Security Incidents">
+                                <i class="bi bi-shield-exclamation me-2"></i>
+                                <span class="nav-text">Incidents</span>
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Reports & Export</span>
+                    </h6>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'export_audit_report' %}active{% endif %}" 
+                               href="{% url 'audit:export_audit_report' %}" 
+                               data-tooltip="Export Reports">
+                                <i class="bi bi-download me-2"></i>
+                                <span class="nav-text">Export Report</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-tooltip="Help & Documentation">
+                                <i class="bi bi-question-circle me-2"></i>
+                                <span class="nav-text">Help</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="px-md-4 main-content">
+                <!-- Alert Messages -->
+                {% if messages %}
+                <div class="mt-3">
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        <i class="bi bi-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' or message.tags == 'danger' %}exclamation-triangle{% elif message.tags == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Page Header -->
+                {% block page_header %}
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">{% block page_title %}Audit Dashboard{% endblock %}</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        {% block page_actions %}{% endblock %}
+                    </div>
+                </div>
+                {% endblock %}
+
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
+
+                <!-- Footer -->
+                <footer class="mt-5 py-4 border-top text-center text-muted">
+                    <div class="row">
+                        <div class="col-md-6 text-start">
+                            <small>© 2024 MediNet - Audit System</small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small>
+                                Auditor: <span style="color: var(--audit-primary);">{{ user.username }}</span> |
+                                IP: <span class="text-secondary">{{ request.META.REMOTE_ADDR }}</span> |
+                                <span id="session-timer" class="text-warning"></span>
+                            </small>
+                        </div>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    
+    <!-- Session Timer & Sidebar Toggle -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Session Timer
+            const sessionTimeout = 1800; // 30 minutes
+            let lastActivity = Date.now();
+            let timerElement = document.getElementById('session-timer');
+            
+            function updateTimer() {
+                const timeLeft = Math.max(0, sessionTimeout - Math.floor((Date.now() - lastActivity) / 1000));
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                
+                timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft <= 300) { // 5 minutes warning
+                    timerElement.className = 'text-danger fw-bold';
+                } else if (timeLeft <= 600) { // 10 minutes warning
+                    timerElement.className = 'text-warning';
+                }
+                
+                if (timeLeft <= 0) {
+                    alert('Your session has expired. You will be redirected to login.');
+                    window.location.href = '/auth/login/';
+                }
+            }
+            
+            // Update timer every second
+            setInterval(updateTimer, 1000);
+            
+            // Reset timer on activity
+            document.addEventListener('click', () => lastActivity = Date.now());
+            document.addEventListener('keypress', () => lastActivity = Date.now());
+            
+            // Mini Sidebar Toggle Functionality
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebarMenu');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = sidebarToggle ? sidebarToggle.querySelector('i') : null;
+            
+            if (sidebarToggle && sidebar && mainContent) {
+                // Check localStorage for saved state
+                const sidebarMini = localStorage.getItem('auditSidebarMini') === 'true';
+                if (sidebarMini) {
+                    sidebar.classList.add('mini');
+                    mainContent.classList.add('mini-mode');
+                    if (toggleIcon) toggleIcon.className = 'bi bi-chevron-right';
+                }
+                
+                sidebarToggle.addEventListener('click', function() {
+                    const isMini = sidebar.classList.contains('mini');
+                    
+                    if (isMini) {
+                        // Expand sidebar
+                        sidebar.classList.remove('mini');
+                        mainContent.classList.remove('mini-mode');
+                        if (toggleIcon) toggleIcon.className = 'bi bi-chevron-left';
+                        localStorage.setItem('auditSidebarMini', 'false');
+                    } else {
+                        // Minimize sidebar
+                        sidebar.classList.add('mini');
+                        mainContent.classList.add('mini-mode');
+                        if (toggleIcon) toggleIcon.className = 'bi bi-chevron-right';
+                        localStorage.setItem('auditSidebarMini', 'true');
+                    }
+                });
+            }
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
