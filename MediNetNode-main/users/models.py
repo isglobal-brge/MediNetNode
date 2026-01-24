@@ -11,6 +11,7 @@ class Role(models.Model):
 
     ROLE_CHOICES = (
         ('ADMIN', 'ADMIN'),
+        ('MEMBER', 'MEMBER'),
         ('RESEARCHER', 'RESEARCHER'),
         ('AUDITOR', 'AUDITOR'),
     )
@@ -61,13 +62,82 @@ class CustomUser(AbstractUser):
             return timezone.now() < self.account_locked_until
         return False
 
-    def has_permission(self, permission_key: str) -> bool:
+    def has_permission(self, permission_key: str, domain: str = None) -> bool:
+        """
+        Check if user has a specific permission.
+
+        Args:
+            permission_key: The permission to check (e.g., 'inference.execute')
+            domain: Optional domain to check against scope (e.g., 'cardiology')
+
+        Returns:
+            bool: True if user has permission
+
+        Supports both simple boolean permissions and scope-based permissions:
+        - Simple: 'api.access': True
+        - Scope: 'inference.execute': {'scope': 'ALL'} or {'scope': ['cardiology', 'neurology']}
+        """
         # Superusers have all permissions by definition
         if getattr(self, 'is_superuser', False):
             return True
         if not self.role or not self.role.permissions:
             return False
-        return bool(self.role.permissions.get(permission_key))
+
+        permission_value = self.role.permissions.get(permission_key)
+
+        # No permission found
+        if permission_value is None:
+            return False
+
+        # Simple boolean permission (backward compatible)
+        if isinstance(permission_value, bool):
+            return permission_value
+
+        # Scope-based permission
+        if isinstance(permission_value, dict):
+            scope = permission_value.get('scope')
+
+            # If no scope defined in the permission, deny access
+            if scope is None:
+                return False
+
+            # No domain check needed, just verify permission exists with valid scope
+            if domain is None:
+                # User has permission, scope will be checked when accessing specific resources
+                return True
+
+            # Check domain against scope
+            if scope == 'ALL':
+                return True
+
+            if isinstance(scope, list):
+                return domain in scope
+
+            # Unknown scope type
+            return False
+
+        # Fallback: treat as truthy
+        return bool(permission_value)
+
+    def get_permission_scope(self, permission_key: str):
+        """
+        Get the scope of a permission.
+
+        Args:
+            permission_key: The permission to check
+
+        Returns:
+            str | list | None: 'ALL', list of domains, or None if no scope
+        """
+        if not self.role or not self.role.permissions:
+            return None
+
+        permission_value = self.role.permissions.get(permission_key)
+
+        if isinstance(permission_value, dict):
+            return permission_value.get('scope')
+
+        return None
 
     def is_session_expired(self) -> bool:
         """Check if user's session has expired based on idle timeout."""

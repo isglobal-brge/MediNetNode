@@ -23,31 +23,65 @@ class Command(BaseCommand):
         # Define default permissions for each role
         role_permissions = {
             'RESEARCHER': {
+                # API Access
                 'api.access': True,
-                'dataset.view': True,
-                'dataset.train': True,
+                # Datasets
+                'dataset.view': {'scope': 'ALL'},
+                'dataset.train': {'scope': 'ALL'},
+                # Inference (NEW)
+                'inference.execute': {'scope': 'ALL'},
+            },
+            'MEMBER': {
+                # API Access
+                'api.access': True,
+                # Datasets
+                'dataset.view': {'scope': 'ALL'},
+                'dataset.create': True,
+                'dataset.train': {'scope': 'ALL'},
+                # Training
+                'training.view': True,
+                # Inference (NEW)
+                'inference.execute': {'scope': 'ALL'},
+                'inference.upload': True,
             },
             'ADMIN': {
+                # API Access
                 'api.access': True,
+                # Datasets
                 'dataset.view': True,
                 'dataset.train': True,
                 'dataset.create': True,
                 'dataset.edit': True,
                 'dataset.delete': True,
+                # Users
                 'user.view': True,
                 'user.create': True,
                 'user.edit': True,
                 'user.delete': True,
+                # Audit
                 'audit.view': True,
+                # Training
                 'training.view': True,
                 'training.manage': True,
+                # System
                 'system.admin': True,
+                # Inference (NEW)
+                'inference.execute': {'scope': 'ALL'},
+                'inference.upload': {'scope': 'ALL'},
+                'inference.approve': True,
+                'inference.admin': True,
             },
             'AUDITOR': {
+                # Datasets
                 'dataset.view': True,
+                # Audit
                 'audit.view': True,
+                # Training
                 'training.view': True,
+                # Users
                 'user.view': True,
+                # Inference (NEW)
+                'inference.view': True,
             }
         }
 
