@@ -519,7 +519,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            {% if is_admin_role %}
+            {% if is_admin_role or is_member_role %}
             <div class="navbar-nav ms-auto">
                 <div class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
@@ -538,7 +538,7 @@
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-circle me-2"></i>Profile</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-circle me-2"></i>My Profile</a></li>
                         <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a></li>
@@ -552,7 +552,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            {% if is_admin_role %}
+            {% if is_admin_role or is_member_role %}
             <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
                 <div class="sidebar-sticky">
                     <!-- Sidebar Header -->
@@ -560,13 +560,13 @@
                         <button id="sidebarToggle" class="sidebar-toggle">
                             <i class="bi bi-chevron-left"></i>
                         </button>
-                       
+
                         <span class="ms-2 fw-semibold text-dark sidebar-text">Menu</span>
                     </div>
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" 
-                               href="{% url 'admin_dashboard' %}" 
+                            <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'member_dashboard' %}active{% endif %}"
+                               href="{% if is_member_role %}{% url 'inference:member_dashboard' %}{% elif is_admin_role %}{% url 'admin_dashboard' %}{% else %}#{% endif %}"
                                data-tooltip="Dashboard">
                                 <i class="bi bi-speedometer2 me-2"></i>
                                 <span class="nav-text">Dashboard</span>
@@ -610,8 +610,8 @@
                         {% endif %}
                         
                         <li class="nav-item">
-                            <a class="nav-link {% if 'dataset' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="#" 
+                            <a class="nav-link {% if 'dataset' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
                                data-tooltip="Datasets"
                                onclick="toggleSubmenu('datasetsSubmenu', this); return false;">
                                 <i class="bi bi-database me-2"></i>
@@ -620,27 +620,91 @@
                             </a>
                             <div class="nav-submenu" id="datasetsSubmenu">
                                 {% if user.is_superuser or user.role.name == 'ADMIN' %}
-                                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
                                    href="{% url 'dataset:dashboard' %}">
                                     <i class="bi bi-speedometer2 me-2"></i>
                                     Dashboard
                                 </a>
                                 {% endif %}
-                                <a class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}" 
+                                {% if user.role.name == 'MEMBER' %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}"
+                                   href="{% url 'dataset:list' %}">
+                                    <i class="bi bi-folder me-2"></i>
+                                    My Datasets
+                                </a>
+                                {% else %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}"
                                    href="{% url 'dataset:list' %}">
                                     <i class="bi bi-list-ul me-2"></i>
                                     Dataset List
                                 </a>
-                                {% if user.is_superuser or user.role.name == 'ADMIN' or user.role.name == 'RESEARCHER' %}
-                                <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}" 
+                                {% endif %}
+                                {% if user.is_superuser or user.role.name == 'ADMIN' or user.role.name == 'MEMBER' or user.role.name == 'RESEARCHER' %}
+                                <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}"
                                    href="{% url 'dataset:upload' %}">
                                     <i class="bi bi-cloud-upload me-2"></i>
                                     Upload Dataset
                                 </a>
                                 {% endif %}
+                                {% if user.role.name == 'MEMBER' %}
+                                <a class="nav-link" href="#">
+                                    <i class="bi bi-share me-2"></i>
+                                    Shared With Me
+                                </a>
+                                {% endif %}
                             </div>
                         </li>
-                        
+
+                        {% if is_member_role or is_admin_role %}
+                        <!-- Models Section (MEMBER & ADMIN) -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'inference' in request.resolver_match.namespace and 'model' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-tooltip="Models"
+                               onclick="toggleSubmenu('modelsSubmenu', this); return false;">
+                                <i class="bi bi-diagram-3 me-2"></i>
+                                <span class="nav-text">Models</span>
+                                <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
+                            </a>
+                            <div class="nav-submenu" id="modelsSubmenu">
+                                <a class="nav-link" href="{% url 'inference:my_models' %}">
+                                    <i class="bi bi-list-ul me-2"></i>
+                                    My Models
+                                </a>
+                                <a class="nav-link" href="{% url 'inference:upload_model' %}">
+                                    <i class="bi bi-cloud-upload me-2"></i>
+                                    Upload Model
+                                </a>
+                                <a class="nav-link" href="{% url 'inference:public_models' %}">
+                                    <i class="bi bi-globe me-2"></i>
+                                    Public Models
+                                </a>
+                            </div>
+                        </li>
+
+                        <!-- Inference Section (MEMBER & ADMIN) -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'inference' in request.resolver_match.namespace and 'predict' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-tooltip="Inference"
+                               onclick="toggleSubmenu('inferenceSubmenu', this); return false;">
+                                <i class="bi bi-cpu me-2"></i>
+                                <span class="nav-text">Inference</span>
+                                <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
+                            </a>
+                            <div class="nav-submenu" id="inferenceSubmenu">
+                                <a class="nav-link" href="{% url 'inference:new_prediction' %}">
+                                    <i class="bi bi-play-circle me-2"></i>
+                                    New Prediction
+                                </a>
+                                <a class="nav-link" href="{% url 'inference:my_history' %}">
+                                    <i class="bi bi-clock-history me-2"></i>
+                                    My History
+                                </a>
+                            </div>
+                        </li>
+                        {% endif %}
+
                         {% if user.role.name == 'ADMIN' or user.role.name == 'AUDITOR' %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'trainings' in request.resolver_match.namespace %}active{% endif %}" 
@@ -670,11 +734,11 @@
                             </div>
                         </li>
                         {% endif %}
-                        
-                        {% if user.role %}
+
+                        {% if user.is_superuser or user.role.name == 'ADMIN' or user.role.name == 'AUDITOR' %}
                         <li class="nav-item">
-                            <a class="nav-link {% if 'audit' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'system_audit_logs' %}" 
+                            <a class="nav-link {% if 'audit' in request.resolver_match.url_name %}active{% endif %}"
+                               href="{% url 'system_audit_logs' %}"
                                data-tooltip="Audit Logs">
                                 <i class="bi bi-journal-text me-2"></i>
                                 <span class="nav-text">Audit</span>

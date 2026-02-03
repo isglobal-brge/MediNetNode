@@ -1,9 +1,10 @@
 # MediNetNode
 
-![Version](https://img.shields.io/badge/version-0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2-blue.svg)
 ![Status](https://img.shields.io/badge/status-in%20development-orange.svg)
+![Security](https://img.shields.io/badge/security-61%25%20complete-green.svg)
 >[!WARNING]
->This software is still in development (v0.1)
+>This software is still in development (v0.2)
 
 ## Overview
 
@@ -26,9 +27,18 @@ MediNetNode is a software that complements MedinetHub by providing a way to a ce
 - 🔄 More parameters to configure in your models like learning rate scheduler and other callbacks
 - 🔄 Inference from pre-trained models. The researcher can send data to run a model directly to the node without needing to train and download it using API.
 
-## Security Notice
+## Security Status
 
-We are currently working on improving the security measures.
+**MediNetNode v0.2 is SECURE for development environments.**
+
+- ✅ 11/23 vulnerabilities from security audit corrected (48%)
+- ✅ 3 additional security features implemented
+- ✅ 54/54 security tests passing (100%)
+- ✅ **Real status: 14/23 (61%)**
+
+Remaining vulnerabilities are production-specific (2FA, HTTPS, Email verification, etc.).
+
+For full security details, see [SECURITY.md](MediNetNode-main/SECURITY.md)
 
 ## Links
 

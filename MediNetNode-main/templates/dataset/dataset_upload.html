@@ -310,6 +310,11 @@
         font-size: 1.1rem;
         font-weight: 600;
         color: var(--primary-dark);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        word-break: break-all;
+        max-width: 100%;
+        white-space: normal;
     }
 
     .cancel-btn {
@@ -411,11 +416,17 @@
         <!-- Upload Section -->
         <div class="col-lg-8">
             <div class="upload-section">
-                <h4 class="mb-3 d-flex align-items-center text-primary">
-                    <i class="bi bi-cloud-arrow-up me-2"></i>
-                    File Selection
-                </h4>
-                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0 d-flex align-items-center text-primary">
+                        <i class="bi bi-cloud-arrow-up me-2"></i>
+                        File Selection
+                    </h4>
+                    <a href="/static/documentation/CSV_UPLOAD_TROUBLESHOOTING.md" target="_blank" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-question-circle me-1"></i>
+                        CSV Help
+                    </a>
+                </div>
+
                 <div class="drag-drop-zone" id="dropZone">
                     <div class="upload-icon">
                         <i class="bi bi-cloud-upload"></i>

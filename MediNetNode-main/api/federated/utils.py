@@ -40,36 +40,43 @@ def flatten_with_prefix(config, prefix="", delimiter="__"):
             flat_config[new_key] = value
     return flat_config
 
-def unflatten_with_prefix(flat_config, delimiter="__"):
-    """
-    Reconstructs a nested dictionary from a flattened dictionary with prefixed keys.
-
-    Args:
-        flat_config (dict): The flattened dictionary with prefixed keys.
-        delimiter (str, optional): The delimiter used between prefix and key. Defaults to "__".
-
-    Returns:
-        dict: A nested dictionary reconstructed from the flattened dictionary.
-    """
-    nested_config = {}
-
-    for key, value in flat_config.items():
-        parts = key.split(delimiter)
-        current_level = nested_config
-
-        for part in parts[:-1]:
-            if part not in current_level:
-                current_level[part] = {}
-            current_level = current_level[part]
-        
-        if isinstance(value, str):
-            try:
-                value = eval(value)
-            except (SyntaxError, NameError):
-                pass
-        current_level[parts[-1]] = value
-    
-    return nested_config
+# DEPRECATED - LEGACY CODE - DO NOT USE
+# This function contained a critical security vulnerability (eval() usage)
+# and has been removed from active use. Kept for reference only.
+#
+# SECURITY ISSUE: Used eval() which allows arbitrary code execution
+# If you need similar functionality, use ast.literal_eval() instead
+#
+# def unflatten_with_prefix(flat_config, delimiter="__"):
+#     """
+#     Reconstructs a nested dictionary from a flattened dictionary with prefixed keys.
+#
+#     Args:
+#         flat_config (dict): The flattened dictionary with prefixed keys.
+#         delimiter (str, optional): The delimiter used between prefix and key. Defaults to "__".
+#
+#     Returns:
+#         dict: A nested dictionary reconstructed from the flattened dictionary.
+#     """
+#     nested_config = {}
+#
+#     for key, value in flat_config.items():
+#         parts = key.split(delimiter)
+#         current_level = nested_config
+#
+#         for part in parts[:-1]:
+#             if part not in current_level:
+#                 current_level[part] = {}
+#             current_level = current_level[part]
+#
+#         if isinstance(value, str):
+#             try:
+#                 value = eval(value)  # SECURITY VULNERABILITY - DO NOT USE
+#             except (SyntaxError, NameError):
+#                 pass
+#         current_level[parts[-1]] = value
+#
+#     return nested_config
 
 def check_model(net:torch.nn.Module):
     """

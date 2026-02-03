@@ -1,0 +1,542 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page header */
+    .page-header {
+        background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-header .lead {
+        opacity: 0.9;
+        margin-bottom: 0;
+    }
+
+    /* Wizard steps */
+    .wizard-steps {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-top: 1.5rem;
+    }
+
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+        position: relative;
+    }
+
+    .wizard-step:first-child {
+        border-radius: 0.5rem 0 0 0.5rem;
+    }
+
+    .wizard-step:last-child {
+        border-radius: 0 0.5rem 0.5rem 0;
+    }
+
+    .wizard-step.active {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+    }
+
+    .wizard-step .step-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .wizard-step.active .step-num {
+        background: white;
+        color: #059669;
+    }
+
+    .wizard-step.completed .step-num {
+        background: white;
+        color: #059669;
+    }
+
+    /* Search bar */
+    .search-bar {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .search-bar .form-control,
+    .search-bar .form-select {
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+    }
+
+    .search-bar .form-control:focus,
+    .search-bar .form-select:focus {
+        border-color: #10b981;
+        box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+    }
+
+    /* Section headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .section-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .section-header .count {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 0.125rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    /* Model selection cards */
+    .models-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .model-select-card {
+        background: white;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .model-select-card:hover {
+        border-color: #10b981;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+    }
+
+    .model-select-card.selected {
+        border-color: #10b981;
+        background: #ecfdf5;
+    }
+
+    .model-select-card.selected::after {
+        content: '\F272';
+        font-family: 'bootstrap-icons';
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: 24px;
+        height: 24px;
+        background: #10b981;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+    }
+
+    .model-select-card .model-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .model-select-card .model-version {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-bottom: 0.75rem;
+    }
+
+    .model-select-card .model-description {
+        font-size: 0.85rem;
+        color: #4b5563;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 0.75rem;
+    }
+
+    .model-select-card .model-meta {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .model-select-card .meta-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        background: #f3f4f6;
+        color: #4b5563;
+    }
+
+    .model-select-card .meta-badge.domain {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .model-select-card .meta-badge.accuracy {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    /* Empty section */
+    .empty-section {
+        text-align: center;
+        padding: 2rem;
+        color: #9ca3af;
+    }
+
+    .empty-section i {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+        display: block;
+    }
+
+    /* Action footer */
+    .action-footer {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selected-model-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .selected-model-info .icon {
+        width: 40px;
+        height: 40px;
+        background: #ecfdf5;
+        color: #10b981;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .selected-model-info .details {
+        line-height: 1.3;
+    }
+
+    .selected-model-info .label {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    .selected-model-info .name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .no-selection {
+        color: #9ca3af;
+        font-style: italic;
+    }
+
+    /* Hidden radio inputs */
+    .model-select-card input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-header {
+            padding: 1.5rem;
+        }
+
+        .wizard-steps {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .wizard-step {
+            border-radius: 0.5rem !important;
+            justify-content: center;
+        }
+
+        .models-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .action-footer {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Wizard Steps -->
+    <div class="page-header">
+        <div class="text-center">
+            <h1><i class="bi bi-play-circle me-2"></i>New Prediction</h1>
+            <p class="lead">Run inference on your data using approved models</p>
+
+            <!-- Wizard Steps -->
+            <div class="wizard-steps">
+                {% for step in wizard_steps %}
+                <div class="wizard-step {% if step.num == wizard_step %}active{% elif step.num < wizard_step %}completed{% endif %}">
+                    <span class="step-num">
+                        {% if step.num < wizard_step %}
+                        <i class="bi bi-check"></i>
+                        {% else %}
+                        {{ step.num }}
+                        {% endif %}
+                    </span>
+                    <i class="{{ step.icon }}"></i>
+                    <span class="d-none d-sm-inline">{{ step.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Search/Filter Bar -->
+    <div class="search-bar">
+        <form method="get" id="searchForm">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0">
+                            <i class="bi bi-search text-muted"></i>
+                        </span>
+                        <input type="text"
+                               name="q"
+                               class="form-control border-start-0"
+                               placeholder="Search models by name..."
+                               value="{{ search_query }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <select name="domain" class="form-select" onchange="this.form.submit()">
+                        <option value="all">All Domains</option>
+                        {% for domain in domains %}
+                        <option value="{{ domain }}" {% if domain_filter == domain %}selected{% endif %}>
+                            {{ domain|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Model Selection Form -->
+    <form method="post" action="{% url 'inference:prediction_load_data' %}" id="modelSelectForm">
+        {% csrf_token %}
+
+        <!-- My Models Section -->
+        <div class="section-header">
+            <i class="bi bi-person-fill text-primary"></i>
+            <h5>My Models</h5>
+            <span class="count">{{ my_models|length }}</span>
+        </div>
+
+        {% if my_models %}
+        <div class="models-grid">
+            {% for model in my_models %}
+            <label class="model-select-card {% if preselected_model.id == model.id %}selected{% endif %}">
+                <input type="radio"
+                       name="model_id"
+                       value="{{ model.id }}"
+                       {% if preselected_model.id == model.id %}checked{% endif %}
+                       onchange="updateSelection(this)">
+                <div class="model-name">{{ model.name }}</div>
+                <div class="model-version">v{{ model.version }}</div>
+                <div class="model-description">{{ model.description }}</div>
+                <div class="model-meta">
+                    <span class="meta-badge domain">{{ model.get_domain_display }}</span>
+                    {% if model.accuracy_percent %}
+                    <span class="meta-badge accuracy">{{ model.accuracy_percent|floatformat:1 }}% accuracy</span>
+                    {% endif %}
+                    <span class="meta-badge">{{ model.total_predictions }} predictions</span>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-section">
+            <i class="bi bi-box-seam"></i>
+            <p>You don't have any approved models yet</p>
+            <a href="{% url 'inference:upload_model' %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-upload me-1"></i>Upload a Model
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Public Models Section -->
+        <div class="section-header mt-4">
+            <i class="bi bi-globe text-success"></i>
+            <h5>Public Models</h5>
+            <span class="count">{{ public_models|length }}</span>
+        </div>
+
+        {% if public_models %}
+        <div class="models-grid">
+            {% for model in public_models %}
+            <label class="model-select-card {% if preselected_model.id == model.id %}selected{% endif %}">
+                <input type="radio"
+                       name="model_id"
+                       value="{{ model.id }}"
+                       {% if preselected_model.id == model.id %}checked{% endif %}
+                       onchange="updateSelection(this)">
+                <div class="model-name">{{ model.name }}</div>
+                <div class="model-version">v{{ model.version }} by {{ model.uploaded_by.username|default:"Unknown" }}</div>
+                <div class="model-description">{{ model.description }}</div>
+                <div class="model-meta">
+                    <span class="meta-badge domain">{{ model.get_domain_display }}</span>
+                    {% if model.accuracy_percent %}
+                    <span class="meta-badge accuracy">{{ model.accuracy_percent|floatformat:1 }}% accuracy</span>
+                    {% endif %}
+                    <span class="meta-badge">{{ model.total_predictions }} predictions</span>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-section">
+            <i class="bi bi-globe"></i>
+            <p>No public models available{% if domain_filter != 'all' %} in this domain{% endif %}</p>
+        </div>
+        {% endif %}
+
+        <!-- Action Footer -->
+        <div class="action-footer">
+            <div class="selected-model-info" id="selectedModelInfo">
+                <div class="no-selection" id="noSelection">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Select a model to continue
+                </div>
+                <div class="d-none" id="hasSelection">
+                    <div class="icon">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <div class="details">
+                        <div class="label">Selected Model</div>
+                        <div class="name" id="selectedModelName">-</div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <a href="{% url 'inference:member_dashboard' %}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-left me-1"></i>Cancel
+                </a>
+                <button type="submit" class="btn btn-success btn-lg" id="continueBtn" disabled>
+                    Continue to Load Data
+                    <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateSelection(radio) {
+        // Remove selected class from all cards
+        document.querySelectorAll('.model-select-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+
+        // Add selected class to chosen card
+        radio.closest('.model-select-card').classList.add('selected');
+
+        // Update footer
+        const modelName = radio.closest('.model-select-card').querySelector('.model-name').textContent;
+        const modelVersion = radio.closest('.model-select-card').querySelector('.model-version').textContent;
+
+        document.getElementById('noSelection').classList.add('d-none');
+        document.getElementById('hasSelection').classList.remove('d-none');
+        document.getElementById('selectedModelName').textContent = modelName + ' ' + modelVersion;
+        document.getElementById('continueBtn').disabled = false;
+    }
+
+    // Initialize state if a model is preselected
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkedRadio = document.querySelector('input[name="model_id"]:checked');
+        if (checkedRadio) {
+            updateSelection(checkedRadio);
+        }
+    });
+
+    // Keyboard navigation
+    document.querySelectorAll('.model-select-card').forEach(card => {
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.querySelector('input[type="radio"]').click();
+            }
+        });
+        card.setAttribute('tabindex', '0');
+    });
+
+    // Clear search on escape
+    document.querySelector('input[name="q"]').addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            this.value = '';
+            this.form.submit();
+        }
+    });
+</script>
+{% endblock %}

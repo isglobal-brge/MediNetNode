@@ -21,6 +21,7 @@ from .models import Dataset, DatasetAccess, DatasetMetadata
 from .uploader import SecureDatasetUploader
 from .forms import DatasetMetadataForm, DatasetEditForm
 from users.decorators import require_role
+from audit.audit_logger import AuditLogger
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -387,8 +388,8 @@ def dataset_upload(request):
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
             
-            # Save file temporarily
-            temp_path = _save_temp_file(uploaded_file)
+            # Save file temporarily (with request for security logging)
+            temp_path = _save_temp_file(uploaded_file, request)
             
             # Create uploader and process synchronously
             uploader = SecureDatasetUploader(request.user)
@@ -467,17 +468,176 @@ def dataset_upload(request):
 
 # Helper functions
 
-def _save_temp_file(uploaded_file) -> str:
-    """Save uploaded file to temporary location."""
+def _save_temp_file(uploaded_file, request=None) -> str:
+    """
+    Save uploaded file to temporary location with path traversal protection.
+
+    Security measures:
+    - Validates original filename doesn't contain path separators or traversal sequences
+    - Sanitizes filename to prevent directory traversal attacks
+    - Validates that final path is within temporary directory
+    - Blocks dangerous characters (../, /, \)
+    - Logs all path traversal attempts to audit system for ADMIN/AUDITOR review
+
+    Args:
+        uploaded_file: Django UploadedFile object
+        request: HTTP request object (optional, for logging user info)
+
+    Returns:
+        str: Absolute path to saved temporary file
+
+    Raises:
+        ValueError: If path traversal attempt detected
+    """
     import tempfile
-    
+
+    # Get user and IP for logging
+    user = request.user if request and hasattr(request, 'user') else None
+    ip_address = request.META.get('REMOTE_ADDR', 'Unknown') if request else 'Unknown'
+
+    # SECURITY: Validate original filename before any processing
+    # Reject filenames with path separators or traversal sequences
+    original_name = uploaded_file.name
+    if not original_name:
+        error_msg = "Filename cannot be empty"
+        logger.warning(
+            f"[SECURITY] Empty filename upload attempt. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}"
+        )
+        raise ValueError(error_msg)
+
+    if '/' in original_name or '\\' in original_name:
+        error_msg = (
+            f"Invalid filename '{original_name}': path traversal attack detected. "
+            "Filename must not contain directory separators (/ or \\)."
+        )
+        logger.error(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Directory separator. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log to audit system for ADMIN/AUDITOR review
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Directory separator in filename',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Directory Separator',
+                    'blocked': True,
+                    'file_size': uploaded_file.size,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    if '..' in original_name:
+        error_msg = (
+            f"Invalid filename '{original_name}': path traversal attack detected. "
+            "Filename must not contain '..' sequence."
+        )
+        logger.error(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Parent directory reference. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log to audit system for ADMIN/AUDITOR review
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Parent directory reference (..)',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Parent Directory',
+                    'blocked': True,
+                    'file_size': uploaded_file.size,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    # SECURITY: Extract only the base filename (defense in depth)
+    filename = os.path.basename(original_name)
+
+    # SECURITY: Reject empty or suspicious filenames
+    if not filename or filename.startswith('.'):
+        error_msg = f"Invalid filename '{original_name}': must be a valid file"
+        logger.warning(
+            f"[SECURITY] Suspicious filename upload attempt (hidden file). "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log suspicious filename attempt
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='SUSPICIOUS_FILENAME',
+                user=user,
+                details={
+                    'violation': 'Hidden file or invalid filename',
+                    'filename': original_name,
+                    'attack_type': 'Suspicious Upload',
+                    'blocked': True,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    # Create temporary directory
     temp_dir = tempfile.mkdtemp(prefix='upload_')
-    temp_path = os.path.join(temp_dir, uploaded_file.name)
-    
+    temp_path = os.path.join(temp_dir, filename)
+
+    # SECURITY: Verify final path is within temp directory (prevent symlink attacks)
+    abs_temp_path = os.path.abspath(temp_path)
+    abs_temp_dir = os.path.abspath(temp_dir)
+
+    if not abs_temp_path.startswith(abs_temp_dir + os.sep):
+        # Cleanup and raise error
+        os.rmdir(temp_dir)
+        error_msg = (
+            f"Path traversal attack detected: resolved path '{abs_temp_path}' "
+            f"is outside temporary directory '{abs_temp_dir}'"
+        )
+        logger.critical(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Path escape. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}', Attempted path: '{abs_temp_path}'"
+        )
+
+        # Log critical path escape attempt
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Path escape - resolved outside temp directory',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Symlink/Escape',
+                    'blocked': True,
+                    'attempted_path': abs_temp_path,
+                    'allowed_base': abs_temp_dir,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    # Save file securely
     with open(temp_path, 'wb+') as destination:
         for chunk in uploaded_file.chunks():
             destination.write(chunk)
-    
+
     return temp_path
 
 
@@ -670,8 +830,8 @@ def api_detect_columns(request):
         })
     
     try:
-        # Save file temporarily
-        temp_path = _save_temp_file(uploaded_file)
+        # Save file temporarily (with request for security logging)
+        temp_path = _save_temp_file(uploaded_file, request)
         
         # Create uploader instance and detect columns
         uploader = SecureDatasetUploader(request.user)

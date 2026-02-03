@@ -208,17 +208,19 @@ class PasswordHistory(models.Model):
 
 class APIKey(models.Model):
     """API key for stateless authentication of RESEARCHER users."""
-    
+
     user = models.ForeignKey(
         CustomUser,
         on_delete=models.CASCADE,
         related_name='api_keys',
         help_text="RESEARCHER user associated with this API key"
     )
-    key = models.CharField(
-        max_length=64, 
+    key_hash = models.CharField(
+        max_length=128,
         unique=True,
-        help_text="Unique API key for authentication"
+        null=True,  # Temporarily nullable for migration
+        blank=True,
+        help_text="Hashed API key for secure authentication (stores hash, not plaintext)"
     )
     name = models.CharField(
         max_length=100,
@@ -231,29 +233,56 @@ class APIKey(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(
-        null=True, 
+        null=True,
         blank=True,
         help_text="Expiration date for this API key"
     )
     last_used_at = models.DateTimeField(null=True, blank=True)
     last_used_ip = models.GenericIPAddressField(null=True, blank=True)
-    
+
     # TODO: Add regeneration fields after migration is applied
     # regenerated_count = models.IntegerField(default=0, help_text="Number of times this key has been regenerated")
     # last_regenerated_at = models.DateTimeField(null=True, blank=True, help_text="Last time the key was regenerated")
-    
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['key']),
+            models.Index(fields=['key_hash']),
             models.Index(fields=['user', 'is_active']),
         ]
-    
+
+    def set_key(self, raw_key):
+        """
+        Hash and store the API key securely.
+
+        Args:
+            raw_key (str): The plaintext API key to hash
+        """
+        from django.contrib.auth.hashers import make_password
+        self.key_hash = make_password(raw_key)
+
+    def check_key(self, raw_key):
+        """
+        Verify if a raw API key matches the stored hash.
+
+        Args:
+            raw_key (str): The plaintext API key to verify
+
+        Returns:
+            bool: True if the key matches, False otherwise
+        """
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_key, self.key_hash)
+
     def save(self, *args, **kwargs):
-        if not self.key:
-            self.key = self.generate_api_key()
+        # Only generate new key if this is a new instance and no key_hash set
+        if not self.pk and not self.key_hash:
+            raw_key = self.generate_api_key()
+            self.set_key(raw_key)
+            # Store the raw key temporarily so it can be shown to user once
+            self._raw_key = raw_key
         super().save(*args, **kwargs)
-    
+
     @staticmethod
     def generate_api_key():
         """Generate a secure random API key."""
@@ -290,8 +319,8 @@ class APIKey(models.Model):
                         allowed = ipaddress.ip_address(allowed_ip)
                         if client_ip == allowed:
                             return True
-                except (ipaddress.AddressValueError, ipaddress.NetmaskValueError):
-                    # If IP parsing fails, fall back to string comparison
+                except (ValueError, ipaddress.AddressValueError, ipaddress.NetmaskValueError):
+                    # If parsing fails, fall back to string comparison
                     if ip_address == allowed_ip:
                         return True
             

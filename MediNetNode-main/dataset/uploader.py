@@ -135,6 +135,9 @@ class SecureDatasetUploader:
             self._update_progress("validating", "Validating file...")
             self._validate_file(file_path)
 
+            # Step 1.5: Pre-process CSV to remove index columns (fixes DataFrame export issues)
+            file_path = self._preprocess_csv_file(file_path)
+
             # Step 2: Extract metadata
             self._update_progress("extracting_metadata", "Extracting metadata...")
             metadata = self._extract_metadata(file_path, target_column)
@@ -143,9 +146,9 @@ class SecureDatasetUploader:
             self._update_progress("validating_metadata", "Validating medical compliance...")
             metadata = self._validate_medical_compliance(metadata, file_path, target_column)
             
-            # Step 4: Calculate checksums
-            self._update_progress("calculating_checksums", "Calculating checksums...")
-            md5_hash, sha256_hash = self._calculate_checksums(file_path)
+            # Step 4: Calculate checksum
+            self._update_progress("calculating_checksum", "Calculating SHA-256 checksum...")
+            sha256_hash = self._calculate_checksum(file_path)
             
             # Steps 5-7: Store file and create records atomically
             self._update_progress("saving", "Creating dataset record...")
@@ -174,7 +177,7 @@ class SecureDatasetUploader:
                         medical_domain=medical_domain,
                         data_type=data_type,
                         metadata=metadata,
-                        md5_hash=md5_hash,
+                        sha256_hash=sha256_hash,
                         target_column=target_column
                     )
                     
@@ -277,7 +280,73 @@ class SecureDatasetUploader:
         filename = os.path.basename(file_path)
         if not self._is_safe_filename(filename):
             raise SecurityValidationError(f"Unsafe filename: {filename}")
-    
+
+    def _preprocess_csv_file(self, file_path: str) -> str:
+        """
+        Pre-process CSV file to fix common issues like DataFrame index columns.
+
+        This fixes the "not all arguments converted during string formatting" error
+        that occurs when CSVs have unnamed columns (typically from pandas DataFrame
+        exports without index=False).
+
+        Args:
+            file_path: Path to the CSV file
+
+        Returns:
+            Path to the processed file (may be same or new path)
+        """
+        file_ext = Path(file_path).suffix.lower()
+        if file_ext != '.csv':
+            return file_path  # Only process CSV files
+
+        if not PANDAS_AVAILABLE:
+            return file_path  # Can't process without pandas
+
+        try:
+            import pandas as pd
+
+            # Read CSV
+            df = pd.read_csv(file_path)
+
+            if len(df.columns) == 0:
+                return file_path
+
+            first_col = df.columns[0]
+            first_col_str = str(first_col).strip()
+
+            # Check if first column is an index column (unnamed or 'Unnamed: X')
+            is_unnamed = (not first_col_str or
+                         first_col_str.startswith('Unnamed:') or
+                         first_col_str == '')
+
+            if is_unnamed:
+                # Verify it looks like an index (sequential integers starting from 0)
+                first_col_values = df.iloc[:, 0]
+                is_sequential_index = False
+
+                if first_col_values.dtype in ['int64', 'int32', 'float64']:
+                    try:
+                        values_list = first_col_values.astype(int).tolist()
+                        expected = list(range(len(values_list)))
+                        is_sequential_index = (values_list == expected)
+                    except (ValueError, TypeError):
+                        pass
+
+                if is_sequential_index:
+                    # Remove the index column
+                    df = df.iloc[:, 1:]
+                    logger.info(f"Pre-processing: Removed index column '{first_col}' from CSV")
+
+                    # Write back to the same file
+                    df.to_csv(file_path, index=False)
+                    logger.info(f"Pre-processing: CSV rewritten without index column")
+
+        except Exception as e:
+            # Log but don't fail - let the normal processing handle any issues
+            logger.warning(f"CSV pre-processing warning (non-fatal): {str(e)}")
+
+        return file_path
+
     def _extract_metadata(self, file_path: str, target_column: str = None) -> Dict[str, Any]:
         """
         Extract metadata based on file type with medical privacy safeguards.
@@ -317,6 +386,20 @@ class SecureDatasetUploader:
         try:
             # Read CSV with pandas
             df = pd.read_csv(file_path)
+
+            # Auto-detect and remove index column (first column with empty/unnamed header)
+            if len(df.columns) > 0:
+                first_col = df.columns[0]
+                # Check if first column is unnamed/empty and contains sequential integers (index pattern)
+                if (not str(first_col).strip() or str(first_col).startswith('Unnamed:')):
+                    # Verify it's likely an index by checking if values are sequential integers
+                    first_col_values = df.iloc[:, 0]
+                    if (first_col_values.dtype in ['int64', 'int32'] and
+                        len(first_col_values) > 0 and
+                        list(first_col_values) == list(range(len(first_col_values)))):
+                        # Drop the index column
+                        df = df.iloc[:, 1:]
+                        logger.info(f"Auto-removed index column from CSV (first column was unnamed with sequential integers)")
 
             rows, cols = df.shape
 
@@ -858,14 +941,22 @@ class SecureDatasetUploader:
             # Read only the header to get column names
             df_header = pd.read_csv(file_path, nrows=0)
             columns = df_header.columns.tolist()
-            
+
+            # Auto-detect and remove index column (first column with empty/unnamed header)
+            if len(columns) > 0:
+                first_col = columns[0]
+                if (not str(first_col).strip() or str(first_col).startswith('Unnamed:')):
+                    # Remove the first column (index) from the list
+                    columns = columns[1:]
+                    logger.info(f"Auto-removed index column '{first_col}' from column list")
+
             # Validate columns for forbidden patterns
             for col_name in columns:
                 col_lower = col_name.lower()
                 for pattern in self.FORBIDDEN_PATTERNS:
                     if pattern in col_lower:
                         logger.warning(f"Column '{col_name}' matches forbidden pattern '{pattern}'")
-            
+
             return columns
             
         except Exception as e:
@@ -924,6 +1015,18 @@ class SecureDatasetUploader:
                 if target_column and PANDAS_AVAILABLE:
                     import pandas as pd
                     df = pd.read_csv(file_path)
+
+                    # Auto-detect and remove index column (first column with empty/unnamed header)
+                    if len(df.columns) > 0:
+                        first_col = df.columns[0]
+                        if (not str(first_col).strip() or str(first_col).startswith('Unnamed:')):
+                            first_col_values = df.iloc[:, 0]
+                            if (first_col_values.dtype in ['int64', 'int32'] and
+                                len(first_col_values) > 0 and
+                                list(first_col_values) == list(range(len(first_col_values)))):
+                                df = df.iloc[:, 1:]
+                                logger.info(f"Auto-removed index column during target re-analysis")
+
                     if target_column in df.columns:
                         # Use updated column_info from metadata
                         column_info = metadata.get('column_info', {})
@@ -957,28 +1060,48 @@ class SecureDatasetUploader:
         try:
             # Read the CSV file
             df = pd.read_csv(file_path)
-            
+
+            # Auto-detect and remove index column (first column with empty/unnamed header)
+            if len(df.columns) > 0:
+                first_col = df.columns[0]
+                if (not str(first_col).strip() or str(first_col).startswith('Unnamed:')):
+                    first_col_values = df.iloc[:, 0]
+                    if (first_col_values.dtype in ['int64', 'int32'] and
+                        len(first_col_values) > 0 and
+                        list(first_col_values) == list(range(len(first_col_values)))):
+                        df = df.iloc[:, 1:]
+                        logger.info(f"Auto-removed index column during PHI cleanup")
+
             # Remove the specified columns
             df_cleaned = df.drop(columns=columns_to_remove, errors='ignore')
-            
-            # Write back to the same file
+
+            # Write back to the same file (without index)
             df_cleaned.to_csv(file_path, index=False)
             
         except Exception as e:
             # Log the error but don't fail the upload
             print(f"Warning: Could not remove PHI columns from file: {str(e)}")
     
-    def _calculate_checksums(self, file_path: str) -> Tuple[str, str]:
-        """Calculate MD5 and SHA256 checksums."""
-        md5_hash = hashlib.md5()
+    def _calculate_checksum(self, file_path: str) -> str:
+        """
+        Calculate SHA-256 checksum for file integrity verification.
+
+        SHA-256 provides cryptographically secure checksums resistant to
+        collision attacks, ensuring medical dataset integrity.
+
+        Args:
+            file_path: Path to file to checksum
+
+        Returns:
+            64-character hexadecimal SHA-256 hash
+        """
         sha256_hash = hashlib.sha256()
-        
+
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                md5_hash.update(chunk)
                 sha256_hash.update(chunk)
-        
-        return md5_hash.hexdigest(), sha256_hash.hexdigest()
+
+        return sha256_hash.hexdigest()
     
     def _store_file_securely(self, file_path: str, dataset_name: str) -> str:
         """
@@ -1031,9 +1154,9 @@ class SecureDatasetUploader:
         medical_domain: str,
         data_type: str,
         metadata: Dict[str, Any],
-        md5_hash: str
+        sha256_hash: str
     ) -> Dataset:
-        """Create Dataset database record."""
+        """Create Dataset database record (legacy - not currently used)."""
         
         # Extract relevant fields from metadata
         file_size = os.path.getsize(file_path)
@@ -1060,7 +1183,7 @@ class SecureDatasetUploader:
             name, description, file_path, self.user.id,
             medical_domain, metadata.get('rows', 0) if data_type == 'tabular' else None,
             data_type, True, file_size, format_mapping.get(file_ext, 'other'),
-            metadata.get('columns', 0), metadata.get('rows', 0), md5_hash,
+            metadata.get('columns', 0), metadata.get('rows', 0), sha256_hash,
             True, timezone.now().isoformat(), 0  # access_count starts at 0
         )
         
@@ -1073,10 +1196,10 @@ class SecureDatasetUploader:
             with datasets_connection.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO dataset_dataset (
-                        name, description, file_path, uploaded_by_id, 
-                        medical_domain, patient_count, data_type, 
-                        anonymized, file_size, file_format, 
-                        columns_count, rows_count, checksum_md5, 
+                        name, description, file_path, uploaded_by_id,
+                        medical_domain, patient_count, data_type,
+                        anonymized, file_size, file_format,
+                        columns_count, rows_count, checksum_sha256,
                         is_active, uploaded_at, access_count
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, params)
@@ -1101,10 +1224,10 @@ class SecureDatasetUploader:
         medical_domain: str,
         data_type: str,
         metadata: Dict[str, Any],
-        md5_hash: str,
+        sha256_hash: str,
         target_column: str = None
     ) -> int:
-        """Create Dataset database record using raw SQL."""
+        """Create Dataset database record using raw SQL with SHA-256 checksum."""
         
         # Extract relevant fields from metadata
         file_size = os.path.getsize(file_path)
@@ -1138,40 +1261,23 @@ class SecureDatasetUploader:
             timezone.now().strftime('%Y-%m-%d %H:%M:%S'),           # uploaded_at (SQLite format)
             None,                                                   # last_accessed (NULL)
             0,                                                      # access_count
-            md5_hash,                                               # checksum_md5
+            sha256_hash,                                            # checksum_sha256
             True,                                                   # is_active
             self.user.id,                                           # uploaded_by_id
             target_column,                                          # target_column
         )
         
-        # Build SQL with explicit values to avoid placeholder issues
-        def escape_sql_value(val):
-            if val is None:
-                return 'NULL'
-            elif isinstance(val, str):
-                # Escape single quotes and wrap in quotes
-                escaped = val.replace("'", "''")
-                return f"'{escaped}'"
-            elif isinstance(val, bool):
-                return '1' if val else '0'
-            else:
-                return str(val)
-        
-        # Temporarily disable Django query logging to avoid formatting issues
-        from django.conf import settings
-        old_debug = settings.DEBUG
-        settings.DEBUG = False
-        
-        try:
-            escaped_params = [escape_sql_value(p) for p in params]
-            values_str = ', '.join(escaped_params)
-            
-            sql_explicit = f"INSERT INTO dataset_dataset (name, description, file_path, medical_domain, patient_count, data_type, anonymized, file_size, file_format, columns_count, rows_count, uploaded_at, last_accessed, access_count, checksum_md5, is_active, uploaded_by_id, target_column) VALUES ({values_str})"
-            
-            cursor.execute(sql_explicit)
-        finally:
-            # Restore debug setting
-            settings.DEBUG = old_debug
+        # Use parameterized query
+        sql_parameterized = """
+            INSERT INTO dataset_dataset (
+                name, description, file_path, medical_domain, patient_count,
+                data_type, anonymized, file_size, file_format, columns_count,
+                rows_count, uploaded_at, last_accessed, access_count,
+                checksum_sha256, is_active, uploaded_by_id, target_column
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        cursor.execute(sql_parameterized, params)
         
         # Get the ID of the inserted record
         return cursor.lastrowid
@@ -1203,43 +1309,28 @@ class SecureDatasetUploader:
         if 'target_info' in metadata:
             safe_metadata['target_info'] = metadata['target_info']
         
-        # Insert metadata record with explicit SQL to avoid placeholder issues
+        # Use parameterized query
         import json
-        from django.conf import settings
-        old_debug = settings.DEBUG
-        settings.DEBUG = False
-        
-        try:
-            # Use explicit SQL approach like dataset (no placeholders)
-            def escape_sql_value(val):
-                if val is None:
-                    return 'NULL'
-                elif isinstance(val, str):
-                    escaped = val.replace("'", "''")
-                    return f"'{escaped}'"
-                elif isinstance(val, (int, float)):
-                    return str(val)
-                else:
-                    return f"'{str(val)}'"
-            
-            # Build metadata SQL explicitly
-            metadata_values = [
-                str(dataset_id),
-                escape_sql_value(json.dumps(safe_metadata)),
-                escape_sql_value('{}'),  # missing_values
-                escape_sql_value('{}'),  # data_distribution 
-                '1.0',  # quality_score
-                '100.0',  # completeness_percentage
-                escape_sql_value(timezone.now().strftime('%Y-%m-%d %H:%M:%S')),  # generated_at
-                escape_sql_value(timezone.now().strftime('%Y-%m-%d %H:%M:%S'))   # updated_at
-            ]
-            
-            values_str = ', '.join(metadata_values)
-            metadata_sql = f"INSERT INTO dataset_datasetmetadata (dataset_id, statistical_summary, missing_values, data_distribution, quality_score, completeness_percentage, generated_at, updated_at) VALUES ({values_str})"
-            
-            cursor.execute(metadata_sql)
-        finally:
-            settings.DEBUG = old_debug
+
+        metadata_params = (
+            dataset_id,
+            json.dumps(safe_metadata),
+            '{}',  # missing_values
+            '{}',  # data_distribution
+            1.0,   # quality_score
+            100.0, # completeness_percentage
+            timezone.now().strftime('%Y-%m-%d %H:%M:%S'),  # generated_at
+            timezone.now().strftime('%Y-%m-%d %H:%M:%S')   # updated_at
+        )
+
+        metadata_sql = """
+            INSERT INTO dataset_datasetmetadata (
+                dataset_id, statistical_summary, missing_values, data_distribution,
+                quality_score, completeness_percentage, generated_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        cursor.execute(metadata_sql, metadata_params)
     
     def _create_metadata_record(self, dataset: Dataset, metadata: Dict[str, Any]) -> DatasetMetadata:
         """Create DatasetMetadata database record."""

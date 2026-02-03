@@ -15,13 +15,17 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     if user is None:
         return JsonResponse({"ok": False, "error": "invalid_credentials"}, status=400)
+
+    # Regenerate session ID
+    request.session.cycle_key()
+
     login(request, user)
-    
+
     # Initialize session activity timestamp
     from django.utils import timezone
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
-    
+
     return JsonResponse({"ok": True})
 
 from django.shortcuts import render, redirect
@@ -58,6 +62,9 @@ def login_page(request):
             'error': 'Invalid username or password.'
         }, status=400)
 
+    # Regenerate session ID
+    request.session.cycle_key()
+
     login(request, user)
     
     # Initialize session activity timestamp
@@ -75,15 +82,17 @@ def login_page(request):
             role_name = user.role.name
             if role_name == 'ADMIN':
                 return redirect('admin_dashboard')
+            elif role_name == 'MEMBER':
+                return redirect('inference:member_dashboard')
             elif role_name == 'AUDITOR':
                 return redirect('audit:auditor_dashboard')
             elif role_name == 'RESEARCHER':
                 return redirect('researcher_info')
     except AttributeError:
         pass
-    
-    # Fallback for users without roles or any errors
-    return redirect('admin_dashboard')
+
+    # Fallback for users without roles or any errors (default to login)
+    return redirect('login')
 
 
 

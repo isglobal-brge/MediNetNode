@@ -30,7 +30,8 @@ class RootRedirectView(View):
     Root redirect view that intelligently routes users.
 
     If no users exist: redirect to setup
-    If users exist: redirect to login
+    If not authenticated: redirect to login
+    If authenticated: redirect to role-specific dashboard
     """
 
     def get(self, request):
@@ -38,8 +39,27 @@ class RootRedirectView(View):
         if not User.objects.exists() and not SystemConfiguration.is_setup_completed():
             # No users, redirect to setup
             return redirect('initial-setup-page')
+
+        # Check if user is authenticated
+        if request.user.is_authenticated:
+            # Get user's role
+            role_name = getattr(request.user.role, 'name', None) if hasattr(request.user, 'role') else None
+
+            # Redirect based on role
+            if role_name == 'ADMIN' or request.user.is_superuser:
+                return redirect('admin_dashboard')
+            elif role_name == 'MEMBER':
+                return redirect('inference:member_dashboard')
+            elif role_name == 'AUDITOR':
+                return redirect('audit:dashboard')
+            elif role_name == 'RESEARCHER':
+                # RESEARCHER users use API only, redirect to API docs
+                return redirect('schema-swagger-ui')
+            else:
+                # Unknown role, redirect to login
+                return redirect('login')
         else:
-            # Users exist, redirect to login
+            # Not authenticated, redirect to login
             return redirect('login')
 
 

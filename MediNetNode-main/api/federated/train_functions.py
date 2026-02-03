@@ -21,7 +21,7 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
         tuple: The training loss and accuracy.
     """
 
-    config = utils.unflatten_with_prefix(config)
+    #config = utils.unflatten_with_prefix(config)
     # Client training initialized
     if "train" not in config:
         config["train"] = {"epochs": 3}

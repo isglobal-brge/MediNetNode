@@ -221,48 +221,65 @@ class APIAuthenticationMiddleware:
     
     def get_client_ip(self, request):
         """Extract client IP address from request."""
-        # Check for forwarded IP first (for proxy/load balancer scenarios)
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        
-        # Check X-Client-IP header (explicitly provided by client)
-        x_client_ip = request.headers.get('X-Client-IP')
-        if x_client_ip:
-            return x_client_ip.strip()
-        
-        # Fall back to REMOTE_ADDR
-        return request.META.get('REMOTE_ADDR', '0.0.0.0')
+        # Get the direct connection IP
+        remote_addr = request.META.get('REMOTE_ADDR', '0.0.0.0')
+
+        # Check for X-Forwarded-For only if request comes from trusted proxy
+        trusted_proxies = getattr(settings, 'TRUSTED_PROXIES', [])
+
+        if trusted_proxies and remote_addr in trusted_proxies:
+            # Request from trusted proxy, use X-Forwarded-For
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                # Get first IP (original client) from chain
+                return x_forwarded_for.split(',')[0].strip()
+
+        # Use direct connection IP (ignore spoofable headers)
+        return remote_addr
     
     def authenticate_request(self, api_key_value, client_ip, request):
-        """Validate API key and IP address."""
+        """Validate API key and IP address using secure hash comparison."""
         if not api_key_value:
             return {
                 'success': False,
                 'error': 'Missing X-API-Key header',
                 'status_code': 401
             }
-        
+
         if not client_ip:
             return {
                 'success': False,
                 'error': 'Unable to determine client IP address',
                 'status_code': 400
             }
-        
+
+        # NEW SECURE METHOD: Check all active API keys by verifying hash
+        # We can't query by plaintext key anymore since we store hashes
         try:
-            # Get API key from database
-            api_key = APIKey.objects.select_related('user', 'user__role').get(
-                key=api_key_value,
-                is_active=True
-            )
-        except APIKey.DoesNotExist:
+            # Get all active API keys and check each one
+            # This is secure because check_key() uses constant-time comparison
+            api_key = None
+            for candidate_key in APIKey.objects.select_related('user', 'user__role').filter(is_active=True):
+                if candidate_key.check_key(api_key_value):
+                    api_key = candidate_key
+                    break
+
+            if not api_key:
+                # No matching key found
+                return {
+                    'success': False,
+                    'error': 'Invalid API key',
+                    'status_code': 401
+                }
+
+        except Exception as e:
+            logger.error(f"Error during API key authentication: {str(e)}")
             return {
                 'success': False,
-                'error': 'Invalid API key',
-                'status_code': 401
+                'error': 'Authentication error',
+                'status_code': 500
             }
-        
+
         # Check if API key is expired
         if api_key.is_expired():
             return {
@@ -270,7 +287,7 @@ class APIAuthenticationMiddleware:
                 'error': 'API key has expired',
                 'status_code': 401
             }
-        
+
         # Check IP whitelist
         if not api_key.is_ip_allowed(client_ip):
             return {
@@ -278,7 +295,7 @@ class APIAuthenticationMiddleware:
                 'error': 'IP address not authorized for this API key',
                 'status_code': 403
             }
-        
+
         # Validate user has RESEARCHER role
         if not api_key.user.role or api_key.user.role.name != 'RESEARCHER':
             return {
@@ -286,7 +303,7 @@ class APIAuthenticationMiddleware:
                 'error': 'Only RESEARCHER users can access API endpoints',
                 'status_code': 403
             }
-        
+
         # Check if user account is active
         if not api_key.user.is_active:
             return {
@@ -294,7 +311,7 @@ class APIAuthenticationMiddleware:
                 'error': 'User account is inactive',
                 'status_code': 403
             }
-        
+
         # Check if user account is locked
         if api_key.user.is_account_locked():
             return {
@@ -302,7 +319,7 @@ class APIAuthenticationMiddleware:
                 'error': 'User account is locked',
                 'status_code': 403
             }
-        
+
         return {
             'success': True,
             'api_key': api_key,

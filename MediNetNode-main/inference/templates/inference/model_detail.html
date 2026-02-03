@@ -1,0 +1,518 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ model.name }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Status badges */
+    .status-badge {
+        font-size: 0.85rem;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .status-approved { background-color: #198754; color: white; }
+    .status-pending { background-color: #fd7e14; color: white; }
+    .status-rejected { background-color: #dc3545; color: white; }
+    .status-deprecated { background-color: #6c757d; color: white; }
+
+    /* Domain badge */
+    .domain-badge {
+        font-size: 0.8rem;
+        padding: 4px 12px;
+        border-radius: 6px;
+        background-color: #e7f5ff;
+        color: #0d6efd;
+        text-transform: capitalize;
+        font-weight: 500;
+    }
+
+    /* Info cards */
+    .info-card {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 20px;
+        height: 100%;
+    }
+    .info-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        margin-bottom: 4px;
+    }
+    .info-card .value {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: #212529;
+    }
+    .info-card .value.mono {
+        font-family: 'Consolas', monospace;
+        font-size: 0.9rem;
+        word-break: break-all;
+    }
+
+    /* Stats cards */
+    .stat-card {
+        text-align: center;
+        padding: 24px;
+        border-radius: 12px;
+    }
+    .stat-card .number {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    .stat-card .label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 4px;
+    }
+
+    /* Schema display */
+    .schema-box {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 8px;
+        padding: 16px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.85rem;
+        overflow-x: auto;
+        max-height: 300px;
+    }
+    .schema-box .key { color: #9cdcfe; }
+    .schema-box .string { color: #ce9178; }
+    .schema-box .number { color: #b5cea8; }
+    .schema-box .boolean { color: #569cd6; }
+
+    /* Accordion styling */
+    .accordion-button {
+        font-size: 1rem;
+        padding: 1rem 1.25rem;
+    }
+    .accordion-button:not(.collapsed) {
+        background-color: #e7f1ff;
+        color: #0c63e4;
+    }
+    .accordion-button:focus {
+        box-shadow: none;
+        border-color: rgba(0,0,0,.125);
+    }
+    .accordion-body {
+        padding: 0 1.25rem 1rem;
+    }
+
+    /* Action buttons */
+    .action-btn-lg {
+        padding: 12px 24px;
+        font-size: 1rem;
+        border-radius: 8px;
+    }
+
+    /* Timeline for predictions */
+    .prediction-item {
+        padding: 12px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .prediction-item:last-child {
+        border-bottom: none;
+    }
+
+    /* Rejection reason alert */
+    .rejection-alert {
+        background: #fff5f5;
+        border: 1px solid #fed7d7;
+        border-radius: 8px;
+        padding: 16px;
+    }
+
+    /* Header with solid color */
+    .model-header {
+        background: #1e40af;
+        color: white;
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 24px;
+    }
+    .model-header .model-name {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .model-header .model-version {
+        opacity: 0.9;
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Model Details{% endblock %}
+
+{% block content %}
+<!-- Model Header -->
+<div class="model-header">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <span class="domain-badge" style="background: rgba(255,255,255,0.2); color: white;">
+                    {{ model.domain|title }}
+                </span>
+                {% if model.status == 'approved' %}
+                <span class="status-badge status-approved">
+                    <i class="bi bi-check-circle-fill"></i> Active
+                </span>
+                {% elif model.status == 'pending' %}
+                <span class="status-badge status-pending">
+                    <i class="bi bi-hourglass-split"></i> Pending Approval
+                </span>
+                {% elif model.status == 'rejected' %}
+                <span class="status-badge status-rejected">
+                    <i class="bi bi-x-circle-fill"></i> Rejected
+                </span>
+                {% else %}
+                <span class="status-badge status-deprecated">
+                    <i class="bi bi-archive-fill"></i> Deprecated
+                </span>
+                {% endif %}
+                {% if model.is_public %}
+                <span class="badge bg-light text-dark">
+                    <i class="bi bi-globe"></i> Public
+                </span>
+                {% else %}
+                <span class="badge bg-dark">
+                    <i class="bi bi-lock"></i> Private
+                </span>
+                {% endif %}
+            </div>
+            <h1 class="model-name">{{ model.name }}</h1>
+            <div class="model-version">
+                <i class="bi bi-tag me-1"></i> Version {{ model.version }}
+                {% if model.accuracy_percent %}
+                <span class="ms-3">
+                    <i class="bi bi-bullseye me-1"></i> {{ model.accuracy_percent|floatformat:1 }}% Accuracy
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+            {% if model.status == 'approved' %}
+            <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-light btn-lg action-btn-lg">
+                <i class="bi bi-play-fill me-2"></i>Use for Prediction
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Alert (if rejected) -->
+{% if model.status == 'rejected' and model.rejection_reason %}
+<div class="rejection-alert mb-4">
+    <div class="d-flex align-items-start">
+        <i class="bi bi-exclamation-triangle-fill text-danger me-3" style="font-size: 1.5rem;"></i>
+        <div>
+            <h6 class="text-danger mb-1">Model Rejected</h6>
+            <p class="mb-2">{{ model.rejection_reason }}</p>
+            {% if is_owner %}
+            <a href="{% url 'inference:upload_model' %}?resubmit={{ model.id }}" class="btn btn-warning btn-sm">
+                <i class="bi bi-arrow-clockwise me-1"></i>Resubmit Model
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="modern-card stat-card">
+            <div class="number text-primary">{{ prediction_stats.total_predictions|default:0 }}</div>
+            <div class="label text-muted">Total Predictions</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="modern-card stat-card">
+            <div class="number text-success">{{ prediction_stats.total_records|default:0 }}</div>
+            <div class="label text-muted">Records Processed</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="modern-card stat-card">
+            <div class="number text-info">{{ model.file_size_formatted }}</div>
+            <div class="label text-muted">Model Size</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="modern-card stat-card">
+            <div class="number text-warning">{{ user_predictions }}</div>
+            <div class="label text-muted">Your Predictions</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Model Info -->
+    <div class="col-lg-8">
+        <!-- Description -->
+        <div class="modern-card p-4 mb-4">
+            <h5 class="fw-bold mb-3">
+                <i class="bi bi-file-text me-2"></i>Description
+            </h5>
+            <p class="mb-0" style="white-space: pre-wrap;">{{ model.description }}</p>
+        </div>
+
+        <!-- Schemas Accordion -->
+        <div class="modern-card p-4 mb-4">
+            <div class="accordion" id="schemasAccordion">
+                <!-- Input Schema -->
+                <div class="accordion-item border-0 mb-2">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed bg-light rounded" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#inputSchemaCollapse">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>
+                            <strong>Input Schema</strong>
+                            {% if model.input_schema.features %}
+                            <span class="badge bg-primary ms-2">{{ model.input_schema.features|length }} features</span>
+                            {% endif %}
+                        </button>
+                    </h2>
+                    <div id="inputSchemaCollapse" class="accordion-collapse collapse" data-bs-parent="#schemasAccordion">
+                        <div class="accordion-body pt-3">
+                            <div class="schema-box">
+                                <pre class="mb-0">{{ model.input_schema|pprint }}</pre>
+                            </div>
+                            {% if model.input_schema.features %}
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <strong>Features:</strong>
+                                    {% for feature in model.input_schema.features|slice:":10" %}
+                                    <code class="ms-1">{{ feature.name }}</code>{% if not forloop.last %},{% endif %}
+                                    {% endfor %}
+                                    {% if model.input_schema.features|length > 10 %}
+                                    <span class="text-muted">... and {{ model.input_schema.features|length|add:"-10" }} more</span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Schema -->
+                <div class="accordion-item border-0">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed bg-light rounded" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#outputSchemaCollapse">
+                            <i class="bi bi-box-arrow-right me-2"></i>
+                            <strong>Output Schema</strong>
+                            {% if model.output_schema.type %}
+                            <span class="badge bg-success ms-2">{{ model.output_schema.type }}</span>
+                            {% endif %}
+                        </button>
+                    </h2>
+                    <div id="outputSchemaCollapse" class="accordion-collapse collapse" data-bs-parent="#schemasAccordion">
+                        <div class="accordion-body pt-3">
+                            <div class="schema-box">
+                                <pre class="mb-0">{{ model.output_schema|pprint }}</pre>
+                            </div>
+                            {% if model.output_schema.classes %}
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <strong>Classes:</strong>
+                                    {% for key, value in model.output_schema.classes.items %}
+                                    <span class="badge bg-secondary ms-1">{{ key }}: {{ value }}</span>
+                                    {% endfor %}
+                                </small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Predictions -->
+        {% if recent_predictions and is_admin %}
+        <div class="modern-card p-4">
+            <h5 class="fw-bold mb-3">
+                <i class="bi bi-clock-history me-2"></i>Recent Predictions
+            </h5>
+            {% for pred in recent_predictions %}
+            <div class="prediction-item d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-medium">{{ pred.user.username|default:"Unknown" }}</span>
+                    <small class="text-muted ms-2">{{ pred.records_count }} records</small>
+                </div>
+                <div class="text-end">
+                    <small class="text-muted">{{ pred.timestamp|timesince }} ago</small>
+                    {% if pred.success %}
+                    <span class="badge bg-success ms-2">Success</span>
+                    {% else %}
+                    <span class="badge bg-danger ms-2">Failed</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: Metadata -->
+    <div class="col-lg-4">
+        <!-- Model Info -->
+        <div class="modern-card p-4 mb-4">
+            <h5 class="fw-bold mb-3">
+                <i class="bi bi-info-circle me-2"></i>Model Information
+            </h5>
+
+            <div class="info-card mb-3">
+                <div class="label">Source</div>
+                <div class="value">
+                    {% if model.source == 'training' %}
+                    <i class="bi bi-graph-up text-primary me-1"></i> From Training
+                    {% else %}
+                    <i class="bi bi-cloud-upload text-success me-1"></i> Manual Upload
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="info-card mb-3">
+                <div class="label">Uploaded By</div>
+                <div class="value">
+                    <i class="bi bi-person me-1"></i>
+                    {{ model.uploaded_by.username|default:"Unknown" }}
+                </div>
+            </div>
+
+            <div class="info-card mb-3">
+                <div class="label">Uploaded At</div>
+                <div class="value">{{ model.created_at|date:"M d, Y H:i" }}</div>
+            </div>
+
+            {% if model.approved_by %}
+            <div class="info-card mb-3">
+                <div class="label">Approved By</div>
+                <div class="value">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    {{ model.approved_by.username }}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if model.approved_at %}
+            <div class="info-card mb-3">
+                <div class="label">Approved At</div>
+                <div class="value">{{ model.approved_at|date:"M d, Y H:i" }}</div>
+            </div>
+            {% endif %}
+
+            {% if model.last_prediction_at %}
+            <div class="info-card mb-3">
+                <div class="label">Last Used</div>
+                <div class="value">{{ model.last_prediction_at|timesince }} ago</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Security Settings -->
+        <div class="modern-card p-4 mb-4">
+            <h5 class="fw-bold mb-3">
+                <i class="bi bi-shield-lock me-2"></i>Security Settings
+            </h5>
+
+            <div class="info-card mb-3">
+                <div class="label">Rate Limit</div>
+                <div class="value">{{ model.max_requests_per_minute }} req/min</div>
+            </div>
+
+            <div class="info-card mb-3">
+                <div class="label">Max Batch Size</div>
+                <div class="value">{{ model.max_batch_size }} records</div>
+            </div>
+
+            <div class="info-card mb-3">
+                <div class="label">Differential Privacy</div>
+                <div class="value">
+                    {% if model.enable_differential_privacy %}
+                    <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> Enabled</span>
+                    <small class="d-block text-muted mt-1">Epsilon: {{ model.dp_epsilon }}</small>
+                    {% else %}
+                    <span class="text-muted"><i class="bi bi-x-circle me-1"></i> Disabled</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- File Info -->
+        <div class="modern-card p-4">
+            <h5 class="fw-bold mb-3">
+                <i class="bi bi-file-earmark-binary me-2"></i>File Information
+            </h5>
+
+            <div class="info-card mb-3">
+                <div class="label">File Size</div>
+                <div class="value">{{ model.file_size_formatted }}</div>
+            </div>
+
+            <div class="info-card">
+                <div class="label">SHA256 Checksum</div>
+                <div class="value mono">{{ model.checksum|default:"N/A" }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="modern-card p-4 mt-4">
+    <div class="d-flex flex-wrap gap-3">
+        <a href="{% url 'inference:my_models' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Models
+        </a>
+
+        {% if model.status == 'approved' %}
+        <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-primary">
+            <i class="bi bi-play-fill me-2"></i>Use for Prediction
+        </a>
+        {% endif %}
+
+        {% if is_owner and model.status == 'pending' %}
+        <button class="btn btn-outline-secondary" disabled>
+            <i class="bi bi-pencil me-2"></i>Edit (Coming Soon)
+        </button>
+        {% endif %}
+
+        {% if is_admin and model.status == 'pending' %}
+        <button class="btn btn-success" disabled>
+            <i class="bi bi-check-lg me-2"></i>Approve (Admin Panel)
+        </button>
+        <button class="btn btn-danger" disabled>
+            <i class="bi bi-x-lg me-2"></i>Reject (Admin Panel)
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Pretty print JSON in schema boxes
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.schema-box pre').forEach(function(pre) {
+        try {
+            const text = pre.textContent;
+            // Try to parse as JSON and re-format
+            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                const obj = JSON.parse(text.replace(/'/g, '"'));
+                pre.textContent = JSON.stringify(obj, null, 2);
+            }
+        } catch (e) {
+            // If not valid JSON, leave as is
+        }
+    });
+});
+</script>
+{% endblock %}

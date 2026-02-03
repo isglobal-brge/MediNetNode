@@ -1,0 +1,644 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load inference_filters %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page header */
+    .page-header {
+        background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Wizard steps */
+    .wizard-steps {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-top: 1.5rem;
+    }
+
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+    }
+
+    .wizard-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+    .wizard-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+
+    .wizard-step.active {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+    }
+
+    .wizard-step .step-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .wizard-step.active .step-num,
+    .wizard-step.completed .step-num {
+        background: white;
+        color: #059669;
+    }
+
+    /* Success/Error cards */
+    .result-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+
+    .result-card-header {
+        padding: 1.25rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .result-card-header.success {
+        background: #ecfdf5;
+        border-bottom-color: #d1fae5;
+    }
+
+    .result-card-header.error {
+        background: #fef2f2;
+        border-bottom-color: #fecaca;
+    }
+
+    .result-card-header .icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .result-card-header.success .icon {
+        background: #d1fae5;
+        color: #059669;
+    }
+
+    .result-card-header.error .icon {
+        background: #fecaca;
+        color: #dc2626;
+    }
+
+    .result-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .result-card-header p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .result-card-body {
+        padding: 1.5rem;
+    }
+
+    /* Stats row */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 0.5rem;
+    }
+
+    .stat-item .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .stat-item .label {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    /* Results table */
+    .results-table-wrapper {
+        overflow-x: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+    }
+
+    .results-table {
+        width: 100%;
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .results-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .results-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+    }
+
+    .results-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    /* Prediction badges */
+    .prediction-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+
+    .prediction-badge.class-0 {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .prediction-badge.class-1 {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .prediction-badge.high-prob {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .prediction-badge.low-prob {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    /* Probability bar */
+    .prob-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .prob-bar-track {
+        flex: 1;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .prob-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .prob-bar-value {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+        min-width: 50px;
+        text-align: right;
+    }
+
+    /* Error list */
+    .error-list {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .error-list ul {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+
+    .error-list li {
+        color: #991b1b;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Model info sidebar */
+    .model-info-mini {
+        background: #f9fafb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .model-info-mini h6 {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .model-info-mini .info-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        padding: 0.25rem 0;
+    }
+
+    .model-info-mini .info-label {
+        color: #6b7280;
+    }
+
+    .model-info-mini .info-value {
+        font-weight: 500;
+        color: #1f2937;
+    }
+
+    /* Action buttons */
+    .action-footer {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .wizard-steps {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .wizard-step {
+            border-radius: 0.5rem !important;
+            justify-content: center;
+        }
+
+        .stats-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .action-footer {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Wizard Steps -->
+    <div class="page-header">
+        <div class="text-center">
+            <h1>
+                {% if errors %}
+                <i class="bi bi-x-circle me-2"></i>Prediction Failed
+                {% else %}
+                <i class="bi bi-check-circle me-2"></i>Prediction Complete
+                {% endif %}
+            </h1>
+            <p class="lead">
+                {% if errors %}
+                An error occurred while processing your request
+                {% else %}
+                Successfully processed {{ results.rows }} record{{ results.rows|pluralize }}
+                {% endif %}
+            </p>
+
+            <!-- Wizard Steps -->
+            <div class="wizard-steps">
+                {% for step in wizard_steps %}
+                <div class="wizard-step {% if step.num == wizard_step %}active{% elif step.num < wizard_step %}completed{% endif %}">
+                    <span class="step-num">
+                        {% if step.num < wizard_step %}
+                        <i class="bi bi-check"></i>
+                        {% else %}
+                        {{ step.num }}
+                        {% endif %}
+                    </span>
+                    <i class="{{ step.icon }}"></i>
+                    <span class="d-none d-sm-inline">{{ step.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if errors %}
+    <!-- Error Display -->
+    <div class="result-card">
+        <div class="result-card-header error">
+            <div class="icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div>
+                <h5>Prediction Failed</h5>
+                <p>The prediction could not be completed due to the following error(s)</p>
+            </div>
+        </div>
+        <div class="result-card-body">
+            <div class="error-list">
+                <ul>
+                    {% for error in errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="model-info-mini mt-4">
+                <h6><i class="bi bi-box-seam me-1"></i>Model Used</h6>
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-value">{{ model.name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Version</span>
+                    <span class="info-value">v{{ model.version }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Domain</span>
+                    <span class="info-value">{{ model.get_domain_display }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Success Display -->
+    <div class="result-card">
+        <div class="result-card-header success">
+            <div class="icon">
+                <i class="bi bi-check-lg"></i>
+            </div>
+            <div>
+                <h5>Prediction Successful</h5>
+                <p>Model: {{ model.name }} v{{ model.version }} | Type: {{ results.output_type|title }}</p>
+            </div>
+        </div>
+        <div class="result-card-body">
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="value">{{ results.rows }}</div>
+                    <div class="label">Records Processed</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">{{ results.execution_time_ms }}ms</div>
+                    <div class="label">Execution Time</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">{{ model.get_domain_display }}</div>
+                    <div class="label">Domain</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">{{ results.output_type|title }}</div>
+                    <div class="label">Output Type</div>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <h6 class="mb-3"><i class="bi bi-table me-1"></i>Prediction Results</h6>
+            <div class="results-table-wrapper">
+                <table class="results-table table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Predicted Class</th>
+                            <th>Confidence</th>
+                            <th>Probabilities</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pred in results.predictions %}
+                        <tr>
+                            <td>{{ pred.row_index }}</td>
+                            <td>
+                                {% if pred.label is not None %}
+                                <span class="prediction-badge class-{{ pred.label }}">
+                                    {% if pred.label == 0 %}
+                                    <i class="bi bi-circle"></i>
+                                    {% else %}
+                                    <i class="bi bi-circle-fill"></i>
+                                    {% endif %}
+                                    {{ class_labels|get_class_label:pred.label }}
+                                </span>
+                                {% elif pred.value is not None %}
+                                <span class="prediction-badge {% if pred.value > 0.5 %}high-prob{% else %}low-prob{% endif %}">
+                                    {{ pred.value|floatformat:4 }}
+                                </span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pred.probabilities %}
+                                    {% for class_id, prob in pred.probabilities.items %}
+                                        {% if class_id == pred.label|stringformat:"s" %}
+                                        <div class="prob-bar">
+                                            <div class="prob-bar-track">
+                                                <div class="prob-bar-fill" style="width: {{ prob|floatformat:0 }}%"></div>
+                                            </div>
+                                            <span class="prob-bar-value">{{ prob|floatformat:1 }}%</span>
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% elif pred.value is not None %}
+                                <div class="prob-bar">
+                                    <div class="prob-bar-track">
+                                        <div class="prob-bar-fill" style="width: {% widthratio pred.value 1 100 %}%"></div>
+                                    </div>
+                                    <span class="prob-bar-value">{% widthratio pred.value 1 100 %}%</span>
+                                </div>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pred.probabilities %}
+                                <small class="text-muted">
+                                    {% for class_id, prob in pred.probabilities.items %}
+                                    {{ class_labels|get_class_label:class_id }}: {{ prob|floatformat:2 }}%{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </small>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Audit Info -->
+            <div class="model-info-mini mt-4">
+                <h6><i class="bi bi-shield-check me-1"></i>Audit Information</h6>
+                <div class="info-row">
+                    <span class="info-label">Audit ID</span>
+                    <span class="info-value"><code>{{ results.audit_id|slice:":8" }}...</code></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Differential Privacy</span>
+                    <span class="info-value">
+                        {% if model.enable_differential_privacy %}
+                        <span class="text-success"><i class="bi bi-check-circle"></i> Applied</span>
+                        {% else %}
+                        <span class="text-muted"><i class="bi bi-x-circle"></i> Not Applied</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Footer -->
+    <div class="action-footer">
+        <div>
+            <a href="{% url 'inference:my_history' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-clock-history me-1"></i>View History
+            </a>
+        </div>
+        <div>
+            {% if not errors %}
+            <button type="button" class="btn btn-outline-primary" id="exportCsvBtn">
+                <i class="bi bi-download me-1"></i>Export CSV
+            </button>
+            {% endif %}
+            <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-primary">
+                <i class="bi bi-arrow-repeat me-1"></i>New Prediction with Same Model
+            </a>
+            <a href="{% url 'inference:new_prediction' %}" class="btn btn-success">
+                <i class="bi bi-plus-lg me-1"></i>New Prediction
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if not errors %}
+{{ results.predictions|json_script:"predictions-data" }}
+{{ class_labels|json_script:"class-labels-data" }}
+<script>
+document.getElementById('exportCsvBtn').addEventListener('click', function() {
+    // Build CSV content
+    const predictions = JSON.parse(document.getElementById('predictions-data').textContent);
+    const classLabels = JSON.parse(document.getElementById('class-labels-data').textContent);
+
+    // Get class label name
+    function getClassName(labelId) {
+        if (classLabels && classLabels[String(labelId)]) {
+            return classLabels[String(labelId)];
+        }
+        return 'Class ' + labelId;
+    }
+
+    // CSV header
+    let csv = 'Row,Predicted Label,Class Name,Confidence (%)';
+
+    // Add probability columns for each class
+    if (predictions.length > 0 && predictions[0].probabilities) {
+        const classIds = Object.keys(predictions[0].probabilities).sort();
+        classIds.forEach(function(classId) {
+            csv += ',' + getClassName(classId) + ' Probability (%)';
+        });
+    }
+    csv += '\n';
+
+    // Add data rows
+    predictions.forEach(function(pred) {
+        let row = [
+            pred.row_index,
+            pred.label !== null && pred.label !== undefined ? pred.label : (pred.value !== null ? pred.value.toFixed(4) : ''),
+            pred.label !== null && pred.label !== undefined ? getClassName(pred.label) : '',
+            ''
+        ];
+
+        // Add confidence (probability of predicted class)
+        if (pred.probabilities && pred.label !== null) {
+            const confidence = pred.probabilities[String(pred.label)];
+            row[3] = confidence !== undefined ? confidence.toFixed(2) : '';
+        }
+
+        // Add all probability columns
+        if (pred.probabilities) {
+            const classIds = Object.keys(pred.probabilities).sort();
+            classIds.forEach(function(classId) {
+                row.push(pred.probabilities[classId].toFixed(2));
+            });
+        }
+
+        csv += row.join(',') + '\n';
+    });
+
+    // Create and download file
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    // Generate filename with model name and timestamp
+    const modelName = '{{ model.name|escapejs }}'.replace(/[^a-z0-9]/gi, '_');
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+    const filename = 'predictions_' + modelName + '_' + timestamp + '.csv';
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+});
+</script>
+{% endif %}
+{% endblock %}

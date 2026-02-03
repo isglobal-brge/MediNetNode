@@ -1,0 +1,951 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Upload Model - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .accordion-button:not(.collapsed) {
+        background-color: #e7f1ff;
+        color: #0d6efd;
+    }
+
+    .accordion-button:focus {
+        box-shadow: none;
+        border-color: rgba(13, 110, 253, 0.25);
+    }
+
+    .accordion-body {
+        padding: 1.5rem;
+    }
+
+    .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #0d6efd;
+        color: white;
+        font-weight: 600;
+        font-size: 0.875rem;
+        margin-right: 0.75rem;
+    }
+
+    .accordion-button:not(.collapsed) .step-number {
+        background: #0a58ca;
+    }
+
+    .help-icon {
+        color: #6c757d;
+        cursor: help;
+        font-size: 0.875rem;
+    }
+
+    .required-asterisk {
+        color: #dc3545;
+        margin-left: 3px;
+    }
+
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #f8f9fa;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .upload-area:hover {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+    }
+
+    .upload-area:active {
+        transform: translateY(0);
+    }
+
+    .upload-area.dragover {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+    }
+
+    .upload-area input[type="file"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+        opacity: 0;
+    }
+
+    .file-info {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #e7f1ff;
+        border-radius: 8px;
+        display: none;
+    }
+
+    .file-info.show {
+        display: block;
+    }
+
+    .nav-tabs .nav-link {
+        color: #6c757d;
+        border: none;
+        border-bottom: 2px solid transparent;
+    }
+
+    .nav-tabs .nav-link:hover {
+        color: #0d6efd;
+        border-bottom-color: #dee2e6;
+    }
+
+    .nav-tabs .nav-link.active {
+        color: #0d6efd;
+        border-bottom-color: #0d6efd;
+        font-weight: 600;
+    }
+
+    .csv-upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        background: #f8f9fa;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .csv-upload-area:hover {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+    }
+
+    .csv-upload-area input[type="file"] {
+        display: none;
+    }
+
+    .schema-result {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        max-height: 400px;
+        overflow-y: auto;
+        display: none;
+    }
+
+    .schema-result.show {
+        display: block;
+    }
+
+    .feature-row {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .feature-row:last-child {
+        border-bottom: none;
+    }
+
+    .badge-type {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Upload Model{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1">
+                        <i class="bi bi-cloud-upload me-2"></i>Upload Model
+                    </h4>
+                    <p class="text-muted mb-0">Deploy a new ONNX model for inference</p>
+                </div>
+                <a href="{% url 'inference:my_models' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to My Models
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form with Accordion -->
+    <form method="post" enctype="multipart/form-data" id="uploadForm">
+        {% csrf_token %}
+
+        <div class="accordion" id="uploadAccordion">
+
+            <!-- Step 1: Basic Information -->
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#step1" aria-expanded="true">
+                        <span class="step-number">1</span>
+                        <span><i class="bi bi-info-circle me-2"></i>Basic Information</span>
+                    </button>
+                </h2>
+                <div id="step1" class="accordion-collapse collapse show" data-bs-parent="#uploadAccordion">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    Model Name<span class="required-asterisk">*</span>
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.name.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">{{ form.name.help_text }}</small>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label for="{{ form.version.id_for_label }}" class="form-label">
+                                    Version<span class="required-asterisk">*</span>
+                                </label>
+                                {{ form.version }}
+                                {% if form.version.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.version.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">{{ form.version.help_text }}</small>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label for="{{ form.domain.id_for_label }}" class="form-label">
+                                    Domain<span class="required-asterisk">*</span>
+                                </label>
+                                {{ form.domain }}
+                                {% if form.domain.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.domain.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">{{ form.domain.help_text }}</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                Description<span class="required-asterisk">*</span>
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.description.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">{{ form.description.help_text }}</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.accuracy_percent.id_for_label }}" class="form-label">
+                                    Model Accuracy
+                                    <i class="bi bi-question-circle help-icon"
+                                       data-bs-toggle="tooltip"
+                                       title="Optional: Enter accuracy from your validation testing (0-100%)"></i>
+                                </label>
+                                {{ form.accuracy_percent }}
+                                {% if form.accuracy_percent.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.accuracy_percent.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">{{ form.accuracy_percent.help_text }}</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    Visibility
+                                </label>
+                                <div class="form-check">
+                                    {{ form.is_public }}
+                                    <label class="form-check-label" for="{{ form.is_public.id_for_label }}">
+                                        Make this model public (requires admin approval)
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">{{ form.is_public.help_text }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Model File -->
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#step2">
+                        <span class="step-number">2</span>
+                        <span><i class="bi bi-file-earmark-binary me-2"></i>Model File</span>
+                    </button>
+                </h2>
+                <div id="step2" class="accordion-collapse collapse" data-bs-parent="#uploadAccordion">
+                    <div class="accordion-body">
+                        <div class="upload-area" id="uploadArea">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                            <h6 class="mt-3 fw-bold">Click here to select file or drag and drop</h6>
+                            <p class="text-muted mb-0">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i>
+                                ONNX model file (max 500MB)
+                            </p>
+                            {{ form.model_file }}
+                        </div>
+
+                        <div class="file-info" id="fileInfo">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <i class="bi bi-file-check text-success me-2"></i>
+                                    <strong id="fileName"></strong>
+                                </div>
+                                <div class="text-muted" id="fileSize"></div>
+                            </div>
+                        </div>
+
+                        {% if form.model_file.errors %}
+                            <div class="alert alert-danger mt-3">
+                                {{ form.model_file.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Input Schema -->
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#step3">
+                        <span class="step-number">3</span>
+                        <span><i class="bi bi-box-arrow-in-down me-2"></i>Input Schema</span>
+                    </button>
+                </h2>
+                <div id="step3" class="accordion-collapse collapse" data-bs-parent="#uploadAccordion">
+                    <div class="accordion-body">
+                        <p class="text-muted mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Define the input features your model expects. Choose the method that works best for you.
+                        </p>
+
+                        <!-- Tabs for Input Methods -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="csv-tab" data-bs-toggle="tab" data-bs-target="#csv-method" type="button" role="tab">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+                                    From CSV Sample (Recommended)
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="manual-tab" data-bs-toggle="tab" data-bs-target="#manual-method" type="button" role="tab">
+                                    <i class="bi bi-pencil-square me-1"></i>
+                                    Manual Entry
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- CSV Auto-Detection Method -->
+                            <div class="tab-pane fade show active" id="csv-method" role="tabpanel">
+                                <div class="alert alert-info">
+                                    <strong><i class="bi bi-lightbulb me-1"></i> How it works:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Upload a CSV file with <strong>headers</strong> and <strong>2-5 sample rows</strong></li>
+                                        <li>We'll auto-detect column names, data types, and ranges</li>
+                                        <li>Review and adjust the detected schema before saving</li>
+                                        <li>Works great for models with hundreds or thousands of features!</li>
+                                    </ul>
+                                </div>
+
+                                <div class="csv-upload-area" id="csvUploadArea">
+                                    <i class="bi bi-filetype-csv" style="font-size: 2.5rem; color: #198754;"></i>
+                                    <h6 class="mt-2 fw-bold">Click to upload CSV with headers + sample rows</h6>
+                                    <p class="text-muted mb-0 small">CSV file with 2-5 data rows for type detection</p>
+                                    <input type="file" id="csvFileInput" accept=".csv">
+                                </div>
+
+                                <div class="schema-result" id="csvSchemaResult">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="bi bi-check-circle text-success me-1"></i>
+                                        Detected Schema
+                                        <span class="badge bg-secondary" id="featureCount"></span>
+                                    </h6>
+                                    <div id="detectedFeatures"></div>
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-sm btn-success" id="applySchemaBtn">
+                                            <i class="bi bi-check2 me-1"></i>Apply This Schema
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="cancelSchemaBtn">
+                                            <i class="bi bi-x-circle me-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Manual Entry Method -->
+                            <div class="tab-pane fade" id="manual-method" role="tabpanel">
+                                <div class="alert alert-warning">
+                                    <strong><i class="bi bi-exclamation-triangle me-1"></i> Note:</strong>
+                                    Manual entry is recommended only for models with few features (&lt;20). For larger models, use the CSV auto-detection method.
+                                </div>
+
+                                <div class="mb-2">
+                                    <label for="{{ form.input_schema.id_for_label }}" class="form-label">
+                                        JSON Schema<span class="required-asterisk">*</span>
+                                    </label>
+                                    {{ form.input_schema }}
+                                    {% if form.input_schema.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.input_schema.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="alert alert-secondary">
+                                    <strong>Example Format:</strong>
+                                    <pre class="mb-0 mt-2"><code>{
+  "features": [
+    {
+      "name": "age",
+      "type": "integer",
+      "min": 0,
+      "max": 120,
+      "required": true,
+      "description": "Patient age in years"
+    }
+  ]
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Output Schema -->
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#step4">
+                        <span class="step-number">4</span>
+                        <span><i class="bi bi-box-arrow-up me-2"></i>Output Schema</span>
+                    </button>
+                </h2>
+                <div id="step4" class="accordion-collapse collapse" data-bs-parent="#uploadAccordion">
+                    <div class="accordion-body">
+                        <p class="text-muted mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Define your model's output format for validation and display.
+                        </p>
+
+                        <!-- Tabs for Output Methods -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="output-csv-tab" data-bs-toggle="tab" data-bs-target="#output-csv-method" type="button" role="tab">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+                                    From CSV Sample (Recommended)
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="output-manual-tab" data-bs-toggle="tab" data-bs-target="#output-manual-method" type="button" role="tab">
+                                    <i class="bi bi-pencil-square me-1"></i>
+                                    Manual Entry
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- CSV Auto-Detection Method for Output -->
+                            <div class="tab-pane fade show active" id="output-csv-method" role="tabpanel">
+                                <div class="alert alert-info">
+                                    <strong><i class="bi bi-lightbulb me-1"></i> How it works:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Upload a CSV file with <strong>headers</strong> representing output column names</li>
+                                        <li>We'll auto-detect the output structure and classes (for classification)</li>
+                                        <li>For classification: unique values become class names</li>
+                                        <li>For regression: we'll detect numeric output format</li>
+                                    </ul>
+                                </div>
+
+                                <div class="csv-upload-area" id="outputCsvUploadArea">
+                                    <i class="bi bi-filetype-csv" style="font-size: 2.5rem; color: #198754;"></i>
+                                    <h6 class="mt-2 fw-bold">Click to upload CSV with output columns + sample rows</h6>
+                                    <p class="text-muted mb-0 small">CSV file with output data for structure detection</p>
+                                    <input type="file" id="outputCsvFileInput" accept=".csv">
+                                </div>
+
+                                <div class="schema-result" id="outputCsvSchemaResult">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="bi bi-check-circle text-success me-1"></i>
+                                        Detected Output Schema
+                                    </h6>
+                                    <div id="detectedOutputSchema"></div>
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-sm btn-success" id="applyOutputSchemaBtn">
+                                            <i class="bi bi-check2 me-1"></i>Apply This Schema
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="cancelOutputSchemaBtn">
+                                            <i class="bi bi-x-circle me-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Manual Entry Method for Output -->
+                            <div class="tab-pane fade" id="output-manual-method" role="tabpanel">
+                                <div class="alert alert-warning">
+                                    <strong><i class="bi bi-exclamation-triangle me-1"></i> Note:</strong>
+                                    Manual entry requires understanding of output schema format. Use CSV detection for easier setup.
+                                </div>
+
+                                <div class="mb-2">
+                                    <label for="{{ form.output_schema.id_for_label }}" class="form-label">
+                                        JSON Schema<span class="required-asterisk">*</span>
+                                    </label>
+                                    {{ form.output_schema }}
+                                    {% if form.output_schema.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.output_schema.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="alert alert-secondary">
+                                    <strong>Example Format (Classification):</strong>
+                                    <pre class="mb-0 mt-2"><code>{
+  "type": "classification",
+  "classes": ["no_risk", "at_risk", "high_risk"],
+  "confidence_threshold": 0.75
+}</code></pre>
+                                    <strong class="d-block mt-3">Example Format (Regression):</strong>
+                                    <pre class="mb-0 mt-2"><code>{
+  "type": "regression",
+  "output_name": "predicted_value",
+  "min": 0,
+  "max": 100
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="mt-4 p-4 bg-white rounded shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{% url 'inference:my_models' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Cancel
+                </a>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-cloud-upload me-2"></i>Upload Model
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // ONNX File upload area handling
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('{{ form.model_file.id_for_label }}');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+
+    uploadArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            updateFileInfo(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length) {
+            updateFileInfo(this.files[0]);
+        }
+    });
+
+    function updateFileInfo(file) {
+        fileName.textContent = file.name;
+
+        const bytes = file.size;
+        if (bytes >= 1024**3) {
+            fileSize.textContent = (bytes / (1024**3)).toFixed(2) + ' GB';
+        } else if (bytes >= 1024**2) {
+            fileSize.textContent = (bytes / (1024**2)).toFixed(2) + ' MB';
+        } else if (bytes >= 1024) {
+            fileSize.textContent = (bytes / 1024).toFixed(2) + ' KB';
+        } else {
+            fileSize.textContent = bytes + ' B';
+        }
+
+        fileInfo.classList.add('show');
+    }
+
+    // CSV Upload for schema detection
+    const csvUploadArea = document.getElementById('csvUploadArea');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const csvSchemaResult = document.getElementById('csvSchemaResult');
+    const detectedFeatures = document.getElementById('detectedFeatures');
+    const featureCount = document.getElementById('featureCount');
+    const inputSchemaTextarea = document.getElementById('{{ form.input_schema.id_for_label }}');
+
+    csvUploadArea.addEventListener('click', function() {
+        csvFileInput.click();
+    });
+
+    csvFileInput.addEventListener('change', function() {
+        if (this.files.length) {
+            processCSVFile(this.files[0]);
+        }
+    });
+
+    function processCSVFile(file) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split('\n').filter(line => line.trim());
+
+            if (lines.length < 2) {
+                alert('CSV must contain headers and at least 1 sample row');
+                return;
+            }
+
+            // Parse CSV
+            const headers = lines[0].split(',').map(h => h.trim());
+            const sampleRows = lines.slice(1, 6).map(line =>
+                line.split(',').map(v => v.trim())
+            );
+
+            // Auto-detect types and ranges
+            const features = headers.map((name, idx) => {
+                const values = sampleRows.map(row => row[idx]).filter(v => v);
+                const feature = {
+                    name: name,
+                    required: true,
+                    description: `Auto-detected from CSV`
+                };
+
+                // Type detection
+                if (values.every(v => v === '0' || v === '1')) {
+                    feature.type = 'boolean';
+                } else if (values.every(v => !isNaN(v) && Number.isInteger(parseFloat(v)))) {
+                    feature.type = 'integer';
+                    const nums = values.map(v => parseInt(v));
+                    feature.min = Math.min(...nums);
+                    feature.max = Math.max(...nums);
+                } else if (values.every(v => !isNaN(v))) {
+                    feature.type = 'float';
+                    const nums = values.map(v => parseFloat(v));
+                    feature.min = Math.min(...nums).toFixed(2);
+                    feature.max = Math.max(...nums).toFixed(2);
+                } else {
+                    feature.type = 'string';
+                }
+
+                return feature;
+            });
+
+            displayDetectedSchema(features);
+        };
+
+        reader.readAsText(file);
+    }
+
+    function displayDetectedSchema(features) {
+        featureCount.textContent = `${features.length} features detected`;
+
+        let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+        html += '<thead><tr><th>Feature Name</th><th>Type</th><th>Range</th><th>Required</th></tr></thead><tbody>';
+
+        features.forEach(f => {
+            const typeColor = {
+                'integer': 'primary',
+                'float': 'info',
+                'boolean': 'success',
+                'string': 'secondary'
+            }[f.type] || 'secondary';
+
+            const range = (f.min !== undefined && f.max !== undefined)
+                ? `${f.min} - ${f.max}`
+                : '-';
+
+            html += `<tr>
+                <td><strong>${f.name}</strong></td>
+                <td><span class="badge bg-${typeColor} badge-type">${f.type}</span></td>
+                <td class="text-muted small">${range}</td>
+                <td><i class="bi bi-check-circle text-success"></i></td>
+            </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        detectedFeatures.innerHTML = html;
+        csvSchemaResult.classList.add('show');
+
+        // Store schema for later application
+        window.detectedSchema = { features: features };
+    }
+
+    document.getElementById('applySchemaBtn').addEventListener('click', function() {
+        if (window.detectedSchema) {
+            inputSchemaTextarea.value = JSON.stringify(window.detectedSchema, null, 2);
+            csvSchemaResult.classList.remove('show');
+            alert('Schema applied successfully! You can review it in the Manual Entry tab.');
+        }
+    });
+
+    document.getElementById('cancelSchemaBtn').addEventListener('click', function() {
+        csvSchemaResult.classList.remove('show');
+        csvFileInput.value = '';
+    });
+
+    // === OUTPUT SCHEMA CSV AUTO-DETECTION ===
+    const outputCsvUploadArea = document.getElementById('outputCsvUploadArea');
+    const outputCsvFileInput = document.getElementById('outputCsvFileInput');
+    const outputCsvSchemaResult = document.getElementById('outputCsvSchemaResult');
+    const detectedOutputSchema = document.getElementById('detectedOutputSchema');
+    const outputSchemaTextarea = document.getElementById('{{ form.output_schema.id_for_label }}');
+
+    outputCsvUploadArea.addEventListener('click', function() {
+        outputCsvFileInput.click();
+    });
+
+    outputCsvFileInput.addEventListener('change', function() {
+        if (this.files.length) {
+            processOutputCSVFile(this.files[0]);
+        }
+    });
+
+    function processOutputCSVFile(file) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split('\n').filter(line => line.trim());
+
+            if (lines.length < 2) {
+                alert('CSV must contain headers and at least 1 sample row');
+                return;
+            }
+
+            // Parse CSV
+            const headers = lines[0].split(',').map(h => h.trim());
+            const sampleRows = lines.slice(1, 50).map(line =>
+                line.split(',').map(v => v.trim())
+            );
+
+            // Detect output type and structure
+            const outputSchema = detectOutputSchema(headers, sampleRows);
+            displayDetectedOutputSchema(outputSchema);
+        };
+
+        reader.readAsText(file);
+    }
+
+    function detectOutputSchema(headers, sampleRows) {
+        // Check if this looks like classification (single column with categorical values)
+        if (headers.length === 1) {
+            const columnName = headers[0];
+            const values = sampleRows.map(row => row[0]).filter(v => v);
+            const uniqueValues = [...new Set(values)];
+
+            // If we have discrete values that repeat, it's likely classification
+            if (uniqueValues.length < values.length && uniqueValues.length <= 20) {
+                return {
+                    type: 'classification',
+                    classes: uniqueValues,
+                    confidence_threshold: 0.75,
+                    output_column: columnName
+                };
+            }
+
+            // If all numeric, could be regression
+            if (values.every(v => !isNaN(v))) {
+                const nums = values.map(v => parseFloat(v));
+                return {
+                    type: 'regression',
+                    output_name: columnName,
+                    min: Math.min(...nums),
+                    max: Math.max(...nums)
+                };
+            }
+        }
+
+        // Multi-column output (e.g., multi-label classification or multiple predictions)
+        if (headers.length > 1) {
+            // Check if columns are probability-like (0-1 range)
+            let allProbabilityLike = true;
+            const columnStats = headers.map((name, idx) => {
+                const values = sampleRows.map(row => row[idx]).filter(v => v && !isNaN(v));
+                const nums = values.map(v => parseFloat(v));
+                const min = Math.min(...nums);
+                const max = Math.max(...nums);
+
+                if (min < 0 || max > 1.1) {
+                    allProbabilityLike = false;
+                }
+
+                return { name, min, max };
+            });
+
+            if (allProbabilityLike && headers.length <= 20) {
+                return {
+                    type: 'multi_class_probabilities',
+                    classes: headers,
+                    confidence_threshold: 0.75
+                };
+            }
+
+            // Otherwise, treat as multi-output regression
+            return {
+                type: 'multi_output',
+                outputs: columnStats
+            };
+        }
+
+        // Fallback: single classification
+        return {
+            type: 'classification',
+            classes: ['class_0', 'class_1'],
+            confidence_threshold: 0.75
+        };
+    }
+
+    function displayDetectedOutputSchema(schema) {
+        let html = '<div class="alert alert-light border">';
+
+        if (schema.type === 'classification') {
+            html += `
+                <h6 class="fw-bold">Classification Output</h6>
+                <p class="mb-2"><strong>Type:</strong> <span class="badge bg-primary">Classification</span></p>
+                <p class="mb-2"><strong>Output Column:</strong> <code>${schema.output_column || 'prediction'}</code></p>
+                <p class="mb-2"><strong>Classes Detected:</strong> <span class="badge bg-secondary">${schema.classes.length} classes</span></p>
+                <div class="mb-2">
+                    ${schema.classes.map(cls => `<span class="badge bg-info me-1">${cls}</span>`).join('')}
+                </div>
+                <p class="mb-0"><strong>Confidence Threshold:</strong> ${schema.confidence_threshold}</p>
+            `;
+        } else if (schema.type === 'regression') {
+            html += `
+                <h6 class="fw-bold">Regression Output</h6>
+                <p class="mb-2"><strong>Type:</strong> <span class="badge bg-success">Regression</span></p>
+                <p class="mb-2"><strong>Output Name:</strong> <code>${schema.output_name}</code></p>
+                <p class="mb-2"><strong>Range:</strong> ${schema.min.toFixed(2)} - ${schema.max.toFixed(2)}</p>
+            `;
+        } else if (schema.type === 'multi_class_probabilities') {
+            html += `
+                <h6 class="fw-bold">Multi-Class Probabilities</h6>
+                <p class="mb-2"><strong>Type:</strong> <span class="badge bg-primary">Classification (Probabilities)</span></p>
+                <p class="mb-2"><strong>Classes:</strong> <span class="badge bg-secondary">${schema.classes.length} classes</span></p>
+                <div class="mb-2">
+                    ${schema.classes.map(cls => `<span class="badge bg-info me-1">${cls}</span>`).join('')}
+                </div>
+                <p class="mb-0 small text-muted">Model outputs probability for each class (0-1 range)</p>
+            `;
+        } else if (schema.type === 'multi_output') {
+            html += `
+                <h6 class="fw-bold">Multi-Output Prediction</h6>
+                <p class="mb-2"><strong>Type:</strong> <span class="badge bg-warning">Multi-Output</span></p>
+                <p class="mb-2"><strong>Outputs:</strong> ${schema.outputs.length} values</p>
+                <ul class="mb-0 small">
+                    ${schema.outputs.slice(0, 5).map(o =>
+                        `<li><code>${o.name}</code>: ${o.min.toFixed(2)} - ${o.max.toFixed(2)}</li>`
+                    ).join('')}
+                    ${schema.outputs.length > 5 ? `<li class="text-muted">... and ${schema.outputs.length - 5} more</li>` : ''}
+                </ul>
+            `;
+        }
+
+        html += '</div>';
+        detectedOutputSchema.innerHTML = html;
+        outputCsvSchemaResult.classList.add('show');
+
+        // Store schema for later application
+        window.detectedOutputSchema = schema;
+    }
+
+    document.getElementById('applyOutputSchemaBtn').addEventListener('click', function() {
+        if (window.detectedOutputSchema) {
+            outputSchemaTextarea.value = JSON.stringify(window.detectedOutputSchema, null, 2);
+            outputCsvSchemaResult.classList.remove('show');
+            alert('Output schema applied successfully! You can review it in the Manual Entry tab.');
+        }
+    });
+
+    document.getElementById('cancelOutputSchemaBtn').addEventListener('click', function() {
+        outputCsvSchemaResult.classList.remove('show');
+        outputCsvFileInput.value = '';
+    });
+
+    // Form validation
+    const form = document.getElementById('uploadForm');
+    form.addEventListener('submit', function(e) {
+        const inputSchema = document.getElementById('{{ form.input_schema.id_for_label }}');
+        const outputSchema = document.getElementById('{{ form.output_schema.id_for_label }}');
+
+        try {
+            JSON.parse(inputSchema.value);
+        } catch (err) {
+            e.preventDefault();
+            alert('Invalid Input Schema JSON: ' + err.message);
+            inputSchema.focus();
+            return false;
+        }
+
+        try {
+            JSON.parse(outputSchema.value);
+        } catch (err) {
+            e.preventDefault();
+            alert('Invalid Output Schema JSON: ' + err.message);
+            outputSchema.focus();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

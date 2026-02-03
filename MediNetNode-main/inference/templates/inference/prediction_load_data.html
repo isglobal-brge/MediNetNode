@@ -1,0 +1,816 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page header */
+    .page-header {
+        background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Wizard steps - same as step 1 */
+    .wizard-steps {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-top: 1.5rem;
+    }
+
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+        position: relative;
+    }
+
+    .wizard-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+    .wizard-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+
+    .wizard-step.active {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+    }
+
+    .wizard-step .step-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .wizard-step.active .step-num,
+    .wizard-step.completed .step-num {
+        background: white;
+        color: #059669;
+    }
+
+    /* Content layout */
+    .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 350px;
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+        .content-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    /* Model info card */
+    .model-info-card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 1rem;
+    }
+
+    .model-info-card h6 {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .model-info-card .model-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #1f2937;
+    }
+
+    .model-info-card .model-version {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-bottom: 1rem;
+    }
+
+    .model-info-card .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 0.875rem;
+    }
+
+    .model-info-card .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .model-info-card .info-label {
+        color: #6b7280;
+    }
+
+    .model-info-card .info-value {
+        font-weight: 500;
+        color: #1f2937;
+    }
+
+    /* Schema section */
+    .schema-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .schema-section h6 {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .schema-list {
+        font-size: 0.8rem;
+        font-family: monospace;
+        background: #f9fafb;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+
+    .schema-list .feature {
+        padding: 0.25rem 0;
+        color: #374151;
+    }
+
+    .schema-list .feature .type {
+        color: #9ca3af;
+        font-size: 0.75rem;
+    }
+
+    /* Upload area */
+    .upload-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        /* Contain table overflow */
+        max-width: 100%;
+    }
+
+    .upload-card-header {
+        padding: 1.25rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .upload-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .upload-card-body {
+        padding: 1.5rem;
+        /* Prevent content from overflowing the card */
+        overflow: hidden;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+        border: 2px dashed #d1d5db;
+        border-radius: 0.75rem;
+        padding: 3rem 2rem;
+        text-align: center;
+        background: #f9fafb;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .drop-zone:hover {
+        border-color: #10b981;
+        background: #ecfdf5;
+    }
+
+    .drop-zone.dragover {
+        border-color: #10b981;
+        background: #d1fae5;
+    }
+
+    .drop-zone .icon {
+        font-size: 3rem;
+        color: #9ca3af;
+        margin-bottom: 1rem;
+    }
+
+    .drop-zone:hover .icon {
+        color: #10b981;
+    }
+
+    .drop-zone h5 {
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .drop-zone p {
+        color: #6b7280;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .drop-zone .file-types {
+        font-size: 0.8rem;
+        color: #9ca3af;
+    }
+
+    .drop-zone input[type="file"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+    }
+
+    .drop-zone-wrapper {
+        position: relative;
+    }
+
+    /* File info */
+    .file-info {
+        display: none;
+        background: #ecfdf5;
+        border: 1px solid #10b981;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .file-info.show {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .file-info .file-icon {
+        width: 48px;
+        height: 48px;
+        background: #d1fae5;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #059669;
+        font-size: 1.5rem;
+    }
+
+    .file-info .file-details {
+        flex: 1;
+    }
+
+    .file-info .file-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .file-info .file-size {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+
+    .file-info .remove-file {
+        color: #dc2626;
+        cursor: pointer;
+        padding: 0.5rem;
+    }
+
+    /* Data preview */
+    .data-preview {
+        margin-top: 1.5rem;
+        display: none;
+        /* Limit width to prevent overflow */
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .data-preview.show {
+        display: block;
+    }
+
+    .data-preview h6 {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.75rem;
+    }
+
+    .preview-table-wrapper {
+        overflow-x: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        /* Force internal scroll within container */
+        max-width: 100%;
+        max-height: 350px;
+        overflow-y: auto;
+    }
+
+    .preview-table {
+        font-size: 0.85rem;
+        margin: 0;
+        /* Don't set width: 100% - let table size naturally */
+    }
+
+    .preview-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        padding: 0.5rem 0.6rem;
+        white-space: nowrap;
+        font-size: 0.75rem;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .preview-table td {
+        padding: 0.4rem 0.6rem;
+        white-space: nowrap;
+        border-top: 1px solid #f3f4f6;
+        font-size: 0.75rem;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .preview-stats {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+
+    .preview-stats .stat {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    /* Validation errors */
+    .validation-errors {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .validation-errors h6 {
+        color: #991b1b;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .validation-errors ul {
+        margin: 0;
+        padding-left: 1.25rem;
+        color: #7f1d1d;
+        font-size: 0.875rem;
+    }
+
+    /* Action footer */
+    .action-footer {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1.5rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-header {
+            padding: 1.5rem;
+        }
+
+        .wizard-steps {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .wizard-step {
+            border-radius: 0.5rem !important;
+            justify-content: center;
+        }
+
+        .action-footer {
+            flex-direction: column;
+            gap: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Wizard Steps -->
+    <div class="page-header">
+        <div class="text-center">
+            <h1><i class="bi bi-file-earmark-arrow-up me-2"></i>Load Data</h1>
+            <p class="lead">Upload your data file for prediction</p>
+
+            <!-- Wizard Steps -->
+            <div class="wizard-steps">
+                {% for step in wizard_steps %}
+                <div class="wizard-step {% if step.num == wizard_step %}active{% elif step.num < wizard_step %}completed{% endif %}">
+                    <span class="step-num">
+                        {% if step.num < wizard_step %}
+                        <i class="bi bi-check"></i>
+                        {% else %}
+                        {{ step.num }}
+                        {% endif %}
+                    </span>
+                    <i class="{{ step.icon }}"></i>
+                    <span class="d-none d-sm-inline">{{ step.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+        <!-- Main Upload Area -->
+        <div>
+            <div class="upload-card">
+                <div class="upload-card-header">
+                    <h5><i class="bi bi-cloud-upload me-2"></i>Upload Data File</h5>
+                </div>
+                <div class="upload-card-body">
+                    <form id="uploadForm" method="post" action="{% url 'inference:run_prediction' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="model_id" value="{{ model.id }}">
+
+                        <!-- Drop Zone -->
+                        <div class="drop-zone-wrapper">
+                            <div class="drop-zone" id="dropZone">
+                                <input type="file"
+                                       name="data_file"
+                                       id="dataFile"
+                                       accept=".csv,.json"
+                                       required>
+                                <div class="icon">
+                                    <i class="bi bi-cloud-arrow-up"></i>
+                                </div>
+                                <h5>Drop your file here</h5>
+                                <p>or click to browse from your computer</p>
+                                <div class="file-types">
+                                    Supported formats: <strong>CSV</strong>, <strong>JSON</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File Info (shown after selection) -->
+                        <div class="file-info" id="fileInfo">
+                            <div class="file-icon">
+                                <i class="bi bi-file-earmark-spreadsheet"></i>
+                            </div>
+                            <div class="file-details">
+                                <div class="file-name" id="fileName">-</div>
+                                <div class="file-size" id="fileSize">-</div>
+                            </div>
+                            <div class="remove-file" onclick="removeFile()" title="Remove file">
+                                <i class="bi bi-x-lg"></i>
+                            </div>
+                        </div>
+
+                        <!-- Data Preview (placeholder - would be populated via JS/AJAX) -->
+                        <div class="data-preview" id="dataPreview">
+                            <h6><i class="bi bi-table me-1"></i>Data Preview</h6>
+                            <div class="preview-table-wrapper">
+                                <table class="preview-table table table-sm" id="previewTable">
+                                    <thead>
+                                        <tr id="previewHeader"></tr>
+                                    </thead>
+                                    <tbody id="previewBody"></tbody>
+                                </table>
+                            </div>
+                            <div class="preview-stats">
+                                <span class="stat">
+                                    <i class="bi bi-list-ol"></i>
+                                    <span id="rowCount">0</span> rows
+                                </span>
+                                <span class="stat">
+                                    <i class="bi bi-layout-three-columns"></i>
+                                    <span id="colCount">0</span> columns
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Validation Errors (if any) -->
+                        {% if data_errors %}
+                        <div class="validation-errors">
+                            <h6><i class="bi bi-exclamation-triangle me-1"></i>Validation Errors</h6>
+                            <ul>
+                                {% for error in data_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+
+            <!-- Action Footer -->
+            <div class="action-footer">
+                <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Model Selection
+                </a>
+                <div>
+                    <button type="submit" form="uploadForm" class="btn btn-success btn-lg" id="runPredictionBtn" disabled>
+                        <i class="bi bi-play-fill me-1"></i>Run Prediction
+                        <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Info Sidebar -->
+        <div>
+            <div class="model-info-card">
+                <h6><i class="bi bi-box-seam me-1"></i>Selected Model</h6>
+
+                <div class="model-name">{{ model.name }}</div>
+                <div class="model-version">v{{ model.version }}</div>
+
+                <div class="info-row">
+                    <span class="info-label">Domain</span>
+                    <span class="info-value">{{ model.get_domain_display }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Accuracy</span>
+                    <span class="info-value">
+                        {% if model.accuracy_percent %}
+                        {{ model.accuracy_percent|floatformat:1 }}%
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Predictions</span>
+                    <span class="info-value">{{ model.total_predictions }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Max Batch Size</span>
+                    <span class="info-value">{{ model.max_batch_size }} rows</span>
+                </div>
+
+                <!-- Input Schema -->
+                <div class="schema-section">
+                    <h6>Expected Input Features</h6>
+                    <div class="schema-list">
+                        {% for feature in model.input_schema.feature_names %}
+                        <div class="feature">
+                            {{ feature }}
+                            {% if model.input_schema.dtypes %}
+                            <span class="type">({{ model.input_schema.dtypes|default_if_none:"" }})</span>
+                            {% endif %}
+                        </div>
+                        {% empty %}
+                        <div class="feature text-muted">No schema defined</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Output Schema -->
+                <div class="schema-section">
+                    <h6>Output</h6>
+                    <div class="schema-list">
+                        {% if model.output_schema.type %}
+                        <div class="feature">
+                            Type: <strong>{{ model.output_schema.type }}</strong>
+                        </div>
+                        {% endif %}
+                        {% if model.output_schema.classes %}
+                        <div class="feature">
+                            Classes: {{ model.output_schema.classes|join:", " }}
+                        </div>
+                        {% endif %}
+                        {% for output in model.output_schema.output_names %}
+                        <div class="feature">{{ output }}</div>
+                        {% empty %}
+                        {% if not model.output_schema.type %}
+                        <div class="feature text-muted">No schema defined</div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Change Model Link -->
+                <div class="mt-3 text-center">
+                    <a href="{% url 'inference:new_prediction' %}" class="text-decoration-none text-muted small">
+                        <i class="bi bi-arrow-repeat me-1"></i>Change Model
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('dataFile');
+    const fileInfo = document.getElementById('fileInfo');
+    const dataPreview = document.getElementById('dataPreview');
+    const runBtn = document.getElementById('runPredictionBtn');
+
+    // Drag and drop handlers
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect(files[0]);
+        }
+    });
+
+    // File input change handler
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileSelect(e.target.files[0]);
+        }
+    });
+
+    function handleFileSelect(file) {
+        // Validate file type
+        const validTypes = ['.csv', '.json', 'text/csv', 'application/json'];
+        const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+
+        if (!validTypes.includes(fileExt) && !validTypes.includes(file.type)) {
+            alert('Invalid file type. Please upload a CSV or JSON file.');
+            return;
+        }
+
+        // Show file info
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatFileSize(file.size);
+        fileInfo.classList.add('show');
+        dropZone.style.display = 'none';
+
+        // Enable run button
+        runBtn.disabled = false;
+
+        // Parse and preview file
+        parseFile(file);
+    }
+
+    function removeFile() {
+        fileInput.value = '';
+        fileInfo.classList.remove('show');
+        dropZone.style.display = 'block';
+        dataPreview.classList.remove('show');
+        runBtn.disabled = true;
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function parseFile(file) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const fileExt = file.name.split('.').pop().toLowerCase();
+
+            try {
+                let data;
+                if (fileExt === 'csv') {
+                    data = parseCSV(content);
+                } else if (fileExt === 'json') {
+                    data = parseJSON(content);
+                }
+
+                if (data && data.length > 0) {
+                    displayPreview(data);
+                }
+            } catch (error) {
+                console.error('Error parsing file:', error);
+                alert('Error parsing file. Please check the format.');
+            }
+        };
+
+        reader.readAsText(file);
+    }
+
+    function parseCSV(content) {
+        const lines = content.trim().split('\n');
+        if (lines.length === 0) return [];
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        const data = [];
+
+        for (let i = 1; i < lines.length && i <= 6; i++) {  // Preview first 5 rows
+            const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const row = {};
+            headers.forEach((header, idx) => {
+                row[header] = values[idx] || '';
+            });
+            data.push(row);
+        }
+
+        // Store total row count
+        data.totalRows = lines.length - 1;
+        data.headers = headers;
+        return data;
+    }
+
+    function parseJSON(content) {
+        const parsed = JSON.parse(content);
+        let data = Array.isArray(parsed) ? parsed : [parsed];
+
+        // Store total and get preview
+        const totalRows = data.length;
+        data = data.slice(0, 5);  // Preview first 5 rows
+        data.totalRows = totalRows;
+        data.headers = data.length > 0 ? Object.keys(data[0]) : [];
+
+        return data;
+    }
+
+    function displayPreview(data) {
+        const headerRow = document.getElementById('previewHeader');
+        const body = document.getElementById('previewBody');
+
+        // Clear existing content
+        headerRow.innerHTML = '';
+        body.innerHTML = '';
+
+        // Add headers
+        data.headers.forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            headerRow.appendChild(th);
+        });
+
+        // Add rows
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            data.headers.forEach(header => {
+                const td = document.createElement('td');
+                td.textContent = row[header] !== undefined ? row[header] : '';
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+
+        // Update stats
+        document.getElementById('rowCount').textContent = data.totalRows;
+        document.getElementById('colCount').textContent = data.headers.length;
+
+        // Show preview
+        dataPreview.classList.add('show');
+    }
+</script>
+{% endblock %}

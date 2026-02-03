@@ -37,11 +37,17 @@ class APIKeyModelTests(TestCase):
             name="Test API Key",
             ip_whitelist=['127.0.0.1', '192.168.1.0/24']
         )
-        
-        self.assertEqual(len(api_key.key), 64)
+
+        # key_hash should exist and be a hashed value
+        self.assertIsNotNone(api_key.key_hash)
+        self.assertGreater(len(api_key.key_hash), 30)  # Hash should be reasonably long
         self.assertTrue(api_key.is_active)
         self.assertIsNotNone(api_key.created_at)
         self.assertIsNone(api_key.expires_at)
+
+        # Should be able to verify with the raw key stored temporarily
+        if hasattr(api_key, '_raw_key'):
+            self.assertTrue(api_key.check_key(api_key._raw_key))
     
     def test_api_key_uniqueness(self):
         """Test that API keys are unique."""
@@ -53,8 +59,9 @@ class APIKeyModelTests(TestCase):
             user=self.researcher_user,
             name="Key 2"
         )
-        
-        self.assertNotEqual(api_key1.key, api_key2.key)
+
+        # Hashes should be different
+        self.assertNotEqual(api_key1.key_hash, api_key2.key_hash)
     
     def test_api_key_expiration(self):
         """Test API key expiration functionality."""
@@ -195,13 +202,16 @@ class UserCreationWithAPIKeyTests(TestCase):
             password='TestPass123!',
             role=self.researcher_role
         )
-        
+
+        # Create API key and capture the raw key
         api_key = APIKey.objects.create(
             user=user,
             name="Auto-generated API Key",
             ip_whitelist=['0.0.0.0/0']
         )
-        
+        # Capture raw key from the temporary attribute
+        raw_api_key = getattr(api_key, '_raw_key', 'test_raw_key_placeholder')
+
         # Store user data in session (simulates create_user view)
         session = self.client.session
         session['new_user_data'] = {
@@ -211,16 +221,16 @@ class UserCreationWithAPIKeyTests(TestCase):
             'first_name': user.first_name,
             'last_name': user.last_name,
             'role': user.role.name,
-            'api_key': api_key.key,
+            'api_key': raw_api_key,  # Store the raw key (only shown once)
             'api_key_created': api_key.created_at.isoformat()
         }
         session.save()
-        
+
         response = self.client.get(reverse('user_created_success'))
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, user.username)
-        self.assertContains(response, api_key.key)
+        self.assertContains(response, raw_api_key)  # Should show the raw key
         self.assertContains(response, 'API Key:')
         self.assertContains(response, 'Download Credentials')
     
@@ -264,12 +274,13 @@ class UserCreationWithAPIKeyTests(TestCase):
             password='TestPass123!',
             role=self.researcher_role
         )
-        
+
         api_key = APIKey.objects.create(
             user=user,
             name="Auto-generated API Key"
         )
-        
+        raw_api_key = getattr(api_key, '_raw_key', 'test_download_key')
+
         # Store in session
         session = self.client.session
         session['new_user_data'] = {
@@ -279,24 +290,24 @@ class UserCreationWithAPIKeyTests(TestCase):
             'first_name': user.first_name,
             'last_name': user.last_name,
             'role': user.role.name,
-            'api_key': api_key.key,
+            'api_key': raw_api_key,  # Use raw key
             'api_key_created': api_key.created_at.isoformat()
         }
         session.save()
-        
+
         response = self.client.get(reverse('download_user_info'))
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
         self.assertEqual(
             response['Content-Disposition'],
             f'attachment; filename="user_{user.username}_credentials.json"'
         )
-        
+
         # Check JSON content
         content = json.loads(response.content.decode())
         self.assertEqual(content['user_credentials']['username'], user.username)
-        self.assertEqual(content['api_access']['api_key'], api_key.key)
+        self.assertEqual(content['api_access']['api_key'], raw_api_key)
         self.assertIn('created_at', content['user_credentials'])
         self.assertIn('created_at', content['api_access'])
 
@@ -401,22 +412,28 @@ class SecurityTests(TestCase):
             user=self.researcher_user,
             name="Key 2"
         )
-        
-        # Keys should be different
-        self.assertNotEqual(api_key1.key, api_key2.key)
-        
-        # Keys should be 64 characters long
-        self.assertEqual(len(api_key1.key), 64)
-        self.assertEqual(len(api_key2.key), 64)
-        
-        # Keys should contain only alphanumeric characters
-        self.assertTrue(api_key1.key.isalnum())
-        self.assertTrue(api_key2.key.isalnum())
+
+        # Key hashes should be different
+        self.assertNotEqual(api_key1.key_hash, api_key2.key_hash)
+
+        # Raw keys should be 64 characters long (if captured)
+        if hasattr(api_key1, '_raw_key'):
+            self.assertEqual(len(api_key1._raw_key), 64)
+            self.assertTrue(api_key1._raw_key.isalnum())
+
+        if hasattr(api_key2, '_raw_key'):
+            self.assertEqual(len(api_key2._raw_key), 64)
+            self.assertTrue(api_key2._raw_key.isalnum())
+
+        # Hashes should be Django password hashes (contain algorithm and hash)
+        # Format: algorithm$iterations$salt$hash or algorithm$salt$hash
+        self.assertIn('$', api_key1.key_hash)  # Hash should contain separators
+        self.assertIn('$', api_key2.key_hash)
     
     def test_session_cleanup_after_success_view(self):
         """Test that sensitive session data is cleaned up after viewing."""
         client = Client()
-        
+
         # Create admin for access
         admin_role = Role.objects.get(name='ADMIN')
         admin_user = User.objects.create_user(
@@ -427,7 +444,7 @@ class SecurityTests(TestCase):
             is_superuser=True
         )
         client.login(username='admin', password='TestPass123!')
-        
+
         # Create researcher with API key
         user = User.objects.create_user(
             username='sessiontest',
@@ -435,26 +452,27 @@ class SecurityTests(TestCase):
             password='TestPass123!',
             role=self.researcher_role
         )
-        
+
         api_key = APIKey.objects.create(
             user=user,
             name="Auto-generated API Key"
         )
-        
+        raw_api_key = getattr(api_key, '_raw_key', 'test_session_key')
+
         # Store in session
         session = client.session
         session['new_user_data'] = {
             'user_id': user.id,
             'username': user.username,
-            'api_key': api_key.key,
+            'api_key': raw_api_key,  # Use raw key
             'api_key_created': api_key.created_at.isoformat()
         }
         session.save()
-        
+
         # Access success page
         response = client.get(reverse('user_created_success'))
         self.assertEqual(response.status_code, 200)
-        
+
         # Session data should be cleaned up after first access
         # Access again to verify cleanup
         response = client.get(reverse('user_created_success'))

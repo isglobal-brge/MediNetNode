@@ -502,3 +502,37 @@ Timestamp: {audit_event.timestamp}
             request_duration_ms=request_duration_ms,
             **kwargs
         )
+
+    @classmethod
+    def log_security_violation(
+        cls,
+        violation_type: str,
+        user,
+        details: Dict[str, Any],
+        ip_address: str = '',
+        resource: str = '',
+        **kwargs
+    ) -> AuditEvent:
+        """
+        Log security violations (path traversal, injection attempts, etc.).
+
+        Args:
+            violation_type: Type of violation (e.g., 'PATH_TRAVERSAL', 'SQL_INJECTION')
+            user: User attempting the violation
+            details: Details about the attempt (e.g., malicious filename, payload)
+            ip_address: IP address of attacker
+            resource: Resource being targeted
+            **kwargs: Additional event parameters
+
+        Returns:
+            Created AuditEvent instance with high risk score
+        """
+        return cls.log_event(
+            action=f'SECURITY_VIOLATION_{violation_type}',
+            user=user,
+            resource=resource,
+            ip_address=ip_address,
+            success=False,  # Security violations are always failures
+            details=details,
+            **kwargs
+        )

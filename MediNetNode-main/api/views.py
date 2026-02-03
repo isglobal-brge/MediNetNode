@@ -16,10 +16,125 @@ from drf_yasg import openapi
 from rest_framework.decorators import api_view
 from multiprocessing import Process
 from datetime import datetime
+from medinet.error_handlers import SafeErrorResponse
 
 logger = logging.getLogger(__name__)
 
 CLIENT_VERSION = "0.1" # Version of the client API, used for versioning and compatibility checks
+
+# JSON schema for training configuration validation
+TRAINING_CONFIG_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "model_json": {
+            "type": "object",
+            "maxProperties": 100
+        },
+        "server_address": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9.-]+:[0-9]{1,5}$",
+            "maxLength": 100
+        },
+        "client_id": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "ca_cert": {
+            "type": "string",
+            "maxLength": 10000
+        },
+        "ssl_enabled": {
+            "type": "boolean"
+        }
+    },
+    "required": ["model_json"],
+    "additionalProperties": True
+}
+
+# Maximum JSON payload size (5MB)
+MAX_JSON_SIZE = 5 * 1024 * 1024
+
+# Blocked server patterns (SSRF protection)
+ALWAYS_BLOCKED_PATTERNS = [
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0'
+]
+
+PRIVATE_NETWORK_PATTERNS = [
+    '192.168.',
+    '10.',
+    '172.16.',
+    '172.17.',
+    '172.18.',
+    '172.19.',
+    '172.20.',
+    '172.21.',
+    '172.22.',
+    '172.23.',
+    '172.24.',
+    '172.25.',
+    '172.26.',
+    '172.27.',
+    '172.28.',
+    '172.29.',
+    '172.30.',
+    '172.31.'
+]
+
+
+def validate_training_config(data, request_body_size):
+    """
+    Validate training configuration against security rules.
+
+    Args:
+        data: Parsed JSON configuration
+        request_body_size: Size of request body in bytes
+
+    Returns:
+        JsonResponse with error if validation fails, None if passes
+    """
+    from jsonschema import validate, ValidationError
+
+    # Size limit check
+    if request_body_size > MAX_JSON_SIZE:
+        logger.warning(f"Training config exceeds size limit: {request_body_size} bytes")
+        return JsonResponse({
+            'error': 'Configuration too large'
+        }, status=400)
+
+    # Schema validation
+    try:
+        validate(instance=data, schema=TRAINING_CONFIG_SCHEMA)
+    except ValidationError as e:
+        logger.warning(f"Training config schema validation failed: {e.message}")
+        return JsonResponse({
+            'error': 'Invalid configuration format'
+        }, status=400)
+
+    # SSRF protection - block localhost always
+    server_address = data.get("server_address", "localhost:8080")
+    server_host = server_address.split(':')[0].lower()
+
+    # Always block localhost/loopback
+    for blocked_pattern in ALWAYS_BLOCKED_PATTERNS:
+        if server_host.startswith(blocked_pattern):
+            logger.warning(f"Blocked localhost server address: {server_address}")
+            return JsonResponse({
+                'error': 'Localhost addresses not allowed'
+            }, status=403)
+
+    # Block private networks only if not explicitly allowed (check dynamically)
+    allow_private = getattr(settings, 'ALLOW_PRIVATE_FL_SERVERS', False)
+    if not allow_private:
+        for blocked_pattern in PRIVATE_NETWORK_PATTERNS:
+            if server_host.startswith(blocked_pattern):
+                logger.warning(f"Blocked private network server address: {server_address}")
+                return JsonResponse({
+                    'error': 'Private network addresses not allowed. Set ALLOW_PRIVATE_FL_SERVERS=True in settings to enable.'
+                }, status=403)
+
+    return None
 
 
 def api_view_required(view_func):
@@ -77,10 +192,7 @@ def get_data_info(request):
         return JsonResponse(data_dict)
         
     except Exception as e:
-        logger.error(f"Error in get_data_info for user {request.api_user.username}: {str(e)}")
-        return JsonResponse({
-            'error': 'Internal server error retrieving dataset information'
-        }, status=500)
+        return SafeErrorResponse.internal_error(request, e, "get_data_info")
 
 
 @csrf_exempt
@@ -105,6 +217,11 @@ def start_client(request):
             }, status=400)
         logger.info(f"start_client request from user {user.username}")
         logger.debug(f"Request data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+
+        # Validate training configuration
+        validation_error = validate_training_config(data, len(request.body))
+        if validation_error is not None:
+            return validation_error
         
         # Extract and validate required parameters
         model_json = data.get("model_json")
@@ -170,10 +287,7 @@ def start_client(request):
             logger.info(f"[OK] Training session created: {training_session.session_id}")
             
         except Exception as e:
-            logger.error(f"[ERROR] Error creating training session: {e}")
-            return JsonResponse({
-                'error': 'Failed to create training session'
-            }, status=500)
+            return SafeErrorResponse.internal_error(request, e, "create_training_session")
         
         # Save training request JSON to documentation folder for ML testing
         try:
@@ -224,10 +338,7 @@ def start_client(request):
         return JsonResponse(response_data, status=200)
         
     except Exception as e:
-        logger.error(f"[ERROR]Error in start_client for user {request.api_user.username}: {str(e)}")
-        return JsonResponse({
-            'error': 'Internal server error starting client'
-        }, status=500)
+        return SafeErrorResponse.internal_error(request, e, "start_client")
 
 
 def extract_dataset_id_from_model(model_json):
@@ -339,10 +450,7 @@ def validate_training_permissions(user, model_json):
         return None  # Validation passed
         
     except Exception as e:
-        logger.error(f"Error validating dataset permissions for user {user.username}: {str(e)}")
-        return JsonResponse({
-            'error': 'Internal server error validating permissions'
-        }, status=500)
+        return SafeErrorResponse.internal_error(request, e, "validate_dataset_permissions")
 
 
 def get_user_datasets(user):

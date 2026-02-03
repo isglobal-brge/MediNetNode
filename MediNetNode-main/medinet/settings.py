@@ -29,7 +29,7 @@ def get_secret_key():
 SECRET_KEY = get_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [h.strip() for h in config('ALLOWED_HOSTS', default='').split(',') if h.strip()]
 
@@ -55,10 +55,12 @@ INSTALLED_APPS = [
     'dataset',
     'api',  # API for RESEARCHER users
     'trainings',  # Training monitoring system
+    'inference',  # ONNX model inference system
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'medinet.security_middleware.SecurityHeadersMiddleware',  # CSP and security headers
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -318,3 +320,15 @@ SWAGGER_SETTINGS = {
     'LOGIN_URL': None,
     'LOGOUT_URL': None,
 }
+
+# Custom error handlers
+handler400 = 'medinet.error_handlers.handler400'
+handler403 = 'medinet.error_handlers.handler403'
+handler404 = 'medinet.error_handlers.handler404'
+handler500 = 'medinet.error_handlers.handler500'
+
+# Security settings for FL servers
+ALLOW_PRIVATE_FL_SERVERS = config('ALLOW_PRIVATE_FL_SERVERS', default=False, cast=bool)
+
+# Trusted proxies for X-Forwarded-For validation
+TRUSTED_PROXIES = [ip.strip() for ip in config('TRUSTED_PROXIES', default='').split(',') if ip.strip()]

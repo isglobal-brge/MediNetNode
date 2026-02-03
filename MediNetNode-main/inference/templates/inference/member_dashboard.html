@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Dataset metrics purple color */
+    .bg-purple {
+        background-color: #9c27b0 !important;
+    }
+    .text-purple {
+        color: #9c27b0 !important;
+    }
+    .bg-purple.bg-opacity-10 {
+        background-color: rgba(156, 39, 176, 0.1) !important;
+    }
+
+    /* Activity timeline styles */
+    .activity-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    .activity-timeline::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e9ecef;
+    }
+    .activity-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    .activity-icon {
+        position: absolute;
+        left: -30px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        background: white;
+        border: 2px solid;
+    }
+    .activity-content {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+    }
+
+    /* Model status badges */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+
+    /* Action buttons in tables */
+    .action-btn {
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        margin: 0 2px;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Welcome Banner -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="modern-card p-3" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white;">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <h5 class="mb-1 fw-bold">
+                        Welcome back, {{ username }}
+                    </h5>
+                    <small class="opacity-75">
+                        {% if last_login %}
+                            Last login: {{ last_login|timesince }} ago
+                        {% else %}
+                            First time login
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="d-flex gap-2 mt-3 mt-md-0">
+                    <a href="{% url 'inference:new_prediction' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-cpu me-1"></i>New Prediction
+                    </a>
+                    <a href="{% url 'inference:upload_model' %}" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-cloud-upload me-1"></i>Upload Model
+                    </a>
+                    <a href="{% url 'dataset:upload' %}" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-database me-1"></i>Upload Dataset
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-3">
+    <!-- My Datasets -->
+    <div class="col-xl col-lg-4 col-md-6">
+        <a href="{% url 'dataset:dashboard' %}" class="text-decoration-none">
+            <div class="modern-card p-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="stat-card-icon bg-purple bg-opacity-10 text-purple me-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+                        <i class="bi bi-database"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-0">{{ my_datasets_count }}</h4>
+                        <small class="text-muted">My Datasets</small>
+                    </div>
+                    <small class="text-purple ms-2">+{{ my_datasets_recent }}</small>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- My Models -->
+    <div class="col-xl col-lg-4 col-md-6">
+        <a href="{% url 'inference:my_models' %}" class="text-decoration-none">
+            <div class="modern-card p-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="stat-card-icon bg-primary bg-opacity-10 text-primary me-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+                        <i class="bi bi-diagram-3"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-0">{{ my_models_count }}</h4>
+                        <small class="text-muted">My Models</small>
+                    </div>
+                    <small class="text-success ms-2">{{ my_models_active }} active</small>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Predictions This Month -->
+    <div class="col-xl col-lg-4 col-md-6">
+        <a href="{% url 'inference:my_history' %}" class="text-decoration-none">
+            <div class="modern-card p-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="stat-card-icon bg-success bg-opacity-10 text-success me-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-0">{{ predictions_this_month }}</h4>
+                        <small class="text-muted">Predictions</small>
+                    </div>
+                    <small class="text-success ms-2">+{{ predictions_today }}</small>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Pending Models -->
+    <div class="col-xl col-lg-6 col-md-6">
+        <a href="{% url 'inference:my_models' %}?status=pending" class="text-decoration-none">
+            <div class="modern-card p-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="stat-card-icon bg-warning bg-opacity-10 text-warning me-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+                        <i class="bi bi-hourglass"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-0">{{ pending_models_count }}</h4>
+                        <small class="text-muted">Pending</small>
+                    </div>
+                    {% if pending_models_count > 0 %}
+                    <small class="text-warning ms-2"><i class="bi bi-exclamation-triangle"></i></small>
+                    {% else %}
+                    <small class="text-success ms-2"><i class="bi bi-check-circle"></i></small>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Total Storage -->
+    <div class="col-xl col-lg-6 col-md-6">
+        <a href="{% url 'dataset:dashboard' %}" class="text-decoration-none">
+            <div class="modern-card p-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="stat-card-icon bg-info bg-opacity-10 text-info me-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+                        <i class="bi bi-hdd"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h4 class="mb-0">{{ storage_formatted }}</h4>
+                        <small class="text-muted">Storage</small>
+                    </div>
+                    {% if storage_percentage >= 90 %}
+                    <small class="text-danger ms-2">{{ storage_percentage }}%</small>
+                    {% elif storage_percentage >= 75 %}
+                    <small class="text-warning ms-2">{{ storage_percentage }}%</small>
+                    {% else %}
+                    <small class="text-info ms-2">{{ storage_percentage }}%</small>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Two-Column Content: Recent Models & Activity Feed -->
+<div class="row g-4 mb-4">
+    <!-- Left Column: Recent Models -->
+    <div class="col-lg-7">
+        <div class="modern-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 fw-bold">
+                    <i class="bi bi-diagram-3 me-2"></i>My Models Status
+                </h5>
+                <a href="{% url 'inference:my_models' %}" class="btn btn-sm btn-outline-primary">
+                    View All <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+
+            {% if recent_models %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Model Name</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for model in recent_models %}
+                        <tr>
+                            <td>
+                                <div class="fw-medium">{{ model.name }}</div>
+                                <small class="text-muted">{{ model.domain|title }}</small>
+                            </td>
+                            <td>
+                                {% if model.status == 'approved' %}
+                                <span class="status-badge bg-success text-white">
+                                    <i class="bi bi-check-circle"></i> Active
+                                </span>
+                                {% elif model.status == 'pending' %}
+                                <span class="status-badge bg-warning text-dark">
+                                    <i class="bi bi-hourglass"></i> Pending
+                                </span>
+                                {% elif model.status == 'rejected' %}
+                                <span class="status-badge bg-danger text-white">
+                                    <i class="bi bi-x-circle"></i> Rejected
+                                </span>
+                                {% else %}
+                                <span class="status-badge bg-secondary text-white">
+                                    <i class="bi bi-pause-circle"></i> {{ model.status|title }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary action-btn">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                {% if model.status == 'pending' %}
+                                <button class="btn btn-sm btn-outline-secondary action-btn">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-diagram-3 text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-3">No models uploaded yet</p>
+                <a href="{% url 'inference:upload_model' %}" class="btn btn-primary">
+                    <i class="bi bi-cloud-upload me-1"></i>Upload Your First Model
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Recent Activity Feed -->
+    <div class="col-lg-5">
+        <div class="modern-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 fw-bold">
+                    <i class="bi bi-clock-history me-2"></i>Recent Activity
+                </h5>
+            </div>
+
+            {% if recent_activities %}
+            <div class="activity-timeline">
+                {% for activity in recent_activities %}
+                <div class="activity-item">
+                    <div class="activity-icon border-{{ activity.color }}">
+                        <i class="{{ activity.icon }} text-{{ activity.color }}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <p class="mb-1 small fw-medium">{{ activity.description }}</p>
+                                {% if activity.size %}
+                                <small class="text-muted">Size: {{ activity.size }}</small>
+                                {% endif %}
+                                {% if activity.status %}
+                                <small class="text-muted">Status: {{ activity.status|title }}</small>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">{{ activity.timestamp|timesince }} ago</small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-3">No recent activity</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Recommended Actions -->
+{% if recommendations %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="modern-card p-4">
+            <h5 class="mb-3 fw-bold">
+                <i class="bi bi-lightbulb me-2"></i>Recommended Actions
+            </h5>
+            <div class="row g-3">
+                {% for rec in recommendations %}
+                <div class="col-12">
+                    <div class="alert alert-{{ rec.type }} d-flex align-items-center mb-0" role="alert">
+                        <i class="{{ rec.icon }} me-3" style="font-size: 1.5rem;"></i>
+                        <div class="flex-grow-1">
+                            {{ rec.message }}
+                        </div>
+                        <a href="{{ rec.action_url }}" class="btn btn-sm btn-{{ rec.type }} ms-3">
+                            {{ rec.action_text }} <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

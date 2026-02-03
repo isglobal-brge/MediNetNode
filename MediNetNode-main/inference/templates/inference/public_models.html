@@ -1,0 +1,515 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Header solid color */
+    .page-header {
+        background: #1e40af;
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-header .lead {
+        opacity: 0.9;
+        margin-bottom: 0;
+    }
+
+    /* Stats pills */
+    .stats-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+
+    .stat-pill {
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        border-radius: 2rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .stat-pill strong {
+        font-weight: 600;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .filter-bar .form-control,
+    .filter-bar .form-select {
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+    }
+
+    .filter-bar .form-control:focus,
+    .filter-bar .form-select:focus {
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 0.2rem rgba(139, 92, 246, 0.15);
+    }
+
+    /* Model cards grid */
+    .models-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.25rem;
+    }
+
+    /* Model card */
+    .model-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .model-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+
+    .model-card-header {
+        padding: 1.25rem 1.25rem 0.75rem;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .model-card-header h5 {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+        color: #1f2937;
+    }
+
+    .model-card-header .version {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    .model-card-body {
+        padding: 1rem 1.25rem;
+        flex-grow: 1;
+    }
+
+    .model-card-body .description {
+        font-size: 0.875rem;
+        color: #4b5563;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+
+    .model-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .meta-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 1rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .meta-badge i {
+        font-size: 0.7rem;
+    }
+
+    .domain-cardiology { background: #fee2e2; color: #991b1b; }
+    .domain-neurology { background: #dbeafe; color: #1e40af; }
+    .domain-oncology { background: #fef3c7; color: #92400e; }
+    .domain-radiology { background: #e0e7ff; color: #3730a3; }
+    .domain-pathology { background: #fce7f3; color: #9d174d; }
+    .domain-general { background: #d1fae5; color: #065f46; }
+
+    .model-card-stats {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: #6b7280;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .model-card-stats .stat {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .model-card-footer {
+        padding: 1rem 1.25rem;
+        background: #f9fafb;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .model-card-footer .btn {
+        flex: 1;
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Owner badge */
+    .owner-badge {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        background: #1e40af;
+        color: white;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+
+    .model-card-wrapper {
+        position: relative;
+    }
+
+    /* Accuracy indicator */
+    .accuracy-badge {
+        background: #ecfdf5;
+        color: #047857;
+        font-weight: 600;
+    }
+
+    .accuracy-badge.high { background: #dcfce7; color: #166534; }
+    .accuracy-badge.medium { background: #fef9c3; color: #854d0e; }
+    .accuracy-badge.low { background: #fee2e2; color: #991b1b; }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        color: #d1d5db;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state h4 {
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Results count */
+    .results-info {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Pagination */
+    .pagination-wrapper {
+        margin-top: 2rem;
+    }
+
+    .pagination .page-link {
+        border-radius: 0.5rem;
+        margin: 0 0.125rem;
+        border: none;
+        color: #6b7280;
+    }
+
+    .pagination .page-item.active .page-link {
+        background: #1e40af;
+        color: white;
+    }
+
+    .pagination .page-link:hover {
+        background: #f3f4f6;
+        color: #1f2937;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-header {
+            padding: 1.5rem;
+        }
+
+        .models-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filter-bar .row > div {
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1><i class="bi bi-globe me-2"></i>Public Models</h1>
+                <p class="lead">Browse approved models available for inference</p>
+
+                <!-- Stats pills -->
+                <div class="stats-row">
+                    <div class="stat-pill">
+                        <i class="bi bi-box-seam"></i>
+                        <strong>{{ total_public }}</strong> Total Models
+                    </div>
+                    {% for domain, count in stats_by_domain.items %}
+                    <div class="stat-pill">
+                        <i class="bi bi-tag"></i>
+                        {{ domain|title }}: <strong>{{ count }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="{% url 'inference:upload_model' %}" class="btn btn-light btn-lg">
+                    <i class="bi bi-upload me-2"></i>Upload Your Model
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" id="filterForm">
+            <div class="row g-2 align-items-center">
+                <!-- Search -->
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0">
+                            <i class="bi bi-search text-muted"></i>
+                        </span>
+                        <input type="text"
+                               name="q"
+                               class="form-control border-start-0"
+                               placeholder="Search models..."
+                               value="{{ search_query }}">
+                    </div>
+                </div>
+
+                <!-- Domain Filter -->
+                <div class="col-md-3">
+                    <select name="domain" class="form-select" onchange="this.form.submit()">
+                        <option value="all">All Domains</option>
+                        {% for domain_code in domains %}
+                        <option value="{{ domain_code }}" {% if domain_filter == domain_code %}selected{% endif %}>
+                            {{ domain_code|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Sort -->
+                <div class="col-md-3">
+                    <select name="sort" class="form-select" onchange="this.form.submit()">
+                        {% for value, label in sort_choices %}
+                        <option value="{{ value }}" {% if sort_by == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Search Button -->
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Info -->
+    {% if search_query or domain_filter != 'all' %}
+    <div class="results-info">
+        <span>Showing {{ total_count }} result{{ total_count|pluralize }}</span>
+        {% if search_query %}
+            for "<strong>{{ search_query }}</strong>"
+        {% endif %}
+        {% if domain_filter != 'all' %}
+            in <strong>{{ domain_filter|title }}</strong>
+        {% endif %}
+        <a href="{% url 'inference:public_models' %}" class="ms-2 text-decoration-none">
+            <i class="bi bi-x-circle"></i> Clear filters
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Models Grid -->
+    {% if models %}
+    <div class="models-grid">
+        {% for model in models %}
+        <div class="model-card-wrapper">
+            {% if model.id in user_model_ids %}
+            <span class="owner-badge"><i class="bi bi-person-check me-1"></i>Your Model</span>
+            {% endif %}
+            <div class="model-card">
+                <div class="model-card-header">
+                    <h5>{{ model.name }}</h5>
+                    <span class="version">v{{ model.version }}</span>
+                </div>
+
+                <div class="model-card-body">
+                    <p class="description">{{ model.description }}</p>
+
+                    <div class="model-card-meta">
+                        <!-- Domain badge -->
+                        <span class="meta-badge domain-{{ model.domain }}">
+                            <i class="bi bi-tag-fill"></i>
+                            {{ model.get_domain_display }}
+                        </span>
+
+                        <!-- Accuracy badge -->
+                        {% if model.accuracy_percent %}
+                        <span class="meta-badge accuracy-badge {% if model.accuracy_percent >= 90 %}high{% elif model.accuracy_percent >= 70 %}medium{% else %}low{% endif %}">
+                            <i class="bi bi-bullseye"></i>
+                            {{ model.accuracy_percent|floatformat:1 }}%
+                        </span>
+                        {% endif %}
+
+                        <!-- Source badge -->
+                        <span class="meta-badge bg-light text-secondary">
+                            <i class="bi bi-{% if model.source == 'training' %}cpu{% else %}upload{% endif %}"></i>
+                            {{ model.get_source_display }}
+                        </span>
+                    </div>
+
+                    <div class="model-card-stats">
+                        <span class="stat" title="Total predictions">
+                            <i class="bi bi-graph-up"></i>
+                            {{ model.total_predictions|default:0 }} predictions
+                        </span>
+                        <span class="stat" title="File size">
+                            <i class="bi bi-hdd"></i>
+                            {{ model.file_size_formatted }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="model-card-footer">
+                    <a href="{% url 'inference:model_detail' model.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-info-circle me-1"></i>Details
+                    </a>
+                    <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-primary">
+                        <i class="bi bi-play-fill me-1"></i>Use Model
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if models.has_other_pages %}
+    <div class="pagination-wrapper">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if models.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ models.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for num in models.paginator.page_range %}
+                    {% if models.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > models.number|add:'-3' and num < models.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if models.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ models.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state">
+        <i class="bi bi-box-seam"></i>
+        {% if search_query or domain_filter != 'all' %}
+        <h4>No models found</h4>
+        <p>Try adjusting your search criteria or filters</p>
+        <a href="{% url 'inference:public_models' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters
+        </a>
+        {% else %}
+        <h4>No public models yet</h4>
+        <p>Be the first to share a model with the community!</p>
+        <a href="{% url 'inference:upload_model' %}" class="btn btn-primary">
+            <i class="bi bi-upload me-1"></i>Upload Model
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Clear search on escape key
+    document.querySelector('input[name="q"]').addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            this.value = '';
+            this.form.submit();
+        }
+    });
+</script>
+{% endblock %}

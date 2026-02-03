@@ -1,6 +1,18 @@
 """
 Django management command to generate API keys for RESEARCHER users.
-Usage: python manage.py generate_api_key <username> --ips <ip1,ip2,...> --name <key_name>
+
+Usage examples:
+  # Single IP
+  python manage.py generate_api_key researcher1 --ips 203.0.113.10 --name "Lab PC"
+
+  # Multiple IPs
+  python manage.py generate_api_key researcher1 --ips 203.0.113.10,203.0.113.20 --name "Lab Network"
+
+  # CIDR range
+  python manage.py generate_api_key researcher1 --ips 203.0.113.0/24 --name "University Network"
+
+  # Mixed (single IPs + CIDR)
+  python manage.py generate_api_key researcher1 --ips 203.0.113.10,192.168.1.0/24 --name "Mixed Access"
 """
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
@@ -24,7 +36,7 @@ class Command(BaseCommand):
             '--ips',
             type=str,
             required=True,
-            help='Comma-separated list of allowed IP addresses'
+            help='Comma-separated list of allowed IP addresses or CIDR ranges (e.g., 203.0.113.10,192.168.1.0/24)'
         )
         parser.add_argument(
             '--name',
@@ -61,33 +73,43 @@ class Command(BaseCommand):
             if expires_days:
                 expires_at = timezone.now() + timedelta(days=expires_days)
 
-            # Create API key
-            api_key = APIKey.objects.create(
+            # Generate raw API key first
+            raw_key = APIKey.generate_api_key()
+
+            # Create API key object and hash it
+            api_key = APIKey(
                 user=user,
                 name=key_name,
                 ip_whitelist=ip_list,
                 expires_at=expires_at
             )
+            # Set the key (this will hash it internally)
+            api_key.set_key(raw_key)
+            api_key.save()
 
-            # Output results
+            # Output results - show raw key ONLY THIS ONE TIME
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'Successfully created API key for {username}'
+                    f'\n✓ Successfully created API key for {username}'
                 )
             )
-            self.stdout.write(f'API Key: {api_key.key}')
-            self.stdout.write(f'Name: {key_name}')
+            self.stdout.write(self.style.WARNING('\n' + '='*60))
+            self.stdout.write(self.style.WARNING('  API KEY (SAVE THIS - WILL NOT BE SHOWN AGAIN)'))
+            self.stdout.write(self.style.WARNING('='*60))
+            self.stdout.write(f'\n  {raw_key}\n')
+            self.stdout.write(self.style.WARNING('='*60))
+            self.stdout.write(f'\nName: {key_name}')
             self.stdout.write(f'Allowed IPs: {", ".join(ip_list)}')
-            
+
             if expires_at:
-                self.stdout.write(f'Expires: {expires_at}')
+                self.stdout.write(f'Expires: {expires_at.strftime("%Y-%m-%d %H:%M:%S")}')
             else:
                 self.stdout.write('Expires: Never')
 
             self.stdout.write(
                 self.style.WARNING(
-                    '\nSECURITY WARNING: Store this API key securely. '
-                    'It will not be shown again.'
+                    '\n⚠️  SECURITY WARNING: The API key above is hashed in the database.\n'
+                    '   It cannot be retrieved later. Store it securely now!\n'
                 )
             )
 

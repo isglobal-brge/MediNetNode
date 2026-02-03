@@ -44,6 +44,7 @@ urlpatterns = [
     path('datasets/', include('dataset.urls')),
     path('audit/', include('audit.urls')),  # Audit dashboard for AUDITOR users
     path('trainings/', include('trainings.urls')),  # Training monitoring for ADMIN/AUDITOR users
+    path('inference/', include('inference.urls')),  # Inference management for MEMBER/ADMIN users
     path('api/', include('api.urls')),  # API endpoints for RESEARCHER users
     # Swagger/API Documentation URLs
     path('api/docs/swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

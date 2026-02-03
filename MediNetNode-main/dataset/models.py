@@ -80,7 +80,20 @@ class Dataset(models.Model):
     access_count = models.PositiveIntegerField(default=0)
     
     # Security and integrity fields
-    checksum_md5 = models.CharField(max_length=32, editable=False)
+    checksum_sha256 = models.CharField(
+        max_length=64,
+        editable=False,
+        null=True,
+        blank=True,
+        help_text='SHA-256 checksum for file integrity verification'
+    )
+    checksum_md5_deprecated = models.CharField(
+        max_length=32,
+        editable=False,
+        null=True,
+        blank=True,
+        help_text='DEPRECATED: MD5 checksum (vulnerable). Use checksum_sha256 instead.'
+    )
     is_active = models.BooleanField(default=True)
     
     # Federated learning fields
@@ -98,15 +111,26 @@ class Dataset(models.Model):
         return f"{self.name} ({self.medical_domain})"
         
     def calculate_checksum(self) -> str:
-        """Calculate MD5 checksum of the file."""
+        """
+        Calculate SHA-256 checksum of the file.
+
+        SHA-256 provides cryptographically secure file integrity verification,
+        resistant to collision attacks that compromise MD5.
+
+        Returns:
+            64-character hexadecimal SHA-256 hash
+
+        Raises:
+            ValidationError: If file does not exist
+        """
         if not os.path.exists(self.file_path):
             raise ValidationError(f"File not found: {self.file_path}")
-            
-        hash_md5 = hashlib.md5()
+
+        hash_sha256 = hashlib.sha256()
         with open(self.file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
     
     def update_access_count(self):
         """Update access count and last accessed timestamp."""
@@ -144,11 +168,11 @@ class Dataset(models.Model):
         if self.file_path and os.path.exists(self.file_path):
             if not self.file_size:
                 self.file_size = os.path.getsize(self.file_path)
-            
+
             # Calculate checksum if not provided or file changed
-            if not self.checksum_md5:
-                self.checksum_md5 = self.calculate_checksum()
-        
+            if not self.checksum_sha256:
+                self.checksum_sha256 = self.calculate_checksum()
+
         super().save(*args, **kwargs)
 
 
