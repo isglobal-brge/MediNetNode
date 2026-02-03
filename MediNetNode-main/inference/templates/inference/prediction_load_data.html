@@ -440,7 +440,13 @@
     <div class="page-header">
         <div class="text-center">
             <h1><i class="bi bi-file-earmark-arrow-up me-2"></i>Load Data</h1>
-            <p class="lead">Upload your data file for prediction</p>
+            <p class="lead">
+                {% if mode == 'multi' %}
+                Upload your data file for multi-model prediction
+                {% else %}
+                Upload your data file for prediction
+                {% endif %}
+            </p>
 
             <!-- Wizard Steps -->
             <div class="wizard-steps">
@@ -470,9 +476,14 @@
                     <h5><i class="bi bi-cloud-upload me-2"></i>Upload Data File</h5>
                 </div>
                 <div class="upload-card-body">
-                    <form id="uploadForm" method="post" action="{% url 'inference:run_prediction' %}" enctype="multipart/form-data">
+                    <form id="uploadForm" method="post" action="{% if mode == 'multi' %}{% url 'inference:run_multi_prediction' %}{% else %}{% url 'inference:run_prediction' %}{% endif %}" enctype="multipart/form-data">
                         {% csrf_token %}
+                        {% if mode == 'multi' %}
+                        <input type="hidden" name="mode" value="multi">
+                        <input type="hidden" name="model_ids" value="{{ model_ids }}">
+                        {% else %}
                         <input type="hidden" name="model_id" value="{{ model.id }}">
+                        {% endif %}
 
                         <!-- Drop Zone -->
                         <div class="drop-zone-wrapper">
@@ -547,12 +558,17 @@
 
             <!-- Action Footer -->
             <div class="action-footer">
-                <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-outline-secondary">
+                <a href="{% url 'inference:new_prediction' %}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left me-1"></i>Back to Model Selection
                 </a>
                 <div>
                     <button type="submit" form="uploadForm" class="btn btn-success btn-lg" id="runPredictionBtn" disabled>
-                        <i class="bi bi-play-fill me-1"></i>Run Prediction
+                        <i class="bi bi-play-fill me-1"></i>
+                        {% if mode == 'multi' %}
+                        Run Multi-Prediction
+                        {% else %}
+                        Run Prediction
+                        {% endif %}
                         <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </div>
@@ -561,6 +577,43 @@
 
         <!-- Model Info Sidebar -->
         <div>
+            {% if mode == 'multi' %}
+            <!-- Multi-Model Info Card -->
+            <div class="model-info-card">
+                <h6><i class="bi bi-boxes me-1"></i>Selected Models ({{ models|length }})</h6>
+
+                {% for m in models %}
+                <div class="{% if not forloop.first %}mt-3 pt-3 border-top{% endif %}">
+                    <div class="model-name">{{ m.name }}</div>
+                    <div class="model-version">v{{ m.version }}</div>
+                    <div class="info-row">
+                        <span class="info-label">Domain</span>
+                        <span class="info-value">{{ m.get_domain_display }}</span>
+                    </div>
+                    {% if m.accuracy_percent %}
+                    <div class="info-row">
+                        <span class="info-label">Accuracy</span>
+                        <span class="info-value">{{ m.accuracy_percent|floatformat:1 }}%</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- Note about multi-model -->
+                <div class="alert alert-info mt-3 mb-0 p-2" style="font-size: 0.8rem;">
+                    <i class="bi bi-info-circle me-1"></i>
+                    The same input data will be processed by all {{ models|length }} models.
+                </div>
+
+                <!-- Change Models Link -->
+                <div class="mt-3 text-center">
+                    <a href="{% url 'inference:new_prediction' %}" class="text-decoration-none text-muted small">
+                        <i class="bi bi-arrow-repeat me-1"></i>Change Models
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <!-- Single Model Info Card -->
             <div class="model-info-card">
                 <h6><i class="bi bi-box-seam me-1"></i>Selected Model</h6>
 
@@ -638,6 +691,7 @@
                     </a>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

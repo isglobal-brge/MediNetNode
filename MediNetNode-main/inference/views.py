@@ -13,7 +13,7 @@ from django.http import Http404
 from datetime import timedelta
 from users.decorators import require_role
 from inference.models import DeployedModel, PredictionAudit
-from inference.forms import ModelUploadForm
+from inference.forms import ModelUploadForm, ModelEditForm
 from dataset.models import Dataset
 
 
@@ -529,9 +529,25 @@ def new_prediction(request):
         my_models = my_models.filter(domain=domain_filter)
         public_models = public_models.filter(domain=domain_filter)
 
-    # Apply search filter
+    # Apply search filter (supports glob patterns: * for any chars, ? for single char)
     if search_query:
-        search_q = Q(name__icontains=search_query) | Q(description__icontains=search_query)
+        # Check if query contains wildcard patterns
+        if '*' in search_query or '?' in search_query:
+            import re
+            # Convert glob pattern to regex
+            # Escape regex special chars except * and ?
+            pattern = search_query
+            pattern = re.escape(pattern)
+            pattern = pattern.replace(r'\*', '.*')  # * -> match any chars
+            pattern = pattern.replace(r'\?', '.')   # ? -> match single char
+            pattern = f'^{pattern}$'  # Anchor to match full name
+
+            # Use regex filter
+            search_q = Q(name__iregex=pattern) | Q(description__iregex=pattern)
+        else:
+            # Standard contains search
+            search_q = Q(name__icontains=search_query) | Q(description__icontains=search_query)
+
         my_models = my_models.filter(search_q)
         public_models = public_models.filter(search_q)
 
@@ -592,53 +608,110 @@ def prediction_load_data(request):
 
     Handles both GET (display upload form) and POST (process uploaded data).
     Users must select a model in Step 1 before reaching this step.
+
+    Supports two modes:
+    - Single model: model_id parameter
+    - Multi model: model_ids parameter (comma-separated or list)
     """
     user = request.user
 
-    # Get model_id from POST (coming from step 1) or GET (reload page)
-    model_id = request.POST.get('model_id') or request.GET.get('model_id')
+    # Determine mode and get model(s)
+    mode = request.POST.get('mode') or request.GET.get('mode', 'single')
 
-    if not model_id:
-        messages.error(request, 'Please select a model first.')
-        return redirect('inference:new_prediction')
+    if mode == 'multi':
+        # Multi-model mode
+        model_ids = request.POST.getlist('model_ids') or request.GET.get('model_ids', '').split(',')
+        model_ids = [mid for mid in model_ids if mid]  # Remove empty strings
 
-    try:
-        model_id = int(model_id)
-    except (ValueError, TypeError):
-        messages.error(request, 'Invalid model selected.')
-        return redirect('inference:new_prediction')
+        if not model_ids:
+            messages.error(request, 'Please select at least one model.')
+            return redirect('inference:new_prediction')
 
-    # Verify user has access to this model
-    model = DeployedModel.objects.filter(
-        Q(uploaded_by=user, status='approved') |
-        Q(is_public=True, status='approved')
-    ).filter(id=model_id).first()
+        try:
+            model_ids = [int(mid) for mid in model_ids]
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid model selection.')
+            return redirect('inference:new_prediction')
 
-    if not model:
-        messages.error(request, 'Model not found or not accessible.')
-        return redirect('inference:new_prediction')
+        # Verify user has access to all selected models
+        models = list(DeployedModel.objects.filter(
+            Q(uploaded_by=user, status='approved') |
+            Q(is_public=True, status='approved')
+        ).filter(id__in=model_ids))
 
-    # Build context for the template
-    context = {
-        'page_title': 'Load Data',
-        'breadcrumbs': [
-            {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
-            {'name': 'New Prediction', 'url': 'inference:new_prediction'},
-            {'name': 'Load Data', 'url': None}
-        ],
-        'wizard_step': 2,
-        'wizard_steps': [
-            {'num': 1, 'name': 'Select Model', 'icon': 'bi-box-seam'},
-            {'num': 2, 'name': 'Load Data', 'icon': 'bi-file-earmark-arrow-up'},
-            {'num': 3, 'name': 'Results', 'icon': 'bi-graph-up'},
-        ],
-        'model': model,
-        # Placeholder for data preview (will be populated via AJAX or form submission)
-        'data_preview': None,
-        'data_errors': [],
-    }
+        if len(models) != len(model_ids):
+            messages.error(request, 'One or more selected models are not accessible.')
+            return redirect('inference:new_prediction')
 
-    return render(request, 'inference/prediction_load_data.html', context)
+        # Build context for multi-model mode
+        context = {
+            'page_title': 'Load Data - Multi-Model',
+            'breadcrumbs': [
+                {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
+                {'name': 'New Prediction', 'url': 'inference:new_prediction'},
+                {'name': 'Load Data', 'url': None}
+            ],
+            'wizard_step': 2,
+            'wizard_steps': [
+                {'num': 1, 'name': 'Select Models', 'icon': 'bi-boxes'},
+                {'num': 2, 'name': 'Load Data', 'icon': 'bi-file-earmark-arrow-up'},
+                {'num': 3, 'name': 'Results', 'icon': 'bi-graph-up'},
+            ],
+            'mode': 'multi',
+            'models': models,
+            'model_ids': ','.join(str(m.id) for m in models),
+            'data_preview': None,
+            'data_errors': [],
+        }
+
+        return render(request, 'inference/prediction_load_data.html', context)
+
+    else:
+        # Single model mode (original behavior)
+        model_id = request.POST.get('model_id') or request.GET.get('model_id')
+
+        if not model_id:
+            messages.error(request, 'Please select a model first.')
+            return redirect('inference:new_prediction')
+
+        try:
+            model_id = int(model_id)
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid model selected.')
+            return redirect('inference:new_prediction')
+
+        # Verify user has access to this model
+        model = DeployedModel.objects.filter(
+            Q(uploaded_by=user, status='approved') |
+            Q(is_public=True, status='approved')
+        ).filter(id=model_id).first()
+
+        if not model:
+            messages.error(request, 'Model not found or not accessible.')
+            return redirect('inference:new_prediction')
+
+        # Build context for the template
+        context = {
+            'page_title': 'Load Data',
+            'breadcrumbs': [
+                {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
+                {'name': 'New Prediction', 'url': 'inference:new_prediction'},
+                {'name': 'Load Data', 'url': None}
+            ],
+            'wizard_step': 2,
+            'wizard_steps': [
+                {'num': 1, 'name': 'Select Model', 'icon': 'bi-box-seam'},
+                {'num': 2, 'name': 'Load Data', 'icon': 'bi-file-earmark-arrow-up'},
+                {'num': 3, 'name': 'Results', 'icon': 'bi-graph-up'},
+            ],
+            'mode': 'single',
+            'model': model,
+            # Placeholder for data preview (will be populated via AJAX or form submission)
+            'data_preview': None,
+            'data_errors': [],
+        }
+
+        return render(request, 'inference/prediction_load_data.html', context)
 
 
 @login_required
@@ -904,6 +977,259 @@ def run_prediction(request):
 
 @login_required
 @require_role('MEMBER', 'ADMIN')
+def run_multi_prediction(request):
+    """
+    Execute predictions using multiple models on the same input data.
+
+    Receives:
+    - model_ids: Comma-separated list of model IDs
+    - data_file: CSV or JSON file with input data
+
+    Process:
+    1. Validate model access for all models
+    2. Parse input data once
+    3. Run ONNX inference on each model
+    4. Create PredictionAudit records for each
+    5. Display consolidated results
+    """
+    import time
+    import csv
+    import json
+    import hashlib
+    import numpy as np
+
+    if request.method != 'POST':
+        messages.error(request, 'Invalid request method.')
+        return redirect('inference:new_prediction')
+
+    user = request.user
+    model_ids_str = request.POST.get('model_ids', '')
+    data_file = request.FILES.get('data_file')
+
+    # Validate inputs
+    if not model_ids_str or not data_file:
+        messages.error(request, 'Models and data file are required.')
+        return redirect('inference:new_prediction')
+
+    # Parse model IDs
+    try:
+        model_ids = [int(mid.strip()) for mid in model_ids_str.split(',') if mid.strip()]
+    except (ValueError, TypeError):
+        messages.error(request, 'Invalid model selection.')
+        return redirect('inference:new_prediction')
+
+    if not model_ids:
+        messages.error(request, 'Please select at least one model.')
+        return redirect('inference:new_prediction')
+
+    # Get models and verify access
+    models = list(DeployedModel.objects.filter(
+        Q(uploaded_by=user, status='approved') |
+        Q(is_public=True, status='approved')
+    ).filter(id__in=model_ids))
+
+    if len(models) != len(model_ids):
+        messages.error(request, 'One or more models not found or not accessible.')
+        return redirect('inference:new_prediction')
+
+    # Track overall execution time
+    total_start_time = time.time()
+    all_results = []
+    global_errors = []
+    rows = None
+    columns = None
+    file_content = None
+
+    try:
+        # Parse the uploaded file (once for all models)
+        file_content = data_file.read().decode('utf-8')
+        file_ext = data_file.name.split('.')[-1].lower()
+
+        if file_ext == 'csv':
+            reader = csv.DictReader(file_content.splitlines())
+            rows = list(reader)
+            if not rows:
+                raise ValueError("CSV file is empty")
+            columns = list(rows[0].keys())
+        elif file_ext == 'json':
+            parsed = json.loads(file_content)
+            rows = parsed if isinstance(parsed, list) else [parsed]
+            if not rows:
+                raise ValueError("JSON file is empty")
+            columns = list(rows[0].keys())
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+        # Compute input hash for audit (once)
+        input_hash = hashlib.sha256(file_content.encode()).hexdigest()
+
+        # Clean column names
+        clean_columns = [c.strip('"') for c in columns]
+
+        # Import onnxruntime once
+        import onnxruntime as ort
+
+        # Run inference on each model
+        for model in models:
+            model_start_time = time.time()
+            model_result = {
+                'model': model,
+                'predictions': [],
+                'errors': [],
+                'execution_time_ms': 0,
+                'success': False,
+            }
+
+            try:
+                # Validate batch size
+                if len(rows) > model.max_batch_size:
+                    raise ValueError(
+                        f"Batch size ({len(rows)}) exceeds model's maximum ({model.max_batch_size})"
+                    )
+
+                # Get expected features from model schema
+                expected_features = []
+                if 'features' in model.input_schema:
+                    expected_features = [f['name'].strip('"') for f in model.input_schema['features']]
+                elif 'feature_names' in model.input_schema:
+                    expected_features = [f.strip('"') for f in model.input_schema['feature_names']]
+
+                # Build numpy array with features in correct order
+                num_features = len(expected_features) if expected_features else len(clean_columns)
+                input_array = np.zeros((len(rows), num_features), dtype=np.float32)
+
+                for i, row in enumerate(rows):
+                    for j, feat in enumerate(expected_features if expected_features else clean_columns):
+                        value = None
+                        for col in columns:
+                            if col.strip('"') == feat:
+                                value = row[col]
+                                break
+
+                        if value is not None:
+                            try:
+                                input_array[i, j] = float(value)
+                            except (ValueError, TypeError):
+                                input_array[i, j] = 0.0
+
+                # Load and run ONNX model
+                model_path = model.model_file.path
+                session = ort.InferenceSession(model_path)
+                input_name = session.get_inputs()[0].name
+                outputs = session.run(None, {input_name: input_array})
+
+                # Parse outputs
+                output_names = [o.name for o in session.get_outputs()]
+
+                # Process each row's prediction
+                for i in range(len(rows)):
+                    pred_result = {'row_index': i + 1}
+
+                    for idx, out_name in enumerate(output_names):
+                        if 'label' in out_name.lower():
+                            pred_result['model_label'] = int(outputs[idx][i])
+                            pred_result['label'] = int(outputs[idx][i])
+                        elif 'probability' in out_name.lower():
+                            probs = outputs[idx]
+                            if isinstance(probs, list) and len(probs) > i:
+                                prob_dict = probs[i]
+                                if isinstance(prob_dict, dict):
+                                    pred_result['probabilities'] = {
+                                        str(k): float(v) * 100 for k, v in prob_dict.items()
+                                    }
+                                    if prob_dict:
+                                        max_class = max(prob_dict.keys(), key=lambda k: prob_dict[k])
+                                        pred_result['label'] = int(max_class)
+                        else:
+                            if hasattr(outputs[idx], '__len__') and len(outputs[idx]) > i:
+                                pred_result['value'] = float(outputs[idx][i])
+                            else:
+                                pred_result['value'] = float(outputs[idx])
+
+                    model_result['predictions'].append(pred_result)
+
+                model_result['success'] = True
+                model_result['output_type'] = model.output_schema.get('type', 'unknown')
+
+                # Extract class labels
+                class_labels = {}
+                if model.output_schema:
+                    classes = model.output_schema.get('classes', {})
+                    if isinstance(classes, dict):
+                        class_labels = {str(k): v for k, v in classes.items()}
+                    elif isinstance(classes, list):
+                        class_labels = {str(i): name for i, name in enumerate(classes)}
+                model_result['class_labels'] = class_labels
+
+            except Exception as e:
+                model_result['errors'].append(str(e))
+
+            # Calculate execution time for this model
+            model_result['execution_time_ms'] = int((time.time() - model_start_time) * 1000)
+
+            # Create PredictionAudit record
+            PredictionAudit.objects.create(
+                user=user,
+                ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
+                model=model,
+                model_name=model.name,
+                model_version=model.version,
+                model_domain=model.domain,
+                records_count=len(rows) if model_result['success'] else 0,
+                execution_time_ms=model_result['execution_time_ms'],
+                rate_limit_remaining=model.max_requests_per_minute,
+                input_hash=input_hash,
+                success=model_result['success'],
+                error_message='; '.join(model_result['errors']) if model_result['errors'] else '',
+                dp_noise_applied=model.enable_differential_privacy if model_result['success'] else False,
+            )
+
+            # Update model stats if successful
+            if model_result['success']:
+                model.total_predictions += 1
+                model.last_prediction_at = timezone.now()
+                model.save(update_fields=['total_predictions', 'last_prediction_at'])
+
+            all_results.append(model_result)
+
+    except Exception as e:
+        global_errors.append(str(e))
+
+    # Calculate total execution time
+    total_execution_time_ms = int((time.time() - total_start_time) * 1000)
+
+    # Count successes
+    successful_count = sum(1 for r in all_results if r['success'])
+    failed_count = len(all_results) - successful_count
+
+    context = {
+        'page_title': 'Multi-Model Prediction Results',
+        'breadcrumbs': [
+            {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
+            {'name': 'New Prediction', 'url': 'inference:new_prediction'},
+            {'name': 'Results', 'url': None}
+        ],
+        'wizard_step': 3,
+        'wizard_steps': [
+            {'num': 1, 'name': 'Select Models', 'icon': 'bi-boxes'},
+            {'num': 2, 'name': 'Load Data', 'icon': 'bi-file-earmark-arrow-up'},
+            {'num': 3, 'name': 'Results', 'icon': 'bi-graph-up'},
+        ],
+        'mode': 'multi',
+        'models': models,
+        'all_results': all_results,
+        'global_errors': global_errors,
+        'total_execution_time_ms': total_execution_time_ms,
+        'successful_count': successful_count,
+        'failed_count': failed_count,
+        'total_rows': len(rows) if rows else 0,
+    }
+
+    return render(request, 'inference/multi_prediction_results.html', context)
+
+
+@login_required
+@require_role('MEMBER', 'ADMIN')
 def my_history(request):
     """
     View prediction history for the current user.
@@ -1113,3 +1439,50 @@ def model_detail(request, model_id):
     }
 
     return render(request, 'inference/model_detail.html', context)
+
+
+@login_required
+@require_role('MEMBER', 'ADMIN')
+def edit_model(request, model_id):
+    """
+    Edit model metadata and schemas.
+
+    Access control:
+    - ADMIN can edit all models
+    - MEMBER can edit only their own models
+    """
+    user = request.user
+    model = get_object_or_404(DeployedModel, id=model_id)
+
+    # Access control - only owner or admin can edit
+    is_owner = model.uploaded_by == user
+    is_admin = user.role and user.role.name == 'ADMIN'
+
+    if not (is_owner or is_admin):
+        messages.error(request, 'You do not have permission to edit this model.')
+        return redirect('inference:model_detail', model_id=model_id)
+
+    if request.method == 'POST':
+        form = ModelEditForm(request.POST, instance=model)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Model "{model.name}" updated successfully.')
+            return redirect('inference:model_detail', model_id=model_id)
+    else:
+        form = ModelEditForm(instance=model)
+
+    context = {
+        'page_title': f'Edit {model.name}',
+        'breadcrumbs': [
+            {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
+            {'name': 'My Models', 'url': 'inference:my_models'},
+            {'name': model.name, 'url': 'inference:model_detail', 'args': [model_id]},
+            {'name': 'Edit', 'url': None}
+        ],
+        'model': model,
+        'form': form,
+        'is_owner': is_owner,
+        'is_admin': is_admin,
+    }
+
+    return render(request, 'inference/edit_model.html', context)

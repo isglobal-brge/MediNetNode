@@ -17,10 +17,12 @@ urlpatterns = [
     path('models/upload/', views.upload_model, name='upload_model'),
     path('models/public/', views.public_models, name='public_models'),
     path('models/<int:model_id>/', views.model_detail, name='model_detail'),
+    path('models/<int:model_id>/edit/', views.edit_model, name='edit_model'),
 
     # Inference Execution (MEMBER & ADMIN)
     path('predict/', views.new_prediction, name='new_prediction'),
     path('predict/load-data/', views.prediction_load_data, name='prediction_load_data'),
     path('predict/run/', views.run_prediction, name='run_prediction'),
+    path('predict/run-multi/', views.run_multi_prediction, name='run_multi_prediction'),
     path('history/', views.my_history, name='my_history'),
 ]

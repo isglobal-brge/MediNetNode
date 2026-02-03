@@ -395,3 +395,231 @@ cg12135344
             instance.save()
 
         return instance
+
+
+class ModelEditForm(forms.ModelForm):
+    """
+    Form for editing model metadata and schemas.
+
+    Allows editing:
+    - Basic info (name, version, description, domain)
+    - Input schema (with flexible format support)
+    - Output schema
+    - Visibility (is_public)
+
+    Does NOT allow changing the model file itself.
+    """
+
+    # Override input_schema to accept multiple formats (same as upload form)
+    input_schema = forms.CharField(
+        required=True,
+        label='Input Schema',
+        help_text='Feature names (CSV header, one per line, JSON array, or full JSON schema)',
+        widget=forms.Textarea(attrs={
+            'class': 'form-control font-monospace',
+            'rows': 12,
+        })
+    )
+
+    class Meta:
+        model = DeployedModel
+        fields = [
+            'name',
+            'version',
+            'domain',
+            'description',
+            'input_schema',
+            'output_schema',
+            'is_public',
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+            }),
+            'version': forms.TextInput(attrs={
+                'class': 'form-control',
+            }),
+            'domain': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+            }),
+            'output_schema': forms.Textarea(attrs={
+                'class': 'form-control font-monospace',
+                'rows': 6,
+            }),
+            'is_public': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pre-populate input_schema as formatted JSON
+        if self.instance and self.instance.input_schema:
+            self.initial['input_schema'] = json.dumps(
+                self.instance.input_schema, indent=2
+            )
+        # Pre-populate output_schema as formatted JSON
+        if self.instance and self.instance.output_schema:
+            self.initial['output_schema'] = json.dumps(
+                self.instance.output_schema, indent=2
+            )
+
+    # Reuse validation methods from ModelUploadForm
+    def clean_input_schema(self):
+        """Validate input schema - accepts multiple formats."""
+        schema_str = self.cleaned_data.get('input_schema')
+
+        if isinstance(schema_str, dict):
+            schema = schema_str
+        else:
+            schema_str = schema_str.strip()
+
+            try:
+                parsed = json.loads(schema_str)
+
+                if isinstance(parsed, dict):
+                    schema = parsed
+                elif isinstance(parsed, list):
+                    schema = self._convert_feature_names_to_schema(parsed)
+                else:
+                    raise ValidationError('JSON must be an object or array.')
+
+            except json.JSONDecodeError:
+                schema = self._parse_csv_header_to_schema(schema_str)
+
+        return self._validate_schema_structure(schema)
+
+    def _convert_feature_names_to_schema(self, feature_names):
+        """Convert a simple list of feature names to full schema format."""
+        if not feature_names:
+            raise ValidationError('At least one feature is required.')
+
+        features = []
+        for name in feature_names:
+            if not isinstance(name, str):
+                raise ValidationError(f'Feature name must be a string, got: {type(name).__name__}')
+            name = name.strip().strip('"').strip("'")
+            if not name:
+                continue
+            features.append({
+                'name': name,
+                'type': 'float',
+                'required': True
+            })
+
+        if not features:
+            raise ValidationError('At least one feature is required.')
+
+        return {'features': features}
+
+    def _parse_csv_header_to_schema(self, header_str):
+        """Parse CSV header string to schema."""
+        if '\n' in header_str:
+            names = [line.strip() for line in header_str.split('\n')]
+        elif ',' in header_str:
+            names = [name.strip() for name in header_str.split(',')]
+        else:
+            names = [header_str.strip()]
+
+        clean_names = []
+        for name in names:
+            name = name.strip().strip('"').strip("'")
+            if name and name.lower() != 'id':
+                clean_names.append(name)
+
+        if not clean_names:
+            raise ValidationError(
+                'Could not parse input schema. Use JSON format or comma/newline-separated feature names.'
+            )
+
+        return self._convert_feature_names_to_schema(clean_names)
+
+    def _validate_schema_structure(self, schema):
+        """Validate the final schema structure."""
+        if not isinstance(schema, dict):
+            raise ValidationError('Schema must be a JSON object.')
+
+        if 'features' not in schema:
+            raise ValidationError('Schema must contain "features" array.')
+
+        if not isinstance(schema['features'], list):
+            raise ValidationError('"features" must be an array.')
+
+        if len(schema['features']) == 0:
+            raise ValidationError('At least one feature is required.')
+
+        valid_types = ['integer', 'float', 'string', 'boolean']
+
+        for idx, feature in enumerate(schema['features']):
+            if not isinstance(feature, dict):
+                raise ValidationError(f'Feature {idx + 1} must be an object.')
+
+            if 'name' not in feature:
+                raise ValidationError(f'Feature {idx + 1} missing required field: "name"')
+
+            if 'type' not in feature:
+                feature['type'] = 'float'
+            if 'required' not in feature:
+                feature['required'] = True
+
+            if feature['type'] not in valid_types:
+                raise ValidationError(
+                    f'Feature "{feature["name"]}" has invalid type "{feature["type"]}". '
+                    f'Must be one of: {", ".join(valid_types)}'
+                )
+
+            if 'min' in feature and 'max' in feature:
+                try:
+                    if float(feature['min']) >= float(feature['max']):
+                        raise ValidationError(
+                            f'Feature "{feature["name"]}": min must be less than max'
+                        )
+                except (ValueError, TypeError):
+                    raise ValidationError(f'Feature "{feature["name"]}": min and max must be numeric')
+
+        return schema
+
+    def clean_output_schema(self):
+        """Validate output schema JSON."""
+        schema_str = self.cleaned_data.get('output_schema')
+
+        if isinstance(schema_str, dict):
+            schema = schema_str
+        else:
+            try:
+                schema = json.loads(schema_str)
+            except json.JSONDecodeError as e:
+                raise ValidationError(f'Invalid JSON: {str(e)}')
+
+        if not isinstance(schema, dict):
+            raise ValidationError('Schema must be a JSON object.')
+
+        if 'type' not in schema:
+            raise ValidationError('Schema must contain "type" field.')
+
+        valid_types = ['classification', 'regression']
+        if schema['type'] not in valid_types:
+            raise ValidationError(f'Type must be one of: {", ".join(valid_types)}')
+
+        if schema['type'] == 'classification':
+            if 'classes' not in schema:
+                raise ValidationError('Classification schema must contain "classes" field.')
+
+            classes = schema['classes']
+
+            if isinstance(classes, list):
+                if len(classes) < 2:
+                    raise ValidationError('Classification requires at least 2 classes.')
+                schema['classes'] = {str(i): name for i, name in enumerate(classes)}
+            elif isinstance(classes, dict):
+                if len(classes) < 2:
+                    raise ValidationError('Classification requires at least 2 classes.')
+                schema['classes'] = {str(k): v for k, v in classes.items()}
+            else:
+                raise ValidationError('"classes" must be an array or object.')
+
+        return schema

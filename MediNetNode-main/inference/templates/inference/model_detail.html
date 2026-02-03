@@ -199,11 +199,18 @@
             </div>
         </div>
         <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
-            {% if model.status == 'approved' %}
-            <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-light btn-lg action-btn-lg">
-                <i class="bi bi-play-fill me-2"></i>Use for Prediction
-            </a>
-            {% endif %}
+            <div class="d-flex gap-2 justify-content-lg-end">
+                {% if is_owner or is_admin %}
+                <a href="{% url 'inference:edit_model' model.id %}" class="btn btn-outline-light">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                </a>
+                {% endif %}
+                {% if model.status == 'approved' %}
+                <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}" class="btn btn-light btn-lg action-btn-lg">
+                    <i class="bi bi-play-fill me-2"></i>Use for Prediction
+                </a>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
