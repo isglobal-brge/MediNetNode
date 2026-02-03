@@ -121,12 +121,14 @@ class ModelUploadFormTest(TestCase):
         self.assertIn('features', str(form.errors['input_schema']))
 
     def test_input_schema_validation_missing_required_fields(self):
-        """Test input schema validation requires name, type, required fields."""
+        """Test input schema validation requires at minimum the 'name' field."""
+        # Schema with feature missing 'name' field should fail
         invalid_schema = {
             "features": [
                 {
-                    "name": "age",
-                    # Missing 'type' and 'required'
+                    "type": "float",
+                    "required": True
+                    # Missing 'name' - this is required
                 }
             ]
         }
@@ -145,6 +147,35 @@ class ModelUploadFormTest(TestCase):
         form.is_valid()
 
         self.assertIn('input_schema', form.errors)
+        self.assertIn('name', str(form.errors['input_schema']))
+
+    def test_input_schema_validation_defaults_type_and_required(self):
+        """Test that 'type' and 'required' fields have sensible defaults."""
+        # Schema with only 'name' should be valid (type defaults to float, required to True)
+        minimal_schema = {
+            "features": [
+                {
+                    "name": "age"
+                    # 'type' and 'required' should default
+                }
+            ]
+        }
+
+        form_data = {
+            'name': 'Test Model',
+            'version': '1.0.0',
+            'domain': 'cardiology',
+            'description': 'Test description',
+            'input_schema': json.dumps(minimal_schema),
+            'output_schema': json.dumps(self.valid_output_schema),
+            'is_public': False
+        }
+
+        form = ModelUploadForm(data=form_data, files={'model_file': self.onnx_file})
+        form.is_valid()
+
+        # input_schema should be valid (no errors for it)
+        self.assertNotIn('input_schema', form.errors)
 
     def test_input_schema_validation_invalid_type(self):
         """Test input schema validation rejects invalid feature types."""
@@ -328,3 +359,72 @@ class ModelUploadFormTest(TestCase):
         self.assertIn('form-select', form.fields['domain'].widget.attrs.get('class', ''))
         self.assertIn('form-control', form.fields['description'].widget.attrs.get('class', ''))
         self.assertIn('form-control', form.fields['accuracy_percent'].widget.attrs.get('class', ''))
+
+    def test_input_schema_accepts_csv_header_comma_separated(self):
+        """Test input schema accepts comma-separated feature names."""
+        form_data = {
+            'name': 'Test Model',
+            'version': '1.0.0',
+            'domain': 'cardiology',
+            'description': 'Test description',
+            'input_schema': 'feature1,feature2,feature3',  # CSV header format
+            'output_schema': json.dumps(self.valid_output_schema),
+            'is_public': False
+        }
+
+        form = ModelUploadForm(data=form_data, files={'model_file': self.onnx_file})
+        form.is_valid()
+
+        # input_schema should be valid
+        self.assertNotIn('input_schema', form.errors)
+
+    def test_input_schema_accepts_newline_separated(self):
+        """Test input schema accepts one feature per line."""
+        form_data = {
+            'name': 'Test Model',
+            'version': '1.0.0',
+            'domain': 'cardiology',
+            'description': 'Test description',
+            'input_schema': 'cg16057915\ncg02849695\ncg12135344',  # One per line
+            'output_schema': json.dumps(self.valid_output_schema),
+            'is_public': False
+        }
+
+        form = ModelUploadForm(data=form_data, files={'model_file': self.onnx_file})
+        form.is_valid()
+
+        self.assertNotIn('input_schema', form.errors)
+
+    def test_input_schema_accepts_json_array(self):
+        """Test input schema accepts JSON array of feature names."""
+        form_data = {
+            'name': 'Test Model',
+            'version': '1.0.0',
+            'domain': 'cardiology',
+            'description': 'Test description',
+            'input_schema': '["feature1", "feature2", "feature3"]',  # JSON array
+            'output_schema': json.dumps(self.valid_output_schema),
+            'is_public': False
+        }
+
+        form = ModelUploadForm(data=form_data, files={'model_file': self.onnx_file})
+        form.is_valid()
+
+        self.assertNotIn('input_schema', form.errors)
+
+    def test_input_schema_skips_id_column(self):
+        """Test that 'id' column is automatically skipped."""
+        form_data = {
+            'name': 'Test Model',
+            'version': '1.0.0',
+            'domain': 'cardiology',
+            'description': 'Test description',
+            'input_schema': 'id\nfeature1\nfeature2',  # With 'id' that should be skipped
+            'output_schema': json.dumps(self.valid_output_schema),
+            'is_public': False
+        }
+
+        form = ModelUploadForm(data=form_data, files={'model_file': self.onnx_file})
+        form.is_valid()
+
+        self.assertNotIn('input_schema', form.errors)

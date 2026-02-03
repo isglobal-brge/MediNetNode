@@ -39,6 +39,33 @@ class ModelUploadForm(forms.ModelForm):
         })
     )
 
+    # Override input_schema to accept multiple formats (not just JSON)
+    input_schema = forms.CharField(
+        required=True,
+        label='Input Schema',
+        help_text='Feature names (CSV header, one per line, JSON array, or full JSON schema)',
+        widget=forms.Textarea(attrs={
+            'class': 'form-control font-monospace',
+            'rows': 10,
+            'placeholder': '''Accepted formats:
+
+1. CSV header (simplest):
+feature1,feature2,feature3
+
+2. One feature per line:
+cg16057915
+cg02849695
+cg12135344
+
+3. JSON array:
+["feature1", "feature2", "feature3"]
+
+4. Full JSON schema:
+{"features": [{"name": "age", "type": "float", "required": true}]}''',
+            'required': True
+        })
+    )
+
     class Meta:
         model = DeployedModel
         fields = [
@@ -77,12 +104,6 @@ class ModelUploadForm(forms.ModelForm):
                 'accept': '.onnx',
                 'required': True
             }),
-            'input_schema': forms.Textarea(attrs={
-                'class': 'form-control font-monospace',
-                'rows': 10,
-                'placeholder': '''{"features": [{"name": "age", "type": "integer", "min": 0, "max": 120, "required": true, "description": "Patient age in years"}]}''',
-                'required': True
-            }),
             'output_schema': forms.Textarea(attrs={
                 'class': 'form-control font-monospace',
                 'rows': 6,
@@ -99,7 +120,6 @@ class ModelUploadForm(forms.ModelForm):
             'domain': 'Medical domain for this model',
             'description': 'Detailed description of model purpose and usage',
             'model_file': 'ONNX model file (max 500MB)',
-            'input_schema': 'JSON schema defining input features',
             'output_schema': 'JSON schema defining output format',
             'is_public': 'Make this model available to all users (requires admin approval)',
         }
@@ -154,19 +174,105 @@ class ModelUploadForm(forms.ModelForm):
         return model_file
 
     def clean_input_schema(self):
-        """Validate input schema JSON."""
+        """
+        Validate input schema - accepts multiple formats:
+
+        1. Full JSON schema:
+           {"features": [{"name": "age", "type": "float", "required": true}, ...]}
+
+        2. Simple JSON array of feature names:
+           ["feature1", "feature2", "feature3"]
+
+        3. CSV header (comma or newline separated):
+           feature1,feature2,feature3
+           OR
+           feature1
+           feature2
+           feature3
+        """
         schema_str = self.cleaned_data.get('input_schema')
 
         if isinstance(schema_str, dict):
-            # Already parsed (shouldn't happen but handle it)
+            # Already parsed
             schema = schema_str
         else:
-            try:
-                schema = json.loads(schema_str)
-            except json.JSONDecodeError as e:
-                raise ValidationError(f'Invalid JSON: {str(e)}')
+            schema_str = schema_str.strip()
 
-        # Validate schema structure
+            # Try to parse as JSON first
+            try:
+                parsed = json.loads(schema_str)
+
+                if isinstance(parsed, dict):
+                    # Full schema format: {"features": [...]}
+                    schema = parsed
+                elif isinstance(parsed, list):
+                    # Simple array of feature names: ["feat1", "feat2"]
+                    schema = self._convert_feature_names_to_schema(parsed)
+                else:
+                    raise ValidationError('JSON must be an object or array.')
+
+            except json.JSONDecodeError:
+                # Not valid JSON - try to parse as CSV header
+                schema = self._parse_csv_header_to_schema(schema_str)
+
+        # Validate the final schema structure
+        return self._validate_schema_structure(schema)
+
+    def _convert_feature_names_to_schema(self, feature_names):
+        """Convert a simple list of feature names to full schema format."""
+        if not feature_names:
+            raise ValidationError('At least one feature is required.')
+
+        features = []
+        for name in feature_names:
+            if not isinstance(name, str):
+                raise ValidationError(f'Feature name must be a string, got: {type(name).__name__}')
+            name = name.strip().strip('"').strip("'")
+            if not name:
+                continue
+            features.append({
+                'name': name,
+                'type': 'float',  # Default to float for numeric models
+                'required': True
+            })
+
+        if not features:
+            raise ValidationError('At least one feature is required.')
+
+        return {'features': features}
+
+    def _parse_csv_header_to_schema(self, header_str):
+        """Parse CSV header string (comma or newline separated) to schema."""
+        # Check if it's newline-separated (one feature per line)
+        if '\n' in header_str:
+            names = [line.strip() for line in header_str.split('\n')]
+        elif ',' in header_str:
+            # Comma-separated
+            names = [name.strip() for name in header_str.split(',')]
+        else:
+            # Single feature or invalid
+            names = [header_str.strip()]
+
+        # Clean up names (remove quotes, empty strings)
+        clean_names = []
+        for name in names:
+            name = name.strip().strip('"').strip("'")
+            if name and name.lower() != 'id':  # Skip 'id' column if present
+                clean_names.append(name)
+
+        if not clean_names:
+            raise ValidationError(
+                'Could not parse input schema. Accepted formats:\n'
+                '1. JSON: {"features": [{"name": "feat1", "type": "float", "required": true}]}\n'
+                '2. JSON array: ["feat1", "feat2", "feat3"]\n'
+                '3. CSV header: feat1,feat2,feat3\n'
+                '4. One feature per line'
+            )
+
+        return self._convert_feature_names_to_schema(clean_names)
+
+    def _validate_schema_structure(self, schema):
+        """Validate the final schema structure."""
         if not isinstance(schema, dict):
             raise ValidationError('Schema must be a JSON object.')
 
@@ -180,17 +286,21 @@ class ModelUploadForm(forms.ModelForm):
             raise ValidationError('At least one feature is required.')
 
         # Validate each feature
-        required_fields = ['name', 'type', 'required']
         valid_types = ['integer', 'float', 'string', 'boolean']
 
         for idx, feature in enumerate(schema['features']):
             if not isinstance(feature, dict):
                 raise ValidationError(f'Feature {idx + 1} must be an object.')
 
-            # Check required fields
-            for field in required_fields:
-                if field not in feature:
-                    raise ValidationError(f'Feature {idx + 1} missing required field: "{field}"')
+            # Check 'name' is required
+            if 'name' not in feature:
+                raise ValidationError(f'Feature {idx + 1} missing required field: "name"')
+
+            # Set defaults for optional fields
+            if 'type' not in feature:
+                feature['type'] = 'float'  # Default to float
+            if 'required' not in feature:
+                feature['required'] = True  # Default to required
 
             # Validate type
             if feature['type'] not in valid_types:
