@@ -101,9 +101,9 @@ class CustomUser(AbstractUser):
             if scope is None:
                 return False
 
-            # No domain check needed, just verify permission exists with valid scope
+            # No domain provided: just confirm the permission exists.
+            # Callers that need domain filtering must supply a domain argument.
             if domain is None:
-                # User has permission, scope will be checked when accessing specific resources
                 return True
 
             # Check domain against scope
@@ -116,8 +116,13 @@ class CustomUser(AbstractUser):
             # Unknown scope type
             return False
 
-        # Fallback: treat as truthy
-        return bool(permission_value)
+        # Fail-closed: unexpected permission type — deny and log for investigation.
+        import logging
+        logging.getLogger('security').warning(
+            f"Unexpected permission type for '{permission_key}': "
+            f"{type(permission_value).__name__} (user={self.username})"
+        )
+        return False
 
     def get_permission_scope(self, permission_key: str):
         """
@@ -222,6 +227,16 @@ class APIKey(models.Model):
         blank=True,
         help_text="Hashed API key for secure authentication (stores hash, not plaintext)"
     )
+    key_prefix = models.CharField(
+        max_length=8,
+        db_index=True,
+        blank=True,
+        default='',
+        help_text=(
+            "First 8 chars of raw key for indexed pre-filter before hash verification. "
+            "Non-secret. '__LEGACY__' marks keys created before this field was added."
+        )
+    )
     name = models.CharField(
         max_length=100,
         help_text="Descriptive name for this API key"
@@ -240,10 +255,6 @@ class APIKey(models.Model):
     last_used_at = models.DateTimeField(null=True, blank=True)
     last_used_ip = models.GenericIPAddressField(null=True, blank=True)
 
-    # TODO: Add regeneration fields after migration is applied
-    # regenerated_count = models.IntegerField(default=0, help_text="Number of times this key has been regenerated")
-    # last_regenerated_at = models.DateTimeField(null=True, blank=True, help_text="Last time the key was regenerated")
-
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -253,13 +264,14 @@ class APIKey(models.Model):
 
     def set_key(self, raw_key):
         """
-        Hash and store the API key securely.
+        Hash and store the API key securely. Also stores key_prefix for indexed lookup.
 
         Args:
             raw_key (str): The plaintext API key to hash
         """
         from django.contrib.auth.hashers import make_password
         self.key_hash = make_password(raw_key)
+        self.key_prefix = raw_key[:8]
 
     def check_key(self, raw_key):
         """
@@ -272,6 +284,9 @@ class APIKey(models.Model):
             bool: True if the key matches, False otherwise
         """
         from django.contrib.auth.hashers import check_password
+        # Guard: key_hash can be null on uninitialized instances
+        if not self.key_hash:
+            return False
         return check_password(raw_key, self.key_hash)
 
     def save(self, *args, **kwargs):
@@ -320,15 +335,22 @@ class APIKey(models.Model):
                         if client_ip == allowed:
                             return True
                 except (ValueError, ipaddress.AddressValueError, ipaddress.NetmaskValueError):
-                    # If parsing fails, fall back to string comparison
-                    if ip_address == allowed_ip:
-                        return True
-            
+                    # Fail-closed: deny this entry and log — do not fall back to string comparison
+                    import logging
+                    logging.getLogger('security').error(
+                        f"Failed to parse IP/CIDR whitelist entry: {allowed_ip!r}"
+                    )
+                    continue
+
             return False
-            
+
         except ipaddress.AddressValueError:
-            # If client IP parsing fails, fall back to string comparison
-            return ip_address in self.ip_whitelist
+            # Fail-closed: deny if client IP cannot be parsed
+            import logging
+            logging.getLogger('security').error(
+                f"Failed to parse client IP address: {ip_address!r}"
+            )
+            return False
     
     def update_last_used(self, ip_address):
         """Update last used timestamp and IP."""

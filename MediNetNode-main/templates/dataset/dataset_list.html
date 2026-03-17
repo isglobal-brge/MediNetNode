@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Dataset Management - MediNet{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     /* Dataset List Specific Styles */
     .filters-section {
         background: var(--card-bg);
@@ -746,7 +747,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-submit form on filter changes
     const autoSubmitElements = ['domain', 'data_type', 'format', 'page_size'];

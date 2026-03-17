@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Users - MediNet{% endblock %}
 
@@ -328,7 +329,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 function confirmDelete(userId, username) {
     document.getElementById('deleteUsername').textContent = username;
     document.getElementById('deleteForm').action = `/users/${userId}/delete/`;

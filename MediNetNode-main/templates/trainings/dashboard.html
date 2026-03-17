@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}{{ page_title }} - MediNet{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     /* Training Dashboard Specific Styles - Matching Platform Style */
     .metric-card {
         background: var(--card-bg);
@@ -412,7 +413,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     let refreshCountdown = 30;
     let countdownInterval;

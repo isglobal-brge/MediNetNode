@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}User Created Successfully{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     .success-modal {
         display: block;
         position: fixed;
@@ -286,7 +287,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{% csp_nonce %}">
 // Copy API key to clipboard
 function copyApiKey() {
     const apiKeyField = document.getElementById('apiKeyField');

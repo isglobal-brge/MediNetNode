@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Create User - MediNet{% endblock %}
 
@@ -166,7 +167,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Get form elements
     const form = document.querySelector('form');

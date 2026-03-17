@@ -13,7 +13,7 @@ import pytest
 os.environ.setdefault('SECRET_KEY', 'django-insecure-test-key-for-running-tests-only')
 os.environ.setdefault('DEBUG', 'True')
 os.environ.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings_test')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
 
 # Setup Django
 if not settings.configured:

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}{{ page_title }} - MediNet{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     .filter-card {
         background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
         color: white;
@@ -465,7 +466,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Available users for autocomplete
     const availableUsers = [
