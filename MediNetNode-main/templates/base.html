@@ -578,7 +578,7 @@
                             <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" 
                                href="#" 
                                data-tooltip="Users"
-                               onclick="toggleSubmenu('usersSubmenu', this); return false;">
+                               data-submenu="usersSubmenu">
                                 <i class="bi bi-people me-2"></i>
                                 <span class="nav-text">Users</span>
                                 <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
@@ -613,7 +613,7 @@
                             <a class="nav-link {% if 'dataset' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-tooltip="Datasets"
-                               onclick="toggleSubmenu('datasetsSubmenu', this); return false;">
+                               data-submenu="datasetsSubmenu">
                                 <i class="bi bi-database me-2"></i>
                                 <span class="nav-text">Datasets</span>
                                 <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
@@ -661,7 +661,7 @@
                             <a class="nav-link {% if 'inference' in request.resolver_match.namespace and 'model' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-tooltip="Models"
-                               onclick="toggleSubmenu('modelsSubmenu', this); return false;">
+                               data-submenu="modelsSubmenu">
                                 <i class="bi bi-diagram-3 me-2"></i>
                                 <span class="nav-text">Models</span>
                                 <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
@@ -687,7 +687,7 @@
                             <a class="nav-link {% if 'inference' in request.resolver_match.namespace and 'predict' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-tooltip="Inference"
-                               onclick="toggleSubmenu('inferenceSubmenu', this); return false;">
+                               data-submenu="inferenceSubmenu">
                                 <i class="bi bi-cpu me-2"></i>
                                 <span class="nav-text">Inference</span>
                                 <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
@@ -710,7 +710,7 @@
                             <a class="nav-link {% if 'trainings' in request.resolver_match.namespace %}active{% endif %}" 
                                href="#" 
                                data-tooltip="Training Monitoring"
-                               onclick="toggleSubmenu('trainingsSubmenu', this); return false;">
+                               data-submenu="trainingsSubmenu">
                                 <i class="bi bi-graph-up me-2"></i>
                                 <span class="nav-text">Training</span>
                                 <i class="bi bi-chevron-right ms-auto nav-toggle-icon"></i>
@@ -914,33 +914,41 @@
                 }
             }
 
+            // Event delegation for submenu toggles (replaces inline onclick — CSP compliance)
+            document.querySelectorAll('[data-submenu]').forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    toggleSubmenu(this.dataset.submenu, this);
+                });
+            });
+
             // Auto-expand submenu if we're on a dataset or user page
             const currentPath = window.location.pathname;
             if (currentPath.includes('/datasets/')) {
                 const datasetsSubmenu = document.getElementById('datasetsSubmenu');
-                const datasetsToggle = document.querySelector('[onclick*="datasetsSubmenu"] .nav-toggle-icon');
+                const datasetsToggle = document.querySelector('[data-submenu="datasetsSubmenu"] .nav-toggle-icon');
                 if (datasetsSubmenu && datasetsToggle) {
                     datasetsSubmenu.classList.add('show');
                     datasetsToggle.classList.add('rotated');
                     datasetsToggle.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
                 }
             }
-            
+
             // Auto-expand submenu if we're on a user page
             if (currentPath.includes('/users/') || currentPath.includes('/audit/')) {
                 const usersSubmenu = document.getElementById('usersSubmenu');
-                const usersToggle = document.querySelector('[onclick*="usersSubmenu"] .nav-toggle-icon');
+                const usersToggle = document.querySelector('[data-submenu="usersSubmenu"] .nav-toggle-icon');
                 if (usersSubmenu && usersToggle) {
                     usersSubmenu.classList.add('show');
                     usersToggle.classList.add('rotated');
                     usersToggle.className = 'bi bi-chevron-down ms-auto nav-toggle-icon rotated';
                 }
             }
-            
+
             // Auto-expand submenu if we're on a training page
             if (currentPath.includes('/trainings/')) {
                 const trainingsSubmenu = document.getElementById('trainingsSubmenu');
-                const trainingsToggle = document.querySelector('[onclick*="trainingsSubmenu"] .nav-toggle-icon');
+                const trainingsToggle = document.querySelector('[data-submenu="trainingsSubmenu"] .nav-toggle-icon');
                 if (trainingsSubmenu && trainingsToggle) {
                     trainingsSubmenu.classList.add('show');
                     trainingsToggle.classList.add('rotated');
@@ -953,22 +961,22 @@
         function toggleSubmenu(submenuId, toggleElement) {
             const submenu = document.getElementById(submenuId);
             const toggleIcon = toggleElement.querySelector('.nav-toggle-icon');
-            
+
             if (submenu && toggleIcon) {
                 const isOpen = submenu.classList.contains('show');
-                
+
                 // Close all other submenus
                 document.querySelectorAll('.nav-submenu.show').forEach(menu => {
                     if (menu.id !== submenuId) {
                         menu.classList.remove('show');
-                        const otherIcon = document.querySelector(`[onclick*="${menu.id}"] .nav-toggle-icon`);
+                        const otherIcon = document.querySelector(`[data-submenu="${menu.id}"] .nav-toggle-icon`);
                         if (otherIcon) {
                             otherIcon.classList.remove('rotated');
                             otherIcon.className = 'bi bi-chevron-right ms-auto nav-toggle-icon';
                         }
                     }
                 });
-                
+
                 if (isOpen) {
                     submenu.classList.remove('show');
                     toggleIcon.classList.remove('rotated');
