@@ -1,5 +1,6 @@
 import json
 import uuid
+from django.conf import settings
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -240,3 +241,64 @@ class TrainingRound(models.Model):
         
         # Update parent session progress
         self.session.update_progress(self.round_number, self.session.total_rounds)
+
+
+class BudgetResetRequest(models.Model):
+    """
+    Solicitud de un researcher para reiniciar su presupuesto epsilon en un dataset.
+    El ADMIN del Node aprueba o rechaza la solicitud.
+
+    dataset_id y researcher_id son IntegerField (no FK) porque referencian
+    datasets_db y default respectivamente desde el mismo modelo.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('approved', 'Aprobada'),
+        ('rejected', 'Rechazada'),
+    ]
+
+    dataset_id = models.IntegerField(db_index=True)
+    researcher_id = models.IntegerField(db_index=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviewed_budget_resets',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-requested_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['dataset_id', 'researcher_id'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_budget_reset_per_researcher_dataset',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['status', 'requested_at']),
+        ]
+
+    def approve(self, *, admin, notes: str = '') -> None:
+        if self.status != 'pending':
+            raise ValueError("Esta solicitud ya ha sido revisada.")
+        self.status = 'approved'
+        self.reviewed_by = admin
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
+
+    def reject(self, *, admin, notes: str = '') -> None:
+        if self.status != 'pending':
+            raise ValueError("Esta solicitud ya ha sido revisada.")
+        self.status = 'rejected'
+        self.reviewed_by = admin
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
