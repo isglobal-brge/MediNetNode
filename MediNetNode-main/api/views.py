@@ -522,6 +522,28 @@ def validate_training_permissions(user, model_json):
             f"dataset: {dataset_id}"
         )
 
+        # 4b. Experimental job fast-path: skip ALL epsilon budget checks.
+        # The researcher is operating on the small experiment subset which has no
+        # budget tracking by design.  We still validate access (step 3) above.
+        use_experiment = bool(model_json.get('use_experiment', False))
+        if use_experiment:
+            try:
+                dataset_obj = Dataset.objects.using('datasets_db').get(id=dataset_id)
+                if dataset_obj.experiment_file_path:
+                    logger.info(
+                        "[EXP] Experimental job for user %s on dataset %s — skipping budget checks.",
+                        user.username, dataset_id,
+                    )
+                    return None  # Validation passed — no budget consumed
+                else:
+                    logger.warning(
+                        "[EXP] use_experiment=True but dataset %s has no experiment_file_path — "
+                        "falling through to normal budget checks.",
+                        dataset_id,
+                    )
+            except Dataset.DoesNotExist:
+                pass  # Fall through to normal budget checks
+
         # 5. Privacy budget pre-check (Node protects itself; Hub is untrusted).
         # Design invariants:
         #   • Missing policy → BLOCK (fail-closed): datasets must have a policy.
