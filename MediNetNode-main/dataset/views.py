@@ -429,18 +429,35 @@ def dataset_upload(request):
             # Validate required fields
             if not name or not description or not medical_domain:
                 return JsonResponse({'success': False, 'error': 'All fields are required'}, status=400)
-            
+
+            # Optional experimental split ratio (10-50%)
+            split_ratio: float | None = None
+            split_ratio_raw = request.POST.get('split_ratio', '').strip()
+            if split_ratio_raw:
+                try:
+                    split_ratio = float(split_ratio_raw)
+                    if not (0.1 <= split_ratio <= 0.5):
+                        return JsonResponse(
+                            {'success': False, 'error': 'split_ratio must be between 0.1 and 0.5'},
+                            status=400,
+                        )
+                except ValueError:
+                    return JsonResponse(
+                        {'success': False, 'error': 'split_ratio must be a number'},
+                        status=400,
+                    )
+
             # Get uploaded file
             uploaded_file = request.FILES.get('file')
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
-            
+
             # Save file temporarily (with request for security logging)
             temp_path = _save_temp_file(uploaded_file, request)
-            
+
             # Create uploader and process synchronously
             uploader = SecureDatasetUploader(request.user)
-            
+
             try:
                 # Perform upload synchronously
                 dataset, upload_info = uploader.upload_dataset(
@@ -449,7 +466,8 @@ def dataset_upload(request):
                     description=description,
                     medical_domain=medical_domain,
                     data_type=data_type,
-                    target_column=target_column
+                    target_column=target_column,
+                    split_ratio=split_ratio,
                 )
                 
                 # Cleanup temporary file
@@ -478,9 +496,11 @@ def dataset_upload(request):
                 response_data = {
                     'success': True,
                     'message': success_message,
-                    'dataset_id': dataset.id
+                    'dataset_id': dataset.id,
+                    'has_experiment_split': dataset.experiment_file_path is not None,
+                    'experiment_row_count': dataset.experiment_row_count,
                 }
-                
+
                 # Add PHI information if columns were removed
                 if phi_info:
                     response_data['phi_info'] = phi_info
