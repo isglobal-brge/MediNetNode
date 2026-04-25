@@ -106,7 +106,8 @@ class SecureDatasetUploader:
         description: str,
         medical_domain: str,
         data_type: str = 'tabular',
-        target_column: str = None
+        target_column: str = None,
+        split_ratio: Optional[float] = None,
     ) -> Tuple[Dataset, Dict[str, Any]]:
         """
         Main method to upload and process a dataset securely.
@@ -164,10 +165,16 @@ class SecureDatasetUploader:
                 # Step 5: Store file securely WITHIN transaction
                 self._update_progress("storing", "Storing file securely...")
                 final_path = self._store_file_securely(file_path, name)
-                
+
+                # Step 5b: Create experiment split if requested
+                exp_path, exp_rows = self._maybe_create_experiment_split(
+                    production_path=final_path,
+                    split_ratio=split_ratio,
+                )
+
                 with datasets_connection.cursor() as cursor:
                     cursor.execute("PRAGMA foreign_keys = OFF")
-                    
+
                     # Step 6: Create dataset record with raw SQL
                     dataset_id = self._create_dataset_record_raw_sql(
                         cursor=cursor,
@@ -178,7 +185,10 @@ class SecureDatasetUploader:
                         data_type=data_type,
                         metadata=metadata,
                         sha256_hash=sha256_hash,
-                        target_column=target_column
+                        target_column=target_column,
+                        experiment_file_path=exp_path,
+                        experiment_row_count=exp_rows,
+                        experiment_split_ratio=split_ratio,
                     )
                     
                     # Step 7: Create metadata record with raw SQL
@@ -194,12 +204,15 @@ class SecureDatasetUploader:
                 # Rollback on any error
                 datasets_connection.rollback()
                 
-                # CLEANUP: Remove file if it was created
-                if final_path and os.path.exists(final_path):
+                # CLEANUP: Remove files if they were created
+                for path_to_remove in [final_path, exp_path if 'exp_path' in dir() else None]:
+                    if path_to_remove and os.path.exists(path_to_remove):
+                        try:
+                            os.unlink(path_to_remove)
+                        except Exception:
+                            pass
+                if final_path and os.path.exists(os.path.dirname(final_path)):
                     try:
-                        os.unlink(final_path)
-                        
-                        # Remove empty directories recursively (user_id/year/month structure)
                         dir_path = os.path.dirname(final_path)
                         for _ in range(3):  # Max 3 levels: month -> year -> user_id
                             if os.path.exists(dir_path) and not os.listdir(dir_path):
@@ -208,7 +221,7 @@ class SecureDatasetUploader:
                             else:
                                 break
                     except Exception:
-                        pass  # Ignore cleanup errors
+                        pass
                 
                 raise
             finally:
@@ -1146,6 +1159,48 @@ class SecureDatasetUploader:
         
         return final_path
     
+    def _maybe_create_experiment_split(
+        self,
+        production_path: str,
+        split_ratio: Optional[float],
+    ) -> Tuple[Optional[str], Optional[int]]:
+        """Physically split the production CSV into a smaller experiment file.
+
+        Returns (experiment_file_path, experiment_row_count) or (None, None).
+        Only operates on CSV files; other formats return (None, None) silently.
+        """
+        if split_ratio is None or not PANDAS_AVAILABLE:
+            return None, None
+
+        file_ext = Path(production_path).suffix.lower()
+        if file_ext != '.csv':
+            logger.warning(
+                "Experiment split requested but file is not CSV (%s); skipping.", file_ext
+            )
+            return None, None
+
+        try:
+            df = pd.read_csv(production_path)
+            experiment_df = df.sample(frac=split_ratio, random_state=42)
+            n_rows = len(experiment_df)
+
+            stem = os.path.splitext(os.path.basename(production_path))[0]
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            exp_filename = f"{stem}_experiment_{timestamp}.csv"
+            exp_path = os.path.join(os.path.dirname(production_path), exp_filename)
+            experiment_df.to_csv(exp_path, index=False)
+            os.chmod(exp_path, 0o644)
+
+            logger.info(
+                "Experiment split created: %d rows (%.0f%%) → %s",
+                n_rows, split_ratio * 100, exp_path,
+            )
+            return exp_path, n_rows
+
+        except Exception as exc:
+            logger.error("Experiment split failed (non-fatal): %s", exc)
+            return None, None
+
     def _create_dataset_record(
         self,
         name: str,
@@ -1225,7 +1280,10 @@ class SecureDatasetUploader:
         data_type: str,
         metadata: Dict[str, Any],
         sha256_hash: str,
-        target_column: str = None
+        target_column: str = None,
+        experiment_file_path: Optional[str] = None,
+        experiment_row_count: Optional[int] = None,
+        experiment_split_ratio: Optional[float] = None,
     ) -> int:
         """Create Dataset database record using raw SQL with SHA-256 checksum."""
         
@@ -1245,10 +1303,13 @@ class SecureDatasetUploader:
         # Normalize file path to avoid escape character issues
         normalized_path = file_path.replace('\\', '/')
         
+        # Normalize experiment path too
+        normalized_exp_path = experiment_file_path.replace('\\', '/') if experiment_file_path else None
+
         # Match EXACT column order from DB
         params = (
             name,                                                   # name
-            description,                                            # description  
+            description,                                            # description
             normalized_path,                                        # file_path (normalized)
             medical_domain,                                         # medical_domain
             metadata.get('rows', 0) if data_type == 'tabular' else None,  # patient_count
@@ -1265,16 +1326,20 @@ class SecureDatasetUploader:
             True,                                                   # is_active
             self.user.id,                                           # uploaded_by_id
             target_column,                                          # target_column
+            normalized_exp_path,                                    # experiment_file_path
+            experiment_row_count,                                   # experiment_row_count
+            experiment_split_ratio,                                 # experiment_split_ratio
         )
-        
+
         # Use parameterized query
         sql_parameterized = """
             INSERT INTO dataset_dataset (
                 name, description, file_path, medical_domain, patient_count,
                 data_type, anonymized, file_size, file_format, columns_count,
                 rows_count, uploaded_at, last_accessed, access_count,
-                checksum_sha256, is_active, uploaded_by_id, target_column
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                checksum_sha256, is_active, uploaded_by_id, target_column,
+                experiment_file_path, experiment_row_count, experiment_split_ratio
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         cursor.execute(sql_parameterized, params)
