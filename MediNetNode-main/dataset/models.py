@@ -109,6 +109,11 @@ class Dataset(models.Model):
         null=True,
         help_text="Column name that will be used as target for federated learning"
     )
+
+    # Experimental split — populated only when split_ratio was given at upload
+    experiment_file_path = models.CharField(max_length=500, null=True, blank=True)
+    experiment_row_count = models.PositiveIntegerField(null=True, blank=True)
+    experiment_split_ratio = models.FloatField(null=True, blank=True)
     
     class Meta:
         ordering = ['-uploaded_at']
