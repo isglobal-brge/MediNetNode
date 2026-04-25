@@ -71,6 +71,37 @@ Máximo **2 sesiones de entrenamiento activas** simultáneamente por researcher.
 
 ---
 
+## Soporte ML federado (FedSVM y FedDP Random Forest)
+
+MediNet v2 incluye dos algoritmos de aprendizaje automático clásico como alternativa a las redes neuronales profundas. Los investigadores pueden seleccionar SVM federado o Random Forest con privacidad diferencial desde el diseñador de modelos del Hub, sin necesidad de escribir código.
+
+### FedSVM — Support Vector Machine federado
+
+Implementa la variante **OptMD** (Optimized Multiple Deltas): cada hospital entrena un SVM local y comparte únicamente sus vectores soporte al servidor Hub, donde se consolidan en un modelo global. Los datos de pacientes nunca abandonan el hospital.
+
+**Configuración disponible desde el Hub:**
+- Kernel: RBF (por defecto), lineal, polinomial
+- Hiperparámetros: `C`, `gamma`, umbral de convergencia del servidor (`server_eps`)
+- Número de rondas federadas
+
+### FedDP Random Forest — Bosque aleatorio con privacidad diferencial
+
+Cada hospital entrena árboles de decisión localmente con **ruido diferencial aplicado en los nodos de división** (mecanismo de Laplace sobre umbrales). El Hub agrega los árboles en un bosque global.
+
+**Configuración disponible desde el Hub:**
+- Presupuesto de privacidad total (`epsilon_total`)
+- Número de árboles por cliente (`n_trees_per_client`)
+- Profundidad máxima (`max_depth`)
+- Criterio de parada por convergencia
+
+**Predicción federada:** el bosque global admite votación por mayoría (`hard`) con una implementación de travesía recursiva de árbol en el servidor Hub.
+
+### Registro de epsilon para jobs ML en el Node
+
+Los jobs con modelos clásicos no aplican DP-SGD (no hay `noise_multiplier`). Para garantizar que el presupuesto `ResearcherEpsilonBudget` se actualice igualmente, `MLFlowerClient.fit()` registra `max_epsilon_per_job` de la política del dataset como epsilon consumido (enfoque conservador).
+
+---
+
 ## Correcciones de seguridad
 
 ### [ALTA] Parámetros DP sin verificación mid-training

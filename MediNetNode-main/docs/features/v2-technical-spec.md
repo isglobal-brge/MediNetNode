@@ -298,7 +298,92 @@ python manage.py migrate                          # BudgetResetRequest
 
 ---
 
-## 9. Tests
+## 9. Algoritmos ML federados
+
+### 9.1 FedSVM (`FedSVMStrategy` — MediNetHub)
+
+Variante OptMD del SVM federado. Protocolo de ronda:
+
+1. Hub envía vectores soporte de las otras instituciones a cada cliente.
+2. Cliente retraina su SVM local con los SVs recibidos.
+3. Cliente devuelve sus nuevos vectores soporte al Hub.
+4. Hub detecta convergencia cuando `Δ(SVs) < server_eps`.
+
+No hay parámetros de modelo en el sentido DL — los "parámetros" son arrays de vectores soporte serializados como `np.ndarray`.
+
+**Configuración (enviada al Node como `model_json`):**
+```json
+{
+  "algorithm": {
+    "ml_algorithm": {
+      "type": "svm",
+      "hyperparameters": {
+        "kernel": "rbf",
+        "C": 1.0,
+        "gamma": "scale",
+        "server_eps": 0.01
+      }
+    }
+  }
+}
+```
+
+### 9.2 FedDP Random Forest (`FedDPRandomForestStrategy` — MediNetHub)
+
+Protocolo de ronda:
+
+1. Hub serializa el bosque global actual (lista de `tree_state` dicts) y lo envía a cada cliente.
+2. Cliente entrena N árboles locales con DP (mecanismo de Laplace en umbrales de split).
+3. Cliente devuelve árboles en el mismo formato `tree_state`.
+4. Hub agrega árboles, filtra duplicados por SHA y actualiza `global_forest`.
+
+**Formato `tree_state`:**
+```python
+{
+    'tree_structure': {  # árbol recursivo
+        'type': 'split',
+        'feature': int,
+        'threshold': float,
+        'left': {...},   # nodo hijo izquierdo
+        'right': {...},  # nodo hijo derecho
+    },  # o {'type': 'leaf', 'label': int}
+    'n_classes': int,
+    'max_depth': int,
+    'feature_bounds': [[min, max], ...],
+    'epsilon': float,   # epsilon gastado por este árbol
+}
+```
+
+**Predicción del bosque (`predict()`):**
+
+Implementada en `FedDPRandomForestStrategy.predict()` mediante travesía recursiva de cada árbol en `global_forest`:
+
+```python
+def _predict_tree(tree_structure, x):
+    node = tree_structure
+    while node['type'] != 'leaf':
+        node = node['left'] if x[node['feature']] <= node['threshold'] else node['right']
+    return int(node['label'])
+```
+
+Votación por mayoría (`hard`) sobre todos los árboles del bosque. No requiere reconstruir `SecureDPTree` — opera directamente sobre el `tree_structure` serializado.
+
+### 9.3 Selector de estrategia (`server.py::get_strategy()`)
+
+```python
+if model_type == 'ml':
+    ml_algorithm = model_json.get('algorithm', {}).get('ml_algorithm', {}).get('type')
+    if ml_algorithm == 'random_forest':
+        return FedDPRandomForestStrategy(server_manager, ...)
+    elif ml_algorithm == 'svm':
+        return FedSVMStrategy(server_manager, ...)
+else:
+    return FedAvgWithDP(server_manager, ...)  # DL por defecto
+```
+
+---
+
+## 10. Tests (MediNetNode)
 
 Todos los tests nuevos usan `pytest-django` con el mismo patrón que el resto del proyecto. Tests que necesitan ambas DBs usan `@pytest.mark.django_db(databases=['default', 'datasets_db'])`.
 
