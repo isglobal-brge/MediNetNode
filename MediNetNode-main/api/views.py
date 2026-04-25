@@ -11,6 +11,7 @@ import os
 import logging
 from .federated import client
 from dataset.models import Dataset, DatasetAccess, ResearcherEpsilonBudget
+from trainings.models import TrainingSession
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
@@ -21,6 +22,8 @@ from medinet.error_handlers import SafeErrorResponse
 logger = logging.getLogger(__name__)
 
 CLIENT_VERSION = "0.1" # Version of the client API, used for versioning and compatibility checks
+
+MAX_CONCURRENT_TRAINING_SESSIONS = 2
 
 # JSON schema for training configuration validation
 TRAINING_CONFIG_SCHEMA = {
@@ -218,6 +221,22 @@ def start_client(request):
         logger.info(f"start_client request from user {user.username}")
         logger.debug(f"Request data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
 
+        # Limit concurrent active training sessions per researcher
+        active_sessions = TrainingSession.objects.filter(
+            user=request.api_user,
+            status__in=['STARTING', 'ACTIVE'],
+        ).count()
+        if active_sessions >= MAX_CONCURRENT_TRAINING_SESSIONS:
+            return JsonResponse(
+                {
+                    'error': (
+                        f'Límite de sesiones simultáneas alcanzado ({MAX_CONCURRENT_TRAINING_SESSIONS}). '
+                        f'Espera a que termine un entrenamiento antes de iniciar otro.'
+                    )
+                },
+                status=429,
+            )
+
         # Validate training configuration
         validation_error = validate_training_config(data, len(request.body))
         if validation_error is not None:
@@ -252,7 +271,6 @@ def start_client(request):
         logger.info(f"Training initiated by user {user.username}, client_id: {client_id}")
         
         # Create training session BEFORE starting client (ensures it exists)
-        from trainings.models import TrainingSession
         import psutil
         
         try:
@@ -689,7 +707,6 @@ def cancel_training(request, session_id):
         JsonResponse with cancellation status
     """
     import psutil
-    from trainings.models import TrainingSession
 
     user = request.api_user
     logger.info(f"Cancel training request from user {user.username} for session {session_id}")
