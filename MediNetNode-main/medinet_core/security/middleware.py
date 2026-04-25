@@ -20,6 +20,7 @@ import urllib.parse
 
 from django.conf import settings
 from django.contrib.auth import logout
+from django.core.cache import cache
 from django.db.models import Q
 from django.http import JsonResponse, FileResponse, Http404
 from django.shortcuts import redirect
@@ -329,6 +330,10 @@ class APIAuthenticationMiddleware:
 # RateLimitMiddleware
 # ---------------------------------------------------------------------------
 
+_IP_RATE_LIMIT_MAX = 20
+_IP_RATE_LIMIT_WINDOW = 60  # seconds
+
+
 class RateLimitMiddleware:
     """Rate limiting for API endpoints. Counts ALL requests (including failed auth)."""
 
@@ -342,14 +347,33 @@ class RateLimitMiddleware:
     def __call__(self, request):
         if not request.path.startswith('/api/'):
             return self.get_response(request)
+
+        # IP-based rate limiting for unauthenticated requests
         if not hasattr(request, 'api_user'):
+            client_ip = self._get_client_ip(request)
+            cache_key = f'ratelimit_ip_{client_ip}'
+            request_count = cache.get(cache_key, 0)
+            if request_count >= _IP_RATE_LIMIT_MAX:
+                return JsonResponse(
+                    {'error': 'Demasiadas peticiones. Inténtalo más tarde.'},
+                    status=429,
+                )
+            cache.set(cache_key, request_count + 1, _IP_RATE_LIMIT_WINDOW)
             return self.get_response(request)
+
+        # Existing authenticated rate limiting logic
         if self.is_rate_limited(request):
             return JsonResponse(
                 {'error': 'Rate limit exceeded. Maximum 100 requests per hour.', 'retry_after': 3600},
                 status=429
             )
         return self.get_response(request)
+
+    def _get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', '0.0.0.0')
 
     def is_rate_limited(self, request):
         from datetime import timedelta
