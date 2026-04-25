@@ -600,6 +600,53 @@
                         <div class="form-text">Column to predict in federated learning</div>
                     </div>
 
+                    <!-- Experimental Split Section -->
+                    <div class="border rounded p-3 mb-3" style="background:rgba(66,165,245,0.04);">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="enableSplit">
+                            <label class="form-check-label fw-semibold" for="enableSplit">
+                                <i class="bi bi-scissors me-1"></i>
+                                Create experimental subset
+                            </label>
+                        </div>
+                        <div class="form-text mb-2">
+                            Splits a small copy of the dataset with <strong>no epsilon budget</strong> so researchers can iterate freely.
+                        </div>
+
+                        <div id="splitOptions" class="d-none">
+                            <label for="splitRangeInput" class="form-label mb-1">
+                                Subset size: <strong><span id="splitPct">20</span>%</strong> of rows
+                            </label>
+                            <input type="range" class="form-range mb-2" id="splitRangeInput"
+                                   min="10" max="50" step="5" value="20">
+                            <!-- Hidden input that actually gets submitted -->
+                            <input type="hidden" id="splitRatioHidden" name="split_ratio" value="" disabled>
+
+                            <!-- DP Recommendations panel -->
+                            <div class="alert alert-info py-2 px-3 mb-0 mt-2 small" id="dpRecommendations" style="display:none;">
+                                <strong><i class="bi bi-shield-lock me-1"></i>DP Budget Recommendations</strong>
+                                <div id="dpRec-high" class="d-none mt-1">
+                                    <span class="fw-semibold">High sensitivity</span> (genetic, psychiatric)<br>
+                                    ε ≤ <code>0.5</code>/job · lifetime ≤ <code>2.0</code><br>
+                                    <span class="text-muted">Dwork &amp; Roth 2014; Apple DP Team 2017</span>
+                                </div>
+                                <div id="dpRec-medium" class="d-none mt-1">
+                                    <span class="fw-semibold">Medium sensitivity</span> (lab results, diagnoses)<br>
+                                    ε ≤ <code>1.0</code>/job · lifetime ≤ <code>5.0</code><br>
+                                    <span class="text-muted">Erlingsson et al. 2014; US Census ε=17.14</span>
+                                </div>
+                                <div id="dpRec-low" class="d-none mt-1">
+                                    <span class="fw-semibold">Low sensitivity</span> (aggregate stats)<br>
+                                    ε ≤ <code>3.0</code>/job · lifetime ≤ <code>15.0</code><br>
+                                    <span class="text-muted">Abowd 2018; no consensus below ε=10</span>
+                                </div>
+                                <div id="dpRec-placeholder" class="mt-1 text-muted">
+                                    Select a <em>Medical Domain</em> above to see sensitivity-based recommendations.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="d-grid gap-2 mt-4">
                         <button type="submit" class="btn-upload" id="uploadBtn" disabled>
@@ -1034,6 +1081,65 @@ document.addEventListener('DOMContentLoaded', function() {
     // Event listeners for dynamic updates
     document.getElementById('dataType').addEventListener('change', updateTargetColumnVisibility);
     document.getElementById('targetColumn').addEventListener('change', updateUploadButtonState);
+
+    // --- Experimental Split Logic ---
+    const enableSplit    = document.getElementById('enableSplit');
+    const splitOptions   = document.getElementById('splitOptions');
+    const splitRange     = document.getElementById('splitRangeInput');
+    const splitPct       = document.getElementById('splitPct');
+    const splitHidden    = document.getElementById('splitRatioHidden');
+    const dpPanel        = document.getElementById('dpRecommendations');
+    const domainSelect   = document.getElementById('medicalDomain');
+
+    // Domain → sensitivity (mirrors SENSITIVITY_DEFAULTS keys)
+    const sensitivityMap = {
+        cardiology:    'medium',
+        neurology:     'high',
+        oncology:      'high',
+        radiology:     'medium',
+        pathology:     'high',
+        dermatology:   'medium',
+        ophthalmology: 'low',
+        general:       'low',
+        other:         'low',
+    };
+
+    function refreshDpRec() {
+        const level = sensitivityMap[domainSelect.value] || null;
+        ['high', 'medium', 'low'].forEach(function(l) {
+            document.getElementById('dpRec-' + l).classList.add('d-none');
+        });
+        const placeholder = document.getElementById('dpRec-placeholder');
+        if (level) {
+            document.getElementById('dpRec-' + level).classList.remove('d-none');
+            placeholder.classList.add('d-none');
+        } else {
+            placeholder.classList.remove('d-none');
+        }
+    }
+
+    enableSplit.addEventListener('change', function() {
+        const on = this.checked;
+        splitOptions.classList.toggle('d-none', !on);
+        splitHidden.disabled = !on;
+        if (on) {
+            splitHidden.value = (parseInt(splitRange.value) / 100).toFixed(2);
+            dpPanel.style.display = 'block';
+            refreshDpRec();
+        } else {
+            splitHidden.value = '';
+            dpPanel.style.display = 'none';
+        }
+    });
+
+    splitRange.addEventListener('input', function() {
+        splitPct.textContent = this.value;
+        splitHidden.value = (parseInt(this.value) / 100).toFixed(2);
+    });
+
+    domainSelect.addEventListener('change', function() {
+        if (enableSplit.checked) refreshDpRec();
+    });
 });
 </script>
 {% endblock %}
