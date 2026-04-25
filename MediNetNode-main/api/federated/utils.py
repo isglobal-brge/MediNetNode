@@ -1,18 +1,26 @@
+import logging
+import math
 import torch
 from datetime import datetime
+from django.db.models import F
 from opacus.validators import ModuleValidator
+
+logger = logging.getLogger(__name__)
 
 try:
     import django
     django.setup()
     from trainings.models import TrainingRound
     from django.contrib.auth import get_user_model
+    from dataset.models import DatasetPrivacyPolicy, ResearcherEpsilonBudget
     DJANGO_AVAILABLE = True
     User = get_user_model()
-    
+
 except ImportError as e:
     print(f"Warning: Django models not available for training tracking: {e}")
     DJANGO_AVAILABLE = False
+    DatasetPrivacyPolicy = None
+    ResearcherEpsilonBudget = None
     
 
 def flatten_with_prefix(config, prefix="", delimiter="__"):
@@ -162,12 +170,114 @@ def update_training_progress(training_session,round_number, current_process, met
         # Error updating progress
         raise e
 
+def _record_privacy_spend(training_session) -> None:
+    """Record actual ε spent in DatasetPrivacyPolicy after training completes.
+
+    Reads the highest-numbered TrainingRound's metrics to obtain the accumulated
+    privacy_epsilon, then delegates to DatasetPrivacyPolicy.record_spent() which
+    applies an atomic conditional DB update to prevent budget overruns.
+
+    This function never raises — recording failure must not affect training status.
+    """
+    try:
+        dataset_id = getattr(training_session, 'dataset_id', None)
+        if not dataset_id:
+            logger.warning(
+                "[DP] training_session %s has no dataset_id — privacy spend not recorded",
+                getattr(training_session, 'session_id', '?'),
+            )
+            return
+
+        try:
+            policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+        except DatasetPrivacyPolicy.DoesNotExist:
+            logger.info(
+                "[DP] No DatasetPrivacyPolicy for dataset %s — no spend to record",
+                dataset_id,
+            )
+            return
+
+        # The actual epsilon comes from the last completed round's metrics JSONField.
+        # TrainingRound.complete_round(**kwargs) stores extra kwargs (incl. privacy_epsilon)
+        # in the metrics column via update_training_progress in this same file.
+        # Use the reverse relation (training_session.rounds) so tests can mock it easily.
+        last_round = (
+            training_session.rounds
+            .order_by('-round_number')
+            .first()
+        )
+        if last_round is None:
+            logger.warning(
+                "[DP] No TrainingRound records for session %s — privacy spend not recorded",
+                training_session.session_id,
+            )
+            return
+
+        metrics_dict = last_round.metrics or {}
+        raw_eps = metrics_dict.get('privacy_epsilon')
+        if raw_eps is None:
+            logger.warning(
+                "[DP] privacy_epsilon absent from round %s metrics in session %s — "
+                "DP may not have been active for this job",
+                last_round.round_number, training_session.session_id,
+            )
+            return
+
+        try:
+            actual_epsilon = float(raw_eps)
+        except (TypeError, ValueError):
+            logger.error(
+                "[DP] Non-numeric privacy_epsilon (%r) in round %s of session %s",
+                raw_eps, last_round.round_number, training_session.session_id,
+            )
+            return
+
+        if not math.isfinite(actual_epsilon) or actual_epsilon <= 0.0:
+            logger.warning(
+                "[DP] Invalid privacy_epsilon=%.6g in session %s — skipping record",
+                actual_epsilon, training_session.session_id,
+            )
+            return
+
+        policy.record_spent(actual_epsilon)
+        logger.info(
+            "[DP] Recorded ε=%.6f for dataset %s (session %s, round %s)",
+            actual_epsilon, dataset_id,
+            training_session.session_id, last_round.round_number,
+        )
+
+        # Update per-researcher epsilon budget
+        try:
+            researcher_id = getattr(training_session, 'user_id', None)
+            if researcher_id is not None:
+                ResearcherEpsilonBudget.objects.filter(
+                    dataset_id=dataset_id,
+                    researcher_id=researcher_id,
+                    spent_epsilon__lte=F('lifetime_budget'),
+                ).update(spent_epsilon=F('spent_epsilon') + actual_epsilon)
+                logger.info(
+                    "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
+                    researcher_id, dataset_id, actual_epsilon,
+                )
+        except Exception as exc:
+            logger.error(
+                "Error updating ResearcherEpsilonBudget (researcher=%s): %s",
+                getattr(training_session, 'user_id', None), exc,
+            )
+
+    except Exception as exc:
+        logger.error(
+            "[DP] Unexpected error recording privacy spend for session %s: %s",
+            getattr(training_session, 'session_id', '?'), exc,
+        )
+
+
 def complete_training_session(training_session, final_metrics=None):
     """Mark training session as completed with final metrics."""
-    
+
     if not DJANGO_AVAILABLE or not training_session:
         return
-    
+
     try:
         if final_metrics:
             training_session.mark_completed(
@@ -181,23 +291,30 @@ def complete_training_session(training_session, final_metrics=None):
             training_session.status = 'COMPLETED'
             training_session.completed_at = datetime.now()
             training_session.save()
-        
-        # Training session completed
-        
+
+        # Record differential-privacy spend now that training has finished.
+        # _record_privacy_spend never raises, so it cannot affect session status.
+        _record_privacy_spend(training_session)
+
     except Exception as e:
         # Error completing session
         raise e
 
 def fail_training_session(training_session, error_message, traceback=None):
     """Mark training session as failed with error details."""
-    
+
     if not DJANGO_AVAILABLE or not training_session:
         return
-    
+
+    # Record any privacy budget consumed by completed rounds before marking failed.
+    # A Hub that deliberately crashes training on the last round must still be debited
+    # for the rounds that did run. _record_privacy_spend never raises.
+    _record_privacy_spend(training_session)
+
     try:
         training_session.mark_failed(error_message, traceback)
         print(f"[ERROR] Training session failed: {training_session.session_id} - {error_message}")
-        
+
     except Exception as e:
         print(f"[ERROR] Error marking training session as failed: {e}")
 
