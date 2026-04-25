@@ -4,6 +4,7 @@ Compatible with existing client_api.py structure.
 """
 from django.urls import path
 from . import views
+from .budget_views import request_budget_reset, approve_budget_reset, reject_budget_reset
 
 app_name = 'api'
 
@@ -19,4 +20,9 @@ urlpatterns = [
 
     # Cancel training endpoint
     path('v1/cancel-training/<uuid:session_id>', views.cancel_training, name='cancel_training'),
+
+    # Budget reset endpoints
+    path('v1/budget-reset/', request_budget_reset, name='budget_reset_request'),
+    path('v1/budget-reset/<int:request_id>/approve/', approve_budget_reset, name='budget_reset_approve'),
+    path('v1/budget-reset/<int:request_id>/reject/', reject_budget_reset, name='budget_reset_reject'),
 ]
