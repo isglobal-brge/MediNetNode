@@ -28,7 +28,15 @@ User = get_user_model()
 def researcher_info(request):
     """Informational page for non-admin roles explaining limited access."""
     if request.user.role and request.user.role.name == 'RESEARCHER':
-        return render(request, 'users/researcher_info.html', {})
+        from dataset.models import ResearcherEpsilonBudget
+        researcher_budgets = (
+            ResearcherEpsilonBudget.objects
+            .filter(researcher_id=request.user.id)
+            .order_by('dataset_id')
+        )
+        return render(request, 'users/researcher_info.html', {
+            'researcher_budgets': researcher_budgets,
+        })
     return redirect('admin_dashboard')
 
 

@@ -59,7 +59,44 @@
       </div>
     </div>
   </div>
-  
+
+    <!-- DP Budget Section -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0">Mis presupuestos de Privacidad Diferencial (&epsilon;)</h5>
+      </div>
+      <div class="card-body">
+        {% if researcher_budgets %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Dataset ID</th>
+                <th>Gastado (&epsilon;)</th>
+                <th>Restante (&epsilon;)</th>
+                <th>Límite total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for budget in researcher_budgets %}
+              <tr>
+                <td>#{{ budget.dataset_id }}</td>
+                <td>{{ budget.spent_epsilon|floatformat:4 }}</td>
+                <td>{{ budget.remaining_budget|floatformat:4 }}</td>
+                <td>{{ budget.lifetime_budget|floatformat:4 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">
+          Aún no has entrenado con ningún dataset en este Node.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

@@ -6,6 +6,7 @@ import os
 import logging
 from typing import Dict, Any
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.response import TemplateResponse
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -17,7 +18,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-from .models import Dataset, DatasetAccess, DatasetMetadata
+from .models import Dataset, DatasetAccess, DatasetMetadata, DatasetPrivacyPolicy, ResearcherEpsilonBudget
 from .uploader import SecureDatasetUploader
 from .forms import DatasetMetadataForm, DatasetEditForm
 from users.decorators import require_role
@@ -158,9 +159,35 @@ def dataset_detail(request, dataset_id):
         'days_since_upload': (timezone.now() - dataset.uploaded_at).days
     }
     
-    # If it's a POST request, handle metadata updates
-    if request.method == 'POST' and (request.user.is_superuser or 
+    # Load privacy policy for this dataset (may not exist yet).
+    try:
+        privacy_policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+    except DatasetPrivacyPolicy.DoesNotExist:
+        privacy_policy = None
+
+    # If it's a POST request, handle metadata updates or privacy policy updates
+    if request.method == 'POST' and (request.user.is_superuser or
             (request.user.role and request.user.role.name == 'ADMIN')):
+
+        action = request.POST.get('action', 'update_metadata')
+
+        if action == 'update_privacy_policy':
+            sensitivity = request.POST.get('sensitivity', 'medium')
+            allowed = {c[0] for c in DatasetPrivacyPolicy.SENSITIVITY_CHOICES}
+            if sensitivity not in allowed:
+                messages.error(request, 'Sensitivity level no válido.')
+            else:
+                if privacy_policy is None:
+                    privacy_policy = DatasetPrivacyPolicy(dataset_id=dataset_id)
+                privacy_policy.sensitivity = sensitivity
+                # Reset per-job and lifetime budget to preset values; keep spent_epsilon.
+                defaults = DatasetPrivacyPolicy.SENSITIVITY_DEFAULTS[sensitivity]
+                privacy_policy.max_epsilon_per_job = defaults['max_epsilon_per_job']
+                privacy_policy.lifetime_budget = defaults['lifetime_budget']
+                privacy_policy.save()
+                messages.success(request, f'Política de privacidad actualizada: sensibilidad «{sensitivity}».')
+            return redirect('dataset:detail', dataset_id=dataset_id)
+
         form = DatasetMetadataForm(request.POST, instance=metadata_obj)
         if form.is_valid():
             metadata_obj = form.save(commit=False)
@@ -172,6 +199,22 @@ def dataset_detail(request, dataset_id):
     else:
         form = DatasetMetadataForm(instance=metadata_obj)
     
+    # Researcher budgets — only for ADMIN
+    researcher_budgets = []
+    pending_reset_requests = []
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.name == 'ADMIN':
+        from trainings.models import BudgetResetRequest
+        researcher_budgets = (
+            ResearcherEpsilonBudget.objects
+            .filter(dataset=dataset)
+            .order_by('researcher_id')
+        )
+        pending_reset_requests = list(
+            BudgetResetRequest.objects
+            .filter(dataset_id=dataset.id, status='pending')
+            .order_by('requested_at')
+        )
+
     # Format file size for display
     def format_file_size(size_bytes):
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -190,11 +233,15 @@ def dataset_detail(request, dataset_id):
         'stats': stats,
         'formatted_size': formatted_size,
         'form': form,
-        'can_edit': request.user.is_superuser or 
-                   (request.user.role and request.user.role.name == 'ADMIN')
+        'can_edit': request.user.is_superuser or
+                   (request.user.role and request.user.role.name == 'ADMIN'),
+        'privacy_policy': privacy_policy,
+        'sensitivity_choices': DatasetPrivacyPolicy.SENSITIVITY_CHOICES,
+        'researcher_budgets': researcher_budgets,
+        'pending_reset_requests': pending_reset_requests,
     }
     
-    return render(request, 'dataset/detail.html', context)
+    return TemplateResponse(request, 'dataset/detail.html', context)
 
 
 @login_required
