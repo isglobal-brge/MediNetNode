@@ -189,13 +189,23 @@ class MLFlowerClient(NumPyClient):
             # [INIT] DELEGATE to algorithm
             updated_params, metrics = self.algorithm.fit(parameters)
 
+            # Obtain privacy_epsilon for ML: use max_epsilon_per_job as conservative proxy.
+            # Classical ML has no formal DP guarantee; this records the maximum allowed per job.
+            try:
+                from dataset.models import DatasetPrivacyPolicy
+                _policy = DatasetPrivacyPolicy.objects.get(dataset_id=self.table_name)
+                ml_epsilon = _policy.max_epsilon_per_job
+            except Exception:
+                ml_epsilon = float('inf')
+
             # Prepare metrics for tracking
             round_metrics = {
                 'loss': float(metrics.get('loss', 0.0)),
                 'accuracy': float(metrics.get('accuracy', 0.0)),
                 'precision': float(metrics.get('precision', 0.0)),
                 'recall': float(metrics.get('recall', 0.0)),
-                'f1': float(metrics.get('f1', 0.0))
+                'f1': float(metrics.get('f1', 0.0)),
+                'privacy_epsilon': ml_epsilon,
             }
 
             # Update training progress in Django
