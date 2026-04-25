@@ -15,6 +15,7 @@ from datetime import datetime
 from .dl_client import DLFlowerClient
 from .ml_client import MLFlowerClient
 from .algorithms import get_algorithm
+from .train_functions import _TRAINING_BATCH_SIZE
 # Add Django project to path for model imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings')
@@ -153,7 +154,7 @@ def client_fn(context: Context):
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Loading data for table: {TABLE_NAME}\n")
 
-        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=32)
+        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=_TRAINING_BATCH_SIZE)
 
         # Log data loading results
         with open('client_debug.log', 'a', encoding='utf-8') as f:
@@ -264,7 +265,9 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         start_client(
             server_address=server_address,
             client_fn=client_fn,
-            root_certificates=root_certificates
+            root_certificates=root_certificates,
+            max_retries=int(os.environ.get("FLOWER_MAX_RETRIES", 10)),
+            max_wait_time=float(os.environ.get("FLOWER_MAX_WAIT_TIME", 300.0)),
         )
         # If we reach here, training completed successfully
         complete_training_session(TRAINING_SESSION)
