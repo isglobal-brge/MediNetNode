@@ -10,7 +10,7 @@ import json
 import os
 import logging
 from .federated import client
-from dataset.models import Dataset, DatasetAccess
+from dataset.models import Dataset, DatasetAccess, ResearcherEpsilonBudget
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
@@ -377,6 +377,63 @@ def extract_dataset_id_from_model(model_json):
     return None
 
 
+def estimate_job_epsilon(config: dict, dataset_size: int) -> float:
+    """
+    Estimate ε for a training job using RDPAccountant with Node-enforced minimums.
+
+    Mirrors the clamping logic from train_functions.py so the pre-flight check
+    uses the same ε that actual training would produce.  Returns float('inf') on
+    any failure so callers can treat an estimation failure as "budget unknown"
+    and decide how to proceed.
+    """
+    import math
+    try:
+        from api.federated.train_functions import (
+            _MIN_NOISE_MULTIPLIER, _DP_DELTA, _MAX_EPOCHS, _safe_dp_float,
+            _TRAINING_BATCH_SIZE,
+        )
+        from opacus.accountants import RDPAccountant
+    except ImportError as exc:
+        logger.warning("[DP] Cannot import DP dependencies for epsilon estimation: %s", exc)
+        return float('inf')
+
+    if dataset_size <= 0:
+        return float('inf')
+
+    opt_config = config.get('model', {}).get('training', {}).get('optimizer', {})
+    _raw_dp = opt_config.get('differential_privacy', {})
+    if not isinstance(_raw_dp, dict):
+        _raw_dp = {}
+
+    # Apply the same Node-enforced floor as train_functions.train()
+    noise_multiplier = max(
+        _safe_dp_float(_raw_dp.get('noise_multiplier'), _MIN_NOISE_MULTIPLIER),
+        _MIN_NOISE_MULTIPLIER,
+    )
+
+    # Use the Node-fixed batch size, not the Hub-supplied one. The Hub could
+    # send a tiny batch_size to lower the estimated sample_rate and understate ε.
+    batch_size = min(_TRAINING_BATCH_SIZE, dataset_size)
+
+    try:
+        raw_epochs = int(config.get('train', {}).get('epochs', 3))
+    except (TypeError, ValueError):
+        raw_epochs = 3
+    epochs = min(max(raw_epochs, 1), _MAX_EPOCHS)
+
+    sample_rate = batch_size / dataset_size
+    steps = max(int(epochs * dataset_size / batch_size), 1)
+
+    try:
+        acc = RDPAccountant()
+        acc.history = [(noise_multiplier, sample_rate, steps)]
+        eps = float(acc.get_epsilon(delta=_DP_DELTA))
+        return eps if math.isfinite(eps) else float('inf')
+    except Exception as exc:
+        logger.warning("[DP] RDPAccountant epsilon estimation failed: %s", exc)
+        return float('inf')
+
+
 def validate_training_permissions(user, model_json):
     """
     Comprehensive validation of user permissions for federated learning training.
@@ -446,7 +503,80 @@ def validate_training_permissions(user, model_json):
             f"Training permissions validated for user {user.username}, "
             f"dataset: {dataset_id}"
         )
-        
+
+        # 5. Privacy budget pre-check (Node protects itself; Hub is untrusted).
+        # Design invariants:
+        #   • Missing policy → BLOCK (fail-closed): datasets must have a policy.
+        #   • Estimation failure → can_accept_job(inf) handles it → BLOCK.
+        #   • DB / system error → 503 (fail-closed): if we cannot prove budget
+        #     remains, we must not allow access to patient data.
+        try:
+            from dataset.models import DatasetPrivacyPolicy
+            try:
+                policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+            except DatasetPrivacyPolicy.DoesNotExist:
+                logger.warning(
+                    "[DP] No privacy policy for dataset %s — blocking training. "
+                    "Administrator must configure a DatasetPrivacyPolicy.",
+                    dataset_id,
+                )
+                return JsonResponse(
+                    {'error': (
+                        f'Dataset {dataset_id} has no privacy policy configured. '
+                        'An administrator must create a privacy policy before '
+                        'training is permitted on this dataset.'
+                    )},
+                    status=403,
+                )
+            dataset_size = access.dataset.patient_count or 0
+            estimated_eps = estimate_job_epsilon(model_json, dataset_size)
+            can_proceed, reason = policy.can_accept_job(estimated_eps)
+            if not can_proceed:
+                logger.warning(
+                    "[DP] Budget check failed for user %s, dataset %s: %s",
+                    user.username, dataset_id, reason,
+                )
+                return JsonResponse({'error': reason}, status=403)
+            logger.info(
+                "[DP] Budget check passed: estimated ε=%.4f (remaining: %.4f) "
+                "for user %s, dataset %s",
+                estimated_eps, policy.remaining_budget,
+                user.username, dataset_id,
+            )
+
+            # --- Chequeo de presupuesto por researcher ---
+            try:
+                researcher_budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+                    dataset=access.dataset,
+                    researcher_id=user.id,
+                    policy=policy,
+                )
+                can_proceed, reason = researcher_budget.can_accept_job(estimated_eps)
+                if not can_proceed:
+                    logger.warning(
+                        "Researcher %s rechazado por presupuesto personal agotado: %s",
+                        user.username, reason
+                    )
+                    return JsonResponse(
+                        {'error': f'Presupuesto de privacidad del researcher agotado: {reason}'},
+                        status=403,
+                    )
+            except Exception as exc:
+                logger.error("Error verificando presupuesto del researcher: %s", exc)
+                return JsonResponse(
+                    {'error': 'Error verificando presupuesto de privacidad del researcher.'},
+                    status=500,
+                )
+
+        except Exception as dp_exc:
+            logger.error(
+                "[DP] Privacy budget system error for dataset %s: %s", dataset_id, dp_exc
+            )
+            return JsonResponse(
+                {'error': 'Privacy budget check unavailable. Contact administrator.'},
+                status=503,
+            )
+
         return None  # Validation passed
         
     except Exception as e:
