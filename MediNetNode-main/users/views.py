@@ -209,27 +209,24 @@ def user_list(request):
 @csrf_protect
 def create_user(request):
     """Create a new user."""
-    
     if request.method == 'POST':
         form = SecureUserCreationForm(request.POST, created_by=request.user)
-        
         if form.is_valid():
             try:
                 with transaction.atomic():
                     user = form.save()
-                    
+
                     # Auto-generate API key for RESEARCHER users
                     api_key = None
                     if user.role and user.role.name == 'RESEARCHER':
                         from .models import APIKey
                         api_key = APIKey.objects.create(
                             user=user,
-                            name=f"Auto-generated API Key",
-                            ip_whitelist=['0.0.0.0/0'],  # Allow all IPs by default - can be configured later
-                            expires_at=None  # No expiration for now
+                            name="Auto-generated API Key",
+                            ip_whitelist=['0.0.0.0/0'],
+                            expires_at=None
                         )
-                    
-                    # Crear log de auditoría
+
                     AuditLog.objects.create(
                         user=request.user,
                         action='USER_CREATE',
@@ -243,35 +240,25 @@ def create_user(request):
                             'api_key_generated': bool(api_key),
                         }
                     )
-                    
-                    # Store user data in session for success modal (one-time display)
-                    if api_key:
-                        request.session['new_user_data'] = {
-                            'username': user.username,
-                            'password': form.cleaned_data['password1'],
-                            'email': user.email,
-                            'first_name': user.first_name,
-                            'last_name': user.last_name,
-                            'role': user.role.name,
-                            'api_key': api_key.key,
-                            'api_key_created': api_key.created_at.isoformat(),
-                            'user_id': user.id
-                        }
-                    
-                        print(request.session['new_user_data'])
-                        return redirect('user_created_success')
-                    
-                    messages.success(
-                        request,
-                        f'User {user.username} created successfully with role {user.role.name if user.role else "No Role"}.'
-                    )
-                    return redirect('user_detail', user_id=user.id)
-                    
+
+                    request.session['new_user_data'] = {
+                        'username': user.username,
+                        'password': form.cleaned_data['password1'],
+                        'email': user.email,
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'role': user.role.name if user.role else '',
+                        'api_key': api_key._raw_key if api_key else None,
+                        'api_key_created': api_key.created_at.isoformat() if api_key else user.date_joined.isoformat(),
+                        'user_id': user.id
+                    }
+                    return redirect('user_created_success')
+
             except Exception as e:
                 messages.error(request, f'Error creating user: {str(e)}')
     else:
         form = SecureUserCreationForm()
-    
+
     return render(request, 'users/create_user.html', {
         'form': form,
         'roles': Role.objects.all()
@@ -279,22 +266,15 @@ def create_user(request):
 
 
 @require_permission('user.create')
-@csrf_protect
 def user_created_success(request):
-    """Display user creation success modal with API key (one-time view)."""
-    
-    user_data = request.session['new_user_data']
+    """Display user creation success page with credentials (one-time view)."""
+
+    user_data = request.session.get('new_user_data')
     if not user_data:
         messages.error(request, 'No user creation data found.')
         return redirect('user_list')
-    
-    context = {
-        'user_data': user_data
-    }
-    
-    # Clear session data after first access (one-time view)
-    #del request.session['new_user_data']
-    
+
+    context = {'user_data': user_data}
     return render(request, 'users/user_created_success.html', context)
 
 
@@ -302,9 +282,7 @@ def user_created_success(request):
 @csrf_protect
 def download_user_info(request):
     """Download user credentials and API key information."""
-    print(request.session.keys())
     user_data = request.session.get('new_user_data')
-    print("User data:", user_data)
     if not user_data:
         return HttpResponseForbidden("No user data available for download")
 

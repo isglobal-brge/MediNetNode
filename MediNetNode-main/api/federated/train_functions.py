@@ -24,6 +24,26 @@ _TRAINING_BATCH_SIZE = 32
 # not be passed blindly to getattr(torch.optim, ...).
 _ALLOWED_OPTIMIZERS = frozenset({"Adam", "SGD", "RMSprop", "Adagrad", "Adadelta", "AdamW"})
 
+# Loss mode classification — drives output shape, targets dtype, and metric
+# computation throughout train() and test().
+_BINARY_LOSSES = frozenset({"bce", "bce_with_logits"})
+_MULTICLASS_LOSSES = frozenset({"cross_entropy", "nll", "nll_loss"})
+_REGRESSION_LOSSES = frozenset({"mse", "mae", "l1"})
+
+
+def _get_loss_mode(loss_function: str) -> str:
+    """
+    Return one of 'binary', 'multiclass', or 'regression' based on the
+    loss function name coming from the Hub model config.
+    Defaults to 'binary' so existing deployments keep working.
+    """
+    lf = loss_function.lower().replace(" ", "_")
+    if lf in _MULTICLASS_LOSSES:
+        return "multiclass"
+    if lf in _REGRESSION_LOSSES:
+        return "regression"
+    return "binary"
+
 
 def _safe_dp_float(value, default: float) -> float:
     """
@@ -37,6 +57,64 @@ def _safe_dp_float(value, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return v if math.isfinite(v) else default
+
+
+def _build_weighted_criterion(criterion_class, loss_mode: str, trainloader, device: str):
+    """
+    Build a loss criterion with class-frequency weights to handle imbalanced data.
+
+    For *binary* tasks (BCEWithLogitsLoss) we compute ``pos_weight = n_neg / n_pos``
+    which up-weights the minority class in the gradient signal.
+
+    For *multiclass* tasks (CrossEntropyLoss) we compute per-class weights using
+    the inverse-frequency formula: ``w_c = total / (n_classes * count_c)``.
+
+    For *regression* tasks no weighting is applied.
+
+    If weight computation fails for any reason (empty loader, all-same-class, …)
+    the function falls back to an unweighted criterion rather than crashing.
+    """
+    if loss_mode == "regression":
+        return criterion_class()
+
+    try:
+        # Collect all targets from the loader without running any forward pass
+        all_targets: list = []
+        for _, targets in trainloader:
+            all_targets.extend(targets.numpy().flatten().tolist())
+
+        if not all_targets:
+            return criterion_class()
+
+        target_arr = np.array(all_targets)
+
+        if loss_mode == "binary":
+            n_pos = float((target_arr == 1).sum())
+            n_neg = float((target_arr == 0).sum())
+            if n_pos == 0 or n_neg == 0:
+                print("[IMBALANCE] All targets are the same class — skipping pos_weight")
+                return criterion_class()
+            pos_weight = torch.tensor([n_neg / n_pos], dtype=torch.float32).to(device)
+            print(f"[IMBALANCE] Binary: pos_weight={pos_weight.item():.3f} "
+                  f"(n_pos={int(n_pos)}, n_neg={int(n_neg)})")
+            return criterion_class(pos_weight=pos_weight)
+
+        else:  # multiclass
+            classes = np.unique(target_arr.astype(int))
+            n_classes = len(classes)
+            total = len(target_arr)
+            weights = []
+            for cls in range(n_classes):
+                count = float((target_arr.astype(int) == cls).sum())
+                w = total / (n_classes * count) if count > 0 else 1.0
+                weights.append(w)
+            weight_tensor = torch.tensor(weights, dtype=torch.float32).to(device)
+            print(f"[IMBALANCE] Multiclass weights: {[f'{w:.3f}' for w in weights]}")
+            return criterion_class(weight=weight_tensor)
+
+    except Exception as exc:
+        print(f"[IMBALANCE] Weight computation failed ({exc}); using unweighted criterion")
+        return criterion_class()
 
 
 def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
@@ -63,26 +141,42 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
 
     try:
         loss_function = config.get("model", {}).get("training", {}).get("loss_function", "bce_with_logits")
-        
+
         # Mappejar noms de loss functions
         loss_mapping = {
             "bce_with_logits": "BCEWithLogitsLoss",
-            "cross_entropy": "CrossEntropyLoss",
-            "mse": "MSELoss",
-            "mae": "L1Loss"
+            "bce":             "BCEWithLogitsLoss",
+            "cross_entropy":   "CrossEntropyLoss",
+            "nll":             "NLLLoss",
+            "nll_loss":        "NLLLoss",
+            "mse":             "MSELoss",
+            "mae":             "L1Loss",
+            "l1":              "L1Loss",
         }
-        
-        criterion_name = loss_mapping.get(loss_function, "BCEWithLogitsLoss")
-        # Loss function configured
+
+        criterion_name = loss_mapping.get(loss_function.lower(), "BCEWithLogitsLoss")
+        loss_mode = _get_loss_mode(loss_function)
+        print(f"[TRAIN] loss_function='{loss_function}', mode='{loss_mode}', criterion='{criterion_name}'")
     except Exception as e:
-        # Error in loss configuration
+        print(f"[TRAIN] Error resolving loss function: {e}")
         criterion_name = "BCEWithLogitsLoss"
-    
+        loss_mode = "binary"
+
     try:
         criterion_class = getattr(torch.nn, criterion_name)
-        criterion = criterion_class()
-    except Exception:
+
+        # ── Class-imbalance compensation ─────────────────────────────────────
+        # Clinical datasets are frequently highly skewed (e.g. rare disease:
+        # 95 negatives / 5 positives).  We compute per-class frequencies from
+        # the trainloader on the fly and pass a weight tensor to the criterion.
+        # This only touches the loss function — DP, model weights, and all other
+        # training settings are unchanged.
+        criterion = _build_weighted_criterion(criterion_class, loss_mode, trainloader, device)
+        # ─────────────────────────────────────────────────────────────────────
+    except Exception as e:
+        print(f"[TRAIN] Could not build weighted criterion ({e}); using unweighted fallback")
         criterion = torch.nn.BCEWithLogitsLoss()
+        loss_mode = "binary"
 
     # Pre-initialize opt_dp_params so the name is always defined even if the
     # try block raises before assigning it. The ACTUAL security enforcement is
@@ -180,18 +274,36 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
                 targets = targets.to(device)
                 opt.zero_grad()
                 outputs = net(features)
-                loss = criterion(outputs, targets.float().unsqueeze(1))
+
+                # ── Branch on loss mode ──────────────────────────────────────
+                if loss_mode == "multiclass":
+                    # outputs: [B, num_classes] logits
+                    # targets: [B] integer class indices
+                    loss = criterion(outputs, targets.long())
+                    predictions = outputs.argmax(dim=1)
+                    correct = (predictions == targets.long()).sum().item()
+                elif loss_mode == "regression":
+                    # outputs: [B, 1] or [B]
+                    out_squeezed = outputs.squeeze(-1)
+                    loss = criterion(out_squeezed, targets.float())
+                    predictions = out_squeezed
+                    correct = 0  # not applicable for regression
+                else:
+                    # binary — original behaviour
+                    loss = criterion(outputs, targets.float().unsqueeze(1))
+                    predictions = (torch.sigmoid(outputs) >= 0.5).float()
+                    correct = (predictions == targets.float().unsqueeze(1)).sum().item()
+                # ────────────────────────────────────────────────────────────
+
                 loss.backward()
                 opt.step()
 
                 epoch_loss += loss.item()
-                predictions = (torch.sigmoid(outputs) >= 0.5).float()
-                correct = (predictions == targets.float().unsqueeze(1)).sum().item()
                 train_acc += correct / len(targets)
                 train_batches += 1
 
                 if epoch == epochs - 1:
-                    all_predictions.extend(predictions.cpu().numpy().flatten())
+                    all_predictions.extend(predictions.cpu().detach().numpy().flatten())
                     all_targets.extend(targets.cpu().numpy().flatten())
             except Exception as e:
                 print(f"Error processing batch: {e}")
@@ -212,23 +324,41 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
             print(f"Epoch {epoch + 1}: train loss {round(epoch_loss, 3)}, accuracy {round(epoch_acc, 3)}")
     
     # Calcular precision, recall i F1 de la darrera època
+    # Only meaningful for classification (binary / multiclass).
     try:
         all_predictions = np.array(all_predictions)
         all_targets = np.array(all_targets)
-        
-        # True Positives, False Positives, False Negatives
-        tp = np.sum((all_predictions == 1) & (all_targets == 1))
-        fp = np.sum((all_predictions == 1) & (all_targets == 0))
-        fn = np.sum((all_predictions == 0) & (all_targets == 1))
-        
-        # Evitar divisió per zero
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-        
-        if verbose:
-            print(f"Final metrics: precision={precision:.3f}, recall={recall:.3f}, f1={f1:.3f}")
-        
+
+        if loss_mode == "regression":
+            # For regression report RMSE instead of classification metrics.
+            rmse = float(np.sqrt(np.mean((all_predictions - all_targets) ** 2))) if len(all_targets) > 0 else 0.0
+            precision = recall = f1 = 0.0
+            if verbose:
+                print(f"Final metrics (regression): RMSE={rmse:.4f}")
+        elif loss_mode == "multiclass":
+            # Micro-averaged precision / recall / F1 across all classes.
+            classes = np.unique(all_targets).astype(int)
+            tp_total = fp_total = fn_total = 0
+            for cls in classes:
+                tp_total += int(np.sum((all_predictions == cls) & (all_targets == cls)))
+                fp_total += int(np.sum((all_predictions == cls) & (all_targets != cls)))
+                fn_total += int(np.sum((all_predictions != cls) & (all_targets == cls)))
+            precision = tp_total / (tp_total + fp_total) if (tp_total + fp_total) > 0 else 0.0
+            recall    = tp_total / (tp_total + fn_total) if (tp_total + fn_total) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            if verbose:
+                print(f"Final metrics (multiclass micro): precision={precision:.3f}, recall={recall:.3f}, f1={f1:.3f}")
+        else:
+            # Binary — original TP/FP/FN calculation
+            tp = np.sum((all_predictions == 1) & (all_targets == 1))
+            fp = np.sum((all_predictions == 1) & (all_targets == 0))
+            fn = np.sum((all_predictions == 0) & (all_targets == 1))
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            if verbose:
+                print(f"Final metrics (binary): precision={precision:.3f}, recall={recall:.3f}, f1={f1:.3f}")
+
     except Exception as e:
         print(f"Error calculating metrics: {e}")
         precision = recall = f1 = 0.0
@@ -249,41 +379,88 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
 
     return total_loss, epoch_acc, precision, recall, f1, epsilon, actual_noise_multiplier
 
-def test(net, testloader, device='cpu'):
+def test(net, testloader, device='cpu', loss_function: str = "bce_with_logits"):
     """
     Evaluate the model.
+
     Args:
         net: The model.
         testloader: The testing data loader.
+        device: Torch device string.
+        loss_function: Loss function name matching what was used during training
+            (e.g. 'bce_with_logits', 'cross_entropy', 'mse').  Drives output
+            shape and metric computation — must match train() to get comparable
+            numbers.
+
     Returns:
-        tuple: The testing loss and accuracy.
+        tuple: (loss, accuracy) — for regression tasks accuracy is the RMSE.
     """
-    criterion = torch.nn.BCEWithLogitsLoss()
-    correct, total, loss = 0, 0, 0.0
+    loss_mapping = {
+        "bce_with_logits": "BCEWithLogitsLoss",
+        "bce":             "BCEWithLogitsLoss",
+        "cross_entropy":   "CrossEntropyLoss",
+        "nll":             "NLLLoss",
+        "nll_loss":        "NLLLoss",
+        "mse":             "MSELoss",
+        "mae":             "L1Loss",
+        "l1":              "L1Loss",
+    }
+    loss_mode = _get_loss_mode(loss_function)
+    criterion_name = loss_mapping.get(loss_function.lower(), "BCEWithLogitsLoss")
+    try:
+        criterion = getattr(torch.nn, criterion_name)()
+    except Exception:
+        criterion = torch.nn.BCEWithLogitsLoss()
+        loss_mode = "binary"
+
+    total_loss = 0.0
     test_acc = 0.0
     test_batches = 0
-    
+    all_predictions: list = []
+    all_targets_list: list = []
+
     net.eval()
     with torch.no_grad():
-        for batch_idx, (features, targets) in enumerate(testloader):
-            # Mou les dades al dispositiu
+        for features, targets in testloader:
             features = features.to(device)
-            targets = targets.to(device)
-            
-            # Forward pass
+            targets  = targets.to(device)
+
             outputs = net(features)
-            
-            # Calcula la pèrdua
-            loss += criterion(outputs, targets.float().unsqueeze(1)).item()
-            
-            # Calcula la precisió
-            predictions = torch.sigmoid(outputs) >= 0.5
-            correct = (predictions == targets.float().unsqueeze(1)).sum().item()
-            test_acc += correct / len(targets)
+
+            # ── Branch on loss mode ──────────────────────────────────────
+            if loss_mode == "multiclass":
+                batch_loss = criterion(outputs, targets.long())
+                predictions = outputs.argmax(dim=1)
+                correct = (predictions == targets.long()).sum().item()
+            elif loss_mode == "regression":
+                out_squeezed = outputs.squeeze(-1)
+                batch_loss = criterion(out_squeezed, targets.float())
+                predictions = out_squeezed
+                correct = 0
+            else:
+                # binary
+                batch_loss = criterion(outputs, targets.float().unsqueeze(1))
+                predictions = (torch.sigmoid(outputs) >= 0.5).float()
+                correct = (predictions == targets.float().unsqueeze(1)).sum().item()
+            # ────────────────────────────────────────────────────────────
+
+            total_loss += batch_loss.item()
+            test_acc   += correct / len(targets)
             test_batches += 1
-            
+
+            all_predictions.extend(predictions.cpu().numpy().flatten())
+            all_targets_list.extend(targets.cpu().numpy().flatten())
+
     if test_batches == 0:
         return 0.0, 0.0
-    loss /= test_batches
-    accuracy = test_acc / test_batches
-    return loss, accuracy
+
+    avg_loss = total_loss / test_batches
+
+    if loss_mode == "regression":
+        preds_arr = np.array(all_predictions)
+        tgts_arr  = np.array(all_targets_list)
+        accuracy  = float(np.sqrt(np.mean((preds_arr - tgts_arr) ** 2)))  # RMSE
+    else:
+        accuracy = test_acc / test_batches
+
+    return avg_loss, accuracy

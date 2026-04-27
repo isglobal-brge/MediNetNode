@@ -447,6 +447,38 @@ def dataset_upload(request):
                         status=400,
                     )
 
+            # Optional production DP budget (only parsed when split is enabled)
+            max_epsilon_per_job: float | None = None
+            lifetime_budget: float | None = None
+            if split_ratio is not None:
+                try:
+                    raw_eps = request.POST.get('max_epsilon_per_job', '').strip()
+                    raw_lt  = request.POST.get('lifetime_budget', '').strip()
+                    if raw_eps:
+                        max_epsilon_per_job = float(raw_eps)
+                        if max_epsilon_per_job <= 0:
+                            return JsonResponse(
+                                {'success': False, 'error': 'max_epsilon_per_job must be positive'},
+                                status=400,
+                            )
+                    if raw_lt:
+                        lifetime_budget = float(raw_lt)
+                        if lifetime_budget <= 0:
+                            return JsonResponse(
+                                {'success': False, 'error': 'lifetime_budget must be positive'},
+                                status=400,
+                            )
+                    if max_epsilon_per_job and lifetime_budget and max_epsilon_per_job > lifetime_budget:
+                        return JsonResponse(
+                            {'success': False, 'error': 'max_epsilon_per_job cannot exceed lifetime_budget'},
+                            status=400,
+                        )
+                except ValueError:
+                    return JsonResponse(
+                        {'success': False, 'error': 'DP budget values must be numbers'},
+                        status=400,
+                    )
+
             # Get uploaded file
             uploaded_file = request.FILES.get('file')
             if not uploaded_file:
@@ -492,6 +524,26 @@ def dataset_upload(request):
                         'final_columns': upload_info.get('final_columns', 0)
                     }
                 
+                # Create DatasetPrivacyPolicy if budget values were provided
+                if max_epsilon_per_job and lifetime_budget:
+                    try:
+                        from dataset.models import DatasetPrivacyPolicy
+                        _domain_sensitivity = {
+                            'cardiology': 'medium', 'neurology': 'high', 'oncology': 'high',
+                            'radiology': 'medium', 'pathology': 'high', 'dermatology': 'medium',
+                            'ophthalmology': 'low', 'general': 'low', 'other': 'low',
+                        }
+                        sensitivity = _domain_sensitivity.get(medical_domain, 'medium')
+                        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+                            dataset=dataset,
+                            sensitivity=sensitivity,
+                            max_epsilon_per_job=max_epsilon_per_job,
+                            lifetime_budget=lifetime_budget,
+                        )
+                        success_message += ' DP budget policy created.'
+                    except Exception as policy_err:
+                        logger.warning("Could not create privacy policy: %s", policy_err)
+
                 messages.success(request, success_message)
                 response_data = {
                     'success': True,
@@ -499,6 +551,7 @@ def dataset_upload(request):
                     'dataset_id': dataset.id,
                     'has_experiment_split': dataset.experiment_file_path is not None,
                     'experiment_row_count': dataset.experiment_row_count,
+                    'has_dp_policy': bool(max_epsilon_per_job and lifetime_budget),
                 }
 
                 # Add PHI information if columns were removed
@@ -973,19 +1026,16 @@ def dataset_manage_access(request, dataset_id):
             user_id = request.POST.get('user_id')
             can_train = request.POST.get('can_train') == 'on'
             can_view_metadata = request.POST.get('can_view_metadata') == 'on'
-            
+            can_use_experiment = request.POST.get('can_use_experiment') == 'on'
 
             if not user_id:
                 messages.error(request, 'No user selected')
                 return redirect('dataset:manage_access', dataset_id=dataset_id)
-            
+
             try:
-                
-                # Get user from main database
                 UserModel = get_user_model()
                 user = UserModel.objects.using('default').get(id=user_id)
-                
-                # Create or update access
+
                 try:
                     access, created = DatasetAccess.objects.using('datasets_db').get_or_create(
                         dataset_id=dataset_id,
@@ -993,25 +1043,25 @@ def dataset_manage_access(request, dataset_id):
                         defaults={
                             'assigned_by_id': request.user.id,
                             'can_train': can_train,
-                            'can_view_metadata': can_view_metadata
+                            'can_view_metadata': can_view_metadata,
+                            'can_use_experiment': can_use_experiment,
                         }
                     )
-
                 except Exception as e:
                     access = None
                     created = False
                     print(f"Error creating or updating access: {str(e)}")
 
-                if not created:
-                    # Update existing access
+                if not created and access is not None:
                     access.can_train = can_train
                     access.can_view_metadata = can_view_metadata
+                    access.can_use_experiment = can_use_experiment
                     access.assigned_by_id = request.user.id
                     access.save()
-                
+
                 message = f'Access {"updated" if not created else "granted"} for {user.username}'
                 messages.success(request, message)
-                
+
             except Exception as e:
                 messages.error(request, f'Error granting access: {str(e)}')
         
@@ -1030,7 +1080,8 @@ def dataset_manage_access(request, dataset_id):
             user_id = request.POST.get('user_id')
             can_train = request.POST.get('can_train') == 'on'
             can_view_metadata = request.POST.get('can_view_metadata') == 'on'
-            
+            can_use_experiment = request.POST.get('can_use_experiment') == 'on'
+
             try:
                 access = DatasetAccess.objects.using('datasets_db').get(
                     dataset_id=dataset_id,
@@ -1038,10 +1089,25 @@ def dataset_manage_access(request, dataset_id):
                 )
                 access.can_train = can_train
                 access.can_view_metadata = can_view_metadata
+                access.can_use_experiment = can_use_experiment
                 access.save()
                 messages.success(request, 'Permissions updated successfully')
             except Exception as e:
                 messages.error(request, f'Error updating permissions: {str(e)}')
+
+        elif action == 'reset_budget':
+            user_id = request.POST.get('user_id')
+            try:
+                budget = ResearcherEpsilonBudget.objects.using('datasets_db').get(
+                    dataset_id=dataset_id,
+                    researcher_id=user_id,
+                )
+                budget.reset_period()
+                messages.success(request, 'Epsilon budget reset successfully')
+            except ResearcherEpsilonBudget.DoesNotExist:
+                messages.warning(request, 'No budget record found for this user')
+            except Exception as e:
+                messages.error(request, f'Error resetting budget: {str(e)}')
         
         return redirect('dataset:manage_access', dataset_id=dataset_id)
     
@@ -1066,10 +1132,19 @@ def dataset_manage_access(request, dataset_id):
             assigned_by = None
         
         if user:  # Only include if user exists
+            budget = None
+            try:
+                budget = ResearcherEpsilonBudget.objects.using('datasets_db').get(
+                    dataset_id=dataset_id,
+                    researcher_id=access.user_id,
+                )
+            except ResearcherEpsilonBudget.DoesNotExist:
+                pass
             current_access.append({
                 'access': access,
                 'user': user,
-                'assigned_by': assigned_by
+                'assigned_by': assigned_by,
+                'budget': budget,
             })
     
     # Get all users for granting access (exclude those who already have access)

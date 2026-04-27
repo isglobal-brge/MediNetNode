@@ -38,6 +38,7 @@ DEVICE = torch.device("cpu")  # Try "cuda" to train on GPU
 MODEL_JSON = dict()
 MODEL_VALIDATED = False
 TABLE_NAME = None
+USE_EXPERIMENT = False
 CLIENT_IP = "localhost"
 ASSIGNED_CLIENT_ID = None  # Global variable for client_id
 TRAINING_SESSION = None  # Global training session instance
@@ -57,7 +58,7 @@ def client_fn(context: Context):
         FlowerClient: The Flower client instance.
     """
     # Try to recover training session if not already loaded (Flower restart)
-    global MODEL_VALIDATED, MODEL_JSON, TABLE_NAME, ASSIGNED_CLIENT_ID, TRAINING_SESSION
+    global MODEL_VALIDATED, MODEL_JSON, TABLE_NAME, USE_EXPERIMENT, ASSIGNED_CLIENT_ID, TRAINING_SESSION
 
     if not TRAINING_SESSION and ASSIGNED_CLIENT_ID and DJANGO_AVAILABLE:
         try:
@@ -96,7 +97,8 @@ def client_fn(context: Context):
         (X_train, y_train), (X_val, y_val) = load_ml_data(
             dataset_id=TABLE_NAME,
             val_size=training_config.get('val_size', 0.2),
-            random_state=training_config.get('random_state', 42)
+            random_state=training_config.get('random_state', 42),
+            use_experiment=USE_EXPERIMENT,
         )
 
         # Get algorithm class from registry
@@ -154,7 +156,7 @@ def client_fn(context: Context):
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Loading data for table: {TABLE_NAME}\n")
 
-        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=_TRAINING_BATCH_SIZE)
+        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=_TRAINING_BATCH_SIZE, use_experiment=USE_EXPERIMENT)
 
         # Log data loading results
         with open('client_debug.log', 'a', encoding='utf-8') as f:
@@ -199,7 +201,7 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         session_id: UUID of the training session.
         ca_cert (str): CA certificate for SSL/TLS connection (PEM format).
     """
-    global MODEL_JSON, MODEL_VALIDATED, TABLE_NAME, CLIENT_IP, ASSIGNED_CLIENT_ID, CURRENT_USER, TRAINING_SESSION
+    global MODEL_JSON, MODEL_VALIDATED, TABLE_NAME, USE_EXPERIMENT, CLIENT_IP, ASSIGNED_CLIENT_ID, CURRENT_USER, TRAINING_SESSION
 
     # Set the assigned client_id and user
     ASSIGNED_CLIENT_ID = client_id
@@ -224,7 +226,9 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     
     # Access dataset from the correct path based on debug_received_from_server.json structure
     TABLE_NAME = int(model_json['model']['dataset']['selected_datasets'][0]['dataset_id'])
+    USE_EXPERIMENT = bool(model_json.get('use_experiment', False))
     print(f"DEBUG: Model config loaded with {len(model_json.keys()) if isinstance(model_json, dict) else 0} sections")
+    print(f"DEBUG: USE_EXPERIMENT set to: {USE_EXPERIMENT}")
     print(f"DEBUG: TABLE_NAME set to: {TABLE_NAME}")
     print(f"DEBUG: SERVER_ADDRESS set to: {server_address}")
     

@@ -1339,7 +1339,7 @@ class SecureDatasetUploader:
                 rows_count, uploaded_at, last_accessed, access_count,
                 checksum_sha256, is_active, uploaded_by_id, target_column,
                 experiment_file_path, experiment_row_count, experiment_split_ratio
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         cursor.execute(sql_parameterized, params)
@@ -1392,7 +1392,7 @@ class SecureDatasetUploader:
             INSERT INTO dataset_datasetmetadata (
                 dataset_id, statistical_summary, missing_values, data_distribution,
                 quality_score, completeness_percentage, generated_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         cursor.execute(metadata_sql, metadata_params)

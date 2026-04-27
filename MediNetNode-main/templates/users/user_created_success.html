@@ -104,7 +104,7 @@
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
-                    <i class="bi bi-check-circle-fill me-3" style="margin-left: 2px;"></i>
+                    <i class="bi bi-check-circle-fill me-3 ms-1"></i>
                     User Created Successfully
                 </h5>
             </div>
@@ -180,16 +180,15 @@
                                     <div class="p-3">
                                         <label class="form-label fw-semibold mb-2">API Key:</label>
                                         <div class="input-group mb-3">
-                                            <input type="text" 
-                                                   class="form-control api-key-field" 
-                                                   value="{{ user_data.api_key }}" 
-                                                   readonly 
-                                                   id="apiKeyField"
-                                                   onclick="this.select()">
-                                            <button class="btn btn-outline-secondary copy-btn" 
-                                                    type="button" 
-                                                    onclick="copyApiKey()"
-                                                    data-bs-toggle="tooltip" 
+                                            <input type="text"
+                                                   class="form-control api-key-field"
+                                                   value="{{ user_data.api_key }}"
+                                                   readonly
+                                                   id="apiKeyField">
+                                            <button class="btn btn-outline-secondary copy-btn"
+                                                    type="button"
+                                                    id="copyBtn"
+                                                    data-bs-toggle="tooltip"
                                                     title="Copy to clipboard">
                                                 <i class="bi bi-clipboard" id="copyIcon"></i>
                                             </button>
@@ -254,9 +253,7 @@
                             <div class="d-flex justify-content-between align-items-center">
                                 {% if user_data.api_key %}
                                 <div>
-                                    <button type="button" 
-                                            class="btn btn-success btn-lg" 
-                                            onclick="downloadUserInfo()">
+                                    <button type="button" id="btnDownload" class="btn btn-success btn-lg">
                                         <i class="bi bi-download me-2"></i>
                                         Download Credentials
                                     </button>
@@ -265,15 +262,11 @@
                                 <div></div>
                                 {% endif %}
                                 <div>
-                                    <button type="button" 
-                                            class="btn btn-outline-secondary me-3" 
-                                            onclick="goToUserDetail()">
+                                    <button type="button" id="btnUserDetail" class="btn btn-outline-secondary me-3">
                                         <i class="bi bi-person me-2"></i>
                                         View User Details
                                     </button>
-                                    <button type="button" 
-                                            class="btn btn-primary btn-lg" 
-                                            onclick="goToUserList()">
+                                    <button type="button" id="btnUserList" class="btn btn-primary btn-lg">
                                         <i class="bi bi-list me-2"></i>
                                         Back to User List
                                     </button>
@@ -288,60 +281,59 @@
 </div>
 
 <script nonce="{% csp_nonce %}">
-// Copy API key to clipboard
-function copyApiKey() {
-    const apiKeyField = document.getElementById('apiKeyField');
-    const copyIcon = document.getElementById('copyIcon');
-    
-    apiKeyField.select();
-    apiKeyField.setSelectionRange(0, 99999); // For mobile devices
-    
-    navigator.clipboard.writeText(apiKeyField.value).then(function() {
-        // Change icon to checkmark temporarily
-        copyIcon.className = 'bi bi-check2';
-        
-        // Show tooltip feedback
-        const tooltip = new bootstrap.Tooltip(document.querySelector('.copy-btn'), {
-            title: 'Copied!',
-            trigger: 'manual'
-        });
-        tooltip.show();
-        
-        // Reset after 2 seconds
-        setTimeout(function() {
-            copyIcon.className = 'bi bi-clipboard';
-            tooltip.hide();
-        }, 2000);
-    }).catch(function(err) {
-        console.error('Could not copy text: ', err);
-        alert('Failed to copy API key. Please select and copy manually.');
-    });
-}
-
-// Download user credentials
-function downloadUserInfo() {
-    window.location.href = '{% url "download_user_info" %}';
-}
-
-// Navigate to user detail
-function goToUserDetail() {
-    window.location.href = '{% url "user_detail" user_data.user_id %}';
-}
-
-// Navigate to user list
-function goToUserList() {
-    window.location.href = '{% url "user_list" %}';
-}
-
-// Initialize tooltips
 document.addEventListener('DOMContentLoaded', function() {
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    const apiKeyField  = document.getElementById('apiKeyField');
+    const copyBtn      = document.getElementById('copyBtn');
+    const copyIcon     = document.getElementById('copyIcon');
+    const btnDownload  = document.getElementById('btnDownload');
+    const btnUserDetail = document.getElementById('btnUserDetail');
+    const btnUserList  = document.getElementById('btnUserList');
+
+    // Select all on click
+    if (apiKeyField) {
+        apiKeyField.addEventListener('click', function() { this.select(); });
+        apiKeyField.focus();
+    }
+
+    // Copy API key
+    if (copyBtn && apiKeyField) {
+        const tooltip = new bootstrap.Tooltip(copyBtn, { title: 'Copied!', trigger: 'manual' });
+        copyBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(apiKeyField.value).then(function() {
+                copyIcon.className = 'bi bi-check2';
+                tooltip.show();
+                setTimeout(function() {
+                    copyIcon.className = 'bi bi-clipboard';
+                    tooltip.hide();
+                }, 2000);
+            }).catch(function() {
+                apiKeyField.select();
+                alert('Failed to copy — please select and copy manually.');
+            });
+        });
+    }
+
+    // Navigation buttons
+    if (btnDownload) {
+        btnDownload.addEventListener('click', function() {
+            window.location.href = '{% url "download_user_info" %}';
+        });
+    }
+    if (btnUserDetail) {
+        btnUserDetail.addEventListener('click', function() {
+            window.location.href = '{% url "user_detail" user_data.user_id %}';
+        });
+    }
+    if (btnUserList) {
+        btnUserList.addEventListener('click', function() {
+            window.location.href = '{% url "user_list" %}';
+        });
+    }
+
+    // Init any remaining tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+        new bootstrap.Tooltip(el);
     });
-    
-    // Auto-focus API key field for easy copying
-    document.getElementById('apiKeyField').focus();
 });
 </script>
 {% endblock %}

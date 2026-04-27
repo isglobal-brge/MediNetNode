@@ -6,562 +6,355 @@
 
 {% block extra_css %}
 <style nonce="{% csp_nonce %}">
-    /* Dataset Upload Specific Styles */
-    .upload-section {
+    /* ── Wizard shell ── */
+    .wiz-wrap {
         background: var(--card-bg);
         border-radius: var(--border-radius);
-        padding: 2rem;
-        margin-bottom: 1.5rem;
         box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(66, 165, 245, 0.1);
-        position: relative;
+        border: 1px solid rgba(66,165,245,.12);
         overflow: hidden;
     }
-
-    .upload-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 3px;
+    .wiz-wrap::before {
+        content:'';
+        display:block;
+        height:3px;
         background: var(--primary-gradient);
     }
 
+    /* ── Step indicator ── */
+    .wiz-steps {
+        display:flex;
+        align-items:center;
+        padding:1.5rem 2rem 0;
+        gap:0;
+    }
+    .wiz-step {
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        flex:1;
+        position:relative;
+    }
+    .wiz-step:not(:last-child)::after {
+        content:'';
+        position:absolute;
+        top:16px;
+        left:calc(50% + 16px);
+        right:calc(-50% + 16px);
+        height:2px;
+        background:rgba(66,165,245,.2);
+        transition:background .3s;
+    }
+    .wiz-step.done:not(:last-child)::after { background:var(--primary-color); }
+    .wiz-circle {
+        width:32px;height:32px;border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        font-weight:700;font-size:.85rem;
+        border:2px solid rgba(66,165,245,.3);
+        color:#999;background:#fff;
+        transition:all .3s;
+        position:relative;z-index:1;
+    }
+    .wiz-step.active .wiz-circle {
+        border-color:var(--primary-color);
+        color:var(--primary-color);
+        box-shadow:0 0 0 4px rgba(66,165,245,.15);
+    }
+    .wiz-step.done .wiz-circle {
+        background:var(--primary-color);
+        border-color:var(--primary-color);
+        color:#fff;
+    }
+    .wiz-label {
+        font-size:.75rem;color:#888;margin-top:.35rem;
+        white-space:nowrap;transition:color .3s;
+    }
+    .wiz-step.active .wiz-label { color:var(--primary-color);font-weight:600; }
+    .wiz-step.done .wiz-label  { color:var(--primary-color); }
+
+    /* ── Step content panels ── */
+    .wiz-body { padding:1.5rem 2rem 2rem; }
+    .wiz-step-content { display:none; }
+    .wiz-step-content.active { display:block; }
+
+    /* ── File drop zone ── */
     .drag-drop-zone {
-        border: 3px dashed rgba(66, 165, 245, 0.3);
-        border-radius: var(--border-radius);
-        padding: 3rem 2rem;
-        text-align: center;
-        background: rgba(66, 165, 245, 0.02);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        cursor: pointer;
-        position: relative;
-        overflow: hidden;
+        border:3px dashed rgba(66,165,245,.35);
+        border-radius:var(--border-radius);
+        padding:3rem 2rem;text-align:center;
+        background:rgba(66,165,245,.02);
+        transition:all .3s cubic-bezier(.4,0,.2,1);
+        cursor:pointer;position:relative;overflow:hidden;
     }
-
     .drag-drop-zone:hover {
-        border-color: var(--primary-color);
-        background: rgba(66, 165, 245, 0.05);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(66, 165, 245, 0.15);
+        border-color:var(--primary-color);
+        background:rgba(66,165,245,.06);
+        transform:translateY(-2px);
+        box-shadow:0 8px 25px rgba(66,165,245,.15);
     }
-
     .drag-drop-zone.drag-over {
-        border-color: #4caf50;
-        background: rgba(76, 175, 80, 0.1);
-        transform: scale(1.02);
-        box-shadow: 0 12px 35px rgba(76, 175, 80, 0.2);
+        border-color:#4caf50;background:rgba(76,175,80,.1);
+        transform:scale(1.02);box-shadow:0 12px 35px rgba(76,175,80,.2);
     }
-
     .drag-drop-zone.uploading {
-        border-color: #ff9800;
-        background: rgba(255, 152, 0, 0.1);
-        animation: pulse 2s infinite;
+        border-color:#ff9800;background:rgba(255,152,0,.1);
+        animation:pulse 2s infinite;
     }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.01); }
-    }
-
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.01)} }
     .upload-icon {
-        font-size: 4rem;
-        color: var(--primary-color);
-        margin-bottom: 1.5rem;
-        transition: all 0.3s ease;
-        opacity: 0.8;
+        font-size:4rem;color:var(--primary-color);margin-bottom:1.25rem;
+        opacity:.8;transition:all .3s;
     }
-
-    .drag-over .upload-icon {
-        color: #4caf50;
-        transform: scale(1.1);
-    }
-
-    .uploading .upload-icon {
-        color: #ff9800;
-        animation: spin 2s linear infinite;
-    }
-
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
+    .drag-over .upload-icon  { color:#4caf50;transform:scale(1.1); }
+    .uploading .upload-icon  { color:#ff9800;animation:spin 2s linear infinite; }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
     .file-input {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        cursor: pointer;
+        position:absolute;top:0;left:0;width:100%;height:100%;
+        opacity:0;cursor:pointer;
     }
-
-    .file-info-card {
-        background: rgba(66, 165, 245, 0.05);
-        border: 1px solid rgba(66, 165, 245, 0.15);
-        border-radius: var(--border-radius-sm);
-        padding: 1.5rem;
-        margin-top: 1.5rem;
-        display: none;
-        position: relative;
-    }
-
-    .file-info-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: var(--primary-gradient);
-        border-radius: 2px 0 0 2px;
-    }
-
-    .progress-section {
-        display: none;
-        margin-top: 1.5rem;
-        padding: 1.5rem;
-        background: rgba(66, 165, 245, 0.03);
-        border-radius: var(--border-radius-sm);
-        border: 1px solid rgba(66, 165, 245, 0.1);
-    }
-
-    .progress-bar-container {
-        height: 12px;
-        border-radius: 6px;
-        overflow: hidden;
-        background: rgba(66, 165, 245, 0.1);
-        position: relative;
-    }
-
-    .progress-bar {
-        height: 100%;
-        background: var(--primary-gradient);
-        border-radius: 6px;
-        transition: width 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .progress-bar::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        right: 0;
-        background: linear-gradient(
-            90deg,
-            transparent,
-            rgba(255, 255, 255, 0.2),
-            transparent
-        );
-        animation: shimmer 2s infinite;
-    }
-
-    @keyframes shimmer {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(100%); }
-    }
-
-    .form-section {
-        background: var(--card-bg);
-        border-radius: var(--border-radius);
-        padding: 2rem;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(66, 165, 245, 0.1);
-        height: fit-content;
-        position: sticky;
-        top: 2rem;
-    }
-
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-
-    .form-label {
-        font-weight: 600;
-        color: var(--primary-dark);
-        margin-bottom: 0.75rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.95rem;
-    }
-
-    .form-control, .form-select {
-        border: 1px solid rgba(66, 165, 245, 0.2);
-        border-radius: var(--border-radius-sm);
-        padding: 0.75rem 1rem;
-        transition: all 0.3s ease;
-        background: rgba(255, 255, 255, 0.8);
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.25rem rgba(66, 165, 245, 0.15);
-        background: white;
-    }
-
-    .form-text {
-        color: #6c757d;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-    }
-
-    .btn-upload {
-        background: var(--primary-gradient);
-        border: none;
-        color: white;
-        padding: 0.875rem 2rem;
-        border-radius: var(--border-radius-sm);
-        font-weight: 600;
-        font-size: 1.1rem;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .btn-upload:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(66, 165, 245, 0.3);
-        color: white;
-    }
-
-    .btn-upload:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-    }
-
-    .btn-secondary-custom {
-        background: white;
-        border: 1px solid rgba(66, 165, 245, 0.2);
-        color: var(--primary-color);
-        padding: 0.75rem 1.5rem;
-        border-radius: var(--border-radius-sm);
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-
-    .btn-secondary-custom:hover {
-        background: var(--primary-light);
-        color: var(--primary-dark);
-        border-color: var(--primary-color);
-    }
-
-    .security-info {
-        background: rgba(76, 175, 80, 0.05);
-        border: 1px solid rgba(76, 175, 80, 0.2);
-        border-radius: var(--border-radius-sm);
-        padding: 1.5rem;
-        margin-top: 1.5rem;
-    }
-
-    .security-info h6 {
-        color: #2e7d32;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .security-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .security-list li {
-        padding: 0.25rem 0;
-        color: #4caf50;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .upload-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }
-
-    .stat-item {
-        text-align: center;
-        padding: 0.75rem;
-        background: rgba(255, 255, 255, 0.5);
-        border-radius: var(--border-radius-sm);
-        border: 1px solid rgba(66, 165, 245, 0.1);
-    }
-
-    .stat-label {
-        font-size: 0.8rem;
-        color: #6c757d;
-        margin-bottom: 0.25rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .stat-value {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--primary-dark);
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        word-break: break-all;
-        max-width: 100%;
-        white-space: normal;
-    }
-
-    .cancel-btn {
-        background: #dc3545;
-        border: none;
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: var(--border-radius-sm);
-        font-weight: 500;
-        transition: all 0.3s ease;
-        display: none;
-    }
-
-    .cancel-btn:hover {
-        background: #c82333;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
-        color: white;
-    }
-
     .format-chip {
-        background: rgba(66, 165, 245, 0.1);
-        color: var(--primary-color);
-        padding: 0.25rem 0.5rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin: 0.125rem;
-        display: inline-block;
+        background:rgba(66,165,245,.12);color:var(--primary-color);
+        padding:.2rem .45rem;border-radius:10px;font-size:.75rem;
+        font-weight:500;margin:.1rem;display:inline-block;
     }
 
-    .feature-highlight {
-        background: rgba(255, 193, 7, 0.1);
-        border: 1px solid rgba(255, 193, 7, 0.3);
-        border-radius: var(--border-radius-sm);
-        padding: 1rem;
-        margin-top: 1rem;
-        text-align: center;
+    /* ── File info row ── */
+    .file-info-row {
+        display:none;
+        align-items:center;gap:1rem;
+        background:rgba(66,165,245,.05);
+        border:1px solid rgba(66,165,245,.15);
+        border-radius:var(--border-radius-sm);
+        padding:1rem 1.25rem;margin-top:1rem;
+    }
+    .file-info-row .fi-icon { font-size:2rem;color:var(--primary-color); }
+    .file-info-row .fi-name { font-weight:600;word-break:break-all; }
+    .file-info-row .fi-meta { font-size:.82rem;color:#888; }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+        display:none;margin-top:1rem;padding:1rem 1.25rem;
+        background:rgba(66,165,245,.03);
+        border:1px solid rgba(66,165,245,.1);border-radius:var(--border-radius-sm);
+    }
+    .progress-track {
+        height:10px;border-radius:5px;overflow:hidden;
+        background:rgba(66,165,245,.12);
+    }
+    .progress-fill {
+        height:100%;background:var(--primary-gradient);border-radius:5px;
+        transition:width .3s ease;position:relative;overflow:hidden;
+    }
+    .progress-fill::after {
+        content:'';position:absolute;inset:0;
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);
+        animation:shimmer 2s infinite;
+    }
+    @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+    /* ── Form fields ── */
+    .form-label {
+        font-weight:600;color:var(--primary-dark);
+        margin-bottom:.6rem;display:flex;align-items:center;gap:.45rem;
+        font-size:.92rem;
+    }
+    .form-control,.form-select {
+        border:1px solid rgba(66,165,245,.2);border-radius:var(--border-radius-sm);
+        padding:.7rem .9rem;transition:all .3s;background:rgba(255,255,255,.85);
+    }
+    .form-control:focus,.form-select:focus {
+        border-color:var(--primary-color);
+        box-shadow:0 0 0 .2rem rgba(66,165,245,.15);
+        background:#fff;
+    }
+    .form-text { color:#6c757d;font-size:.83rem;margin-top:.35rem; }
+
+    /* ── Split / DP ── */
+    .split-box {
+        border:1px solid rgba(66,165,245,.2);border-radius:var(--border-radius-sm);
+        padding:1.25rem;background:rgba(66,165,245,.03);
     }
 
-    .feature-highlight i {
-        color: #ffc107;
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
+    /* ── Review grid ── */
+    .review-grid {
+        display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;
     }
+    .rv-item {
+        background:rgba(66,165,245,.04);border:1px solid rgba(66,165,245,.12);
+        border-radius:var(--border-radius-sm);padding:.85rem 1rem;
+    }
+    .rv-label { font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.4px; }
+    .rv-value { font-weight:600;color:var(--primary-dark);margin-top:.2rem;word-break:break-all; }
 
-    @media (max-width: 768px) {
-        .upload-section, .form-section {
-            padding: 1.5rem;
-        }
-        
-        .drag-drop-zone {
-            padding: 2rem 1rem;
-        }
-        
-        .upload-icon {
-            font-size: 3rem;
-        }
-        
-        .form-section {
-            position: static;
-            margin-top: 1.5rem;
-        }
+    /* ── Security tips ── */
+    .security-tips {
+        background:rgba(76,175,80,.05);border:1px solid rgba(76,175,80,.2);
+        border-radius:var(--border-radius-sm);padding:1rem 1.25rem;margin-top:1rem;
+    }
+    .security-tips h6 { color:#2e7d32;margin-bottom:.6rem;font-size:.9rem; }
+    .security-tips li { color:#4caf50;font-size:.85rem;padding:.15rem 0; }
+
+    /* ── Navigation buttons ── */
+    .wiz-nav {
+        display:flex;justify-content:space-between;align-items:center;
+        padding:1rem 2rem 1.5rem;border-top:1px solid rgba(66,165,245,.1);
+    }
+    .btn-wiz-prev {
+        background:#fff;border:1px solid rgba(66,165,245,.25);
+        color:var(--primary-color);padding:.6rem 1.4rem;
+        border-radius:var(--border-radius-sm);font-weight:500;cursor:pointer;
+        transition:all .2s;
+    }
+    .btn-wiz-prev:hover { background:var(--primary-light); }
+    .btn-wiz-next {
+        background:var(--primary-gradient);border:none;color:#fff;
+        padding:.7rem 1.75rem;border-radius:var(--border-radius-sm);
+        font-weight:600;cursor:pointer;transition:all .2s;
+    }
+    .btn-wiz-next:hover:not(:disabled) {
+        transform:translateY(-1px);box-shadow:0 6px 18px rgba(66,165,245,.3);
+    }
+    .btn-wiz-next:disabled { opacity:.55;cursor:not-allowed;transform:none;box-shadow:none; }
+
+    @media(max-width:576px) {
+        .wiz-steps { padding:1rem; }
+        .wiz-body  { padding:1rem; }
+        .wiz-label { display:none; }
+        .wiz-nav   { padding:.75rem 1rem 1.25rem; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Header Section -->
+
+    <!-- Header -->
     <div class="dashboard-hero">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h1 class="h2 mb-2">
-                    <i class="bi bi-cloud-upload me-2"></i>
-                    Dataset Upload
-                </h1>
-                <p class="mb-0 opacity-90">
-                    Secure medical dataset upload with automated validation
-                </p>
+                <h1 class="h2 mb-2"><i class="bi bi-cloud-upload me-2"></i>Dataset Upload</h1>
+                <p class="mb-0 opacity-90">Secure medical dataset upload with automated validation</p>
             </div>
             <div class="d-flex gap-2">
                 <a href="{% url 'dataset:list' %}" class="btn btn-light">
-                    <i class="bi bi-list-ul me-2"></i>
-                    View Datasets
+                    <i class="bi bi-list-ul me-2"></i>View Datasets
                 </a>
                 <a href="{% url 'dataset:dashboard' %}" class="btn btn-outline-light">
-                    <i class="bi bi-speedometer2 me-2"></i>
-                    Dashboard
+                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
                 </a>
             </div>
         </div>
     </div>
 
-    <!-- Alert Container -->
-    <div id="alert-container"></div>
+    <!-- Alert area -->
+    <div id="alert-container" class="mb-3"></div>
 
-    <div class="row">
-        <!-- Upload Section -->
-        <div class="col-lg-8">
-            <div class="upload-section">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="mb-0 d-flex align-items-center text-primary">
-                        <i class="bi bi-cloud-arrow-up me-2"></i>
-                        File Selection
-                    </h4>
-                    <a href="/static/documentation/CSV_UPLOAD_TROUBLESHOOTING.md" target="_blank" class="btn btn-sm btn-outline-info">
-                        <i class="bi bi-question-circle me-1"></i>
-                        CSV Help
-                    </a>
-                </div>
+    <!-- Wizard card -->
+    <div class="wiz-wrap">
 
-                <div class="drag-drop-zone" id="dropZone">
-                    <div class="upload-icon">
-                        <i class="bi bi-cloud-upload"></i>
-                    </div>
-                    <h5 class="mb-2">Drag your file here</h5>
-                    <p class="text-muted mb-3">or click to browse and select</p>
-                    <div class="mb-3">
-                        <span class="format-chip">CSV</span>
-                        <span class="format-chip">JSON</span>
-                        <span class="format-chip">Parquet</span>
-                        <span class="format-chip">H5</span>
-                        <span class="format-chip">NPY</span>
-                    </div>
-                    <p class="small text-muted mb-0">
-                        No size limit for medical datasets
-                    </p>
-                    <input type="file" class="file-input" id="fileInput" 
-                           accept=".csv,.json,.parquet,.h5,.npy">
-                </div>
-
-                <!-- File Information Card -->
-                <div class="file-info-card" id="fileInfo">
-                    <h6 class="text-primary mb-3">
-                        <i class="bi bi-file-earmark-check me-2"></i>
-                        File Information
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="stat-item">
-                                <div class="stat-label">File Name</div>
-                                <div class="stat-value" id="fileName">-</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stat-item">
-                                <div class="stat-label">File Size</div>
-                                <div class="stat-value" id="fileSize">-</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stat-item">
-                                <div class="stat-label">File Type</div>
-                                <div class="stat-value" id="fileType">-</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Progress Section -->
-                <div class="progress-section" id="progressContainer">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="text-primary mb-0">
-                            <i class="bi bi-arrow-up-circle me-2"></i>
-                            Upload Progress
-                        </h6>
-                        <span class="badge bg-primary" id="progressPercent">0%</span>
-                    </div>
-                    
-                    <div class="progress-bar-container mb-3">
-                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
-                    </div>
-
-                    <div class="upload-stats">
-                        <div class="stat-item">
-                            <div class="stat-label">Status</div>
-                            <div class="stat-value" id="uploadStatus">Initializing...</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Time Remaining</div>
-                            <div class="stat-value" id="timeRemaining">Calculating...</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Upload Speed</div>
-                            <div class="stat-value" id="currentSpeed">0 KB/s</div>
-                        </div>
-                    </div>
-
-                    <div class="text-center mt-3">
-                        <button type="button" class="cancel-btn" id="cancelBtn">
-                            <i class="bi bi-x-circle me-2"></i>
-                            Cancel Upload
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Feature Highlight -->
-                <div class="feature-highlight">
-                    <i class="bi bi-lightning-charge"></i>
-                    <h6 class="mb-2">Automated Processing</h6>
-                    <p class="small mb-0 text-muted">
-                        Your dataset will be automatically validated, anonymized, and optimized for federated learning
-                    </p>
-                </div>
+        <!-- Step indicator -->
+        <div class="wiz-steps" id="wizSteps">
+            <div class="wiz-step active" data-step="1">
+                <div class="wiz-circle">1</div>
+                <div class="wiz-label">File</div>
+            </div>
+            <div class="wiz-step" data-step="2">
+                <div class="wiz-circle">2</div>
+                <div class="wiz-label">Info</div>
+            </div>
+            <div class="wiz-step" data-step="3">
+                <div class="wiz-circle">3</div>
+                <div class="wiz-label">Privacy &amp; Split</div>
+            </div>
+            <div class="wiz-step" data-step="4">
+                <div class="wiz-circle">4</div>
+                <div class="wiz-label">Review</div>
             </div>
         </div>
 
-        <!-- Form Section -->
-        <div class="col-lg-4">
-            <div class="form-section">
-                <h4 class="mb-3 d-flex align-items-center text-primary">
-                    <i class="bi bi-info-circle me-2"></i>
-                    Dataset Information
-                </h4>
-                
-                <form id="uploadForm" method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    
-                    <div class="form-group">
-                        <label for="datasetName" class="form-label">
-                            <i class="bi bi-tag"></i>
-                            Dataset Name *
-                        </label>
-                        <input type="text" class="form-control" id="datasetName" name="name" required
+        <!-- Single form wraps all steps -->
+        <form id="wizardForm" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <!-- ── Step 1: File ── -->
+            <div class="wiz-body">
+                <div class="wiz-step-content active" id="step1">
+                    <h5 class="text-primary mb-3"><i class="bi bi-cloud-arrow-up me-2"></i>Select File</h5>
+
+                    <div class="drag-drop-zone" id="dropZone">
+                        <div class="upload-icon"><i class="bi bi-cloud-upload"></i></div>
+                        <h5 class="mb-2">Drag your file here</h5>
+                        <p class="text-muted mb-3">or click to browse</p>
+                        <div class="mb-2">
+                            <span class="format-chip">CSV</span>
+                            <span class="format-chip">JSON</span>
+                            <span class="format-chip">Parquet</span>
+                            <span class="format-chip">H5</span>
+                            <span class="format-chip">NPY</span>
+                        </div>
+                        <p class="small text-muted mb-0">No size limit for medical datasets</p>
+                        <input type="file" class="file-input" id="fileInput"
+                               accept=".csv,.json,.parquet,.h5,.npy">
+                    </div>
+
+                    <!-- File info row -->
+                    <div class="file-info-row" id="fileInfoRow">
+                        <div class="fi-icon"><i class="bi bi-file-earmark-check"></i></div>
+                        <div>
+                            <div class="fi-name" id="fiName">-</div>
+                            <div class="fi-meta" id="fiMeta">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="progress-wrap" id="progressWrap">
+                        <div class="d-flex justify-content-between mb-2">
+                            <small class="text-primary fw-semibold"><i class="bi bi-arrow-up-circle me-1"></i>Uploading…</small>
+                            <small id="progressPct">0%</small>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="progressFill" style="width:0%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <small id="uploadStatus" class="text-muted">Initialising…</small>
+                            <small id="uploadSpeed"  class="text-muted">0 KB/s</small>
+                        </div>
+                    </div>
+
+                    <!-- Security tips -->
+                    <div class="security-tips">
+                        <h6><i class="bi bi-shield-check me-2"></i>Security Validations</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li><i class="bi bi-check-circle-fill me-2"></i>File type verification</li>
+                            <li><i class="bi bi-check-circle-fill me-2"></i>Automatic PHI detection</li>
+                            <li><i class="bi bi-check-circle-fill me-2"></i>K-anonymity validation (k≥5)</li>
+                            <li><i class="bi bi-check-circle-fill me-2"></i>Null value rejection</li>
+                            <li><i class="bi bi-check-circle-fill me-2"></i>MD5/SHA256 checksums</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- ── Step 2: Dataset Info ── -->
+                <div class="wiz-step-content" id="step2">
+                    <h5 class="text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Dataset Information</h5>
+
+                    <div class="mb-3">
+                        <label for="datasetName" class="form-label"><i class="bi bi-tag"></i>Dataset Name *</label>
+                        <input type="text" class="form-control" id="datasetName" name="name"
                                placeholder="e.g., Cardiology Study 2024">
                         <div class="form-text">Descriptive and unique name for identification</div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="description" class="form-label">
-                            <i class="bi bi-text-paragraph"></i>
-                            Description *
-                        </label>
-                        <textarea class="form-control" id="description" name="description" rows="3" required
-                                  placeholder="Describe the dataset content and research purpose..."></textarea>
-                        <div class="form-text">Detailed description of the dataset's content and purpose</div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label"><i class="bi bi-text-paragraph"></i>Description *</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Describe the dataset content and research purpose…"></textarea>
                     </div>
 
-                    <div class="form-group">
-                        <label for="medicalDomain" class="form-label">
-                            <i class="bi bi-heart-pulse"></i>
-                            Medical Domain *
-                        </label>
-                        <select class="form-select" id="medicalDomain" name="medical_domain" required>
-                            <option value="">Select medical domain...</option>
+                    <div class="mb-3">
+                        <label for="medicalDomain" class="form-label"><i class="bi bi-heart-pulse"></i>Medical Domain *</label>
+                        <select class="form-select" id="medicalDomain" name="medical_domain">
+                            <option value="">Select medical domain…</option>
                             <option value="cardiology">Cardiology</option>
                             <option value="neurology">Neurology</option>
                             <option value="oncology">Oncology</option>
@@ -574,11 +367,8 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label for="dataType" class="form-label">
-                            <i class="bi bi-database"></i>
-                            Data Type
-                        </label>
+                    <div class="mb-3">
+                        <label for="dataType" class="form-label"><i class="bi bi-database"></i>Data Type</label>
                         <select class="form-select" id="dataType" name="data_type">
                             <option value="tabular">Tabular Data</option>
                             <option value="image">Medical Images</option>
@@ -589,557 +379,521 @@
                         <div class="form-text">Type of medical data contained in the dataset</div>
                     </div>
 
-                    <div class="form-group" id="targetColumnGroup" style="display: none;">
-                        <label for="targetColumn" class="form-label">
-                            <i class="bi bi-bullseye"></i>
-                            Target Column *
-                        </label>
+                    <div class="mb-3" id="targetColumnGroup" style="display:none">
+                        <label for="targetColumn" class="form-label"><i class="bi bi-bullseye"></i>Target Column *</label>
                         <select class="form-select" id="targetColumn" name="target_column">
-                            <option value="">Select target column...</option>
+                            <option value="">Select target column…</option>
                         </select>
                         <div class="form-text">Column to predict in federated learning</div>
                     </div>
+                </div>
 
-                    <!-- Experimental Split Section -->
-                    <div class="border rounded p-3 mb-3" style="background:rgba(66,165,245,0.04);">
+                <!-- ── Step 3: Privacy & Split ── -->
+                <div class="wiz-step-content" id="step3">
+                    <h5 class="text-primary mb-3"><i class="bi bi-shield-lock me-2"></i>Privacy &amp; Experimental Split</h5>
+
+                    <div class="split-box">
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" id="enableSplit">
                             <label class="form-check-label fw-semibold" for="enableSplit">
-                                <i class="bi bi-scissors me-1"></i>
-                                Create experimental subset
+                                <i class="bi bi-scissors me-1"></i>Create experimental subset
                             </label>
                         </div>
                         <div class="form-text mb-2">
-                            Splits a small copy of the dataset with <strong>no epsilon budget</strong> so researchers can iterate freely.
+                            Splits a small copy of the dataset with <strong>no epsilon budget</strong>
+                            so researchers can iterate freely before committing to the production dataset.
                         </div>
 
-                        <div id="splitOptions" class="d-none">
+                        <div id="splitOptions" class="d-none mt-3">
                             <label for="splitRangeInput" class="form-label mb-1">
                                 Subset size: <strong><span id="splitPct">20</span>%</strong> of rows
                             </label>
                             <input type="range" class="form-range mb-2" id="splitRangeInput"
                                    min="10" max="50" step="5" value="20">
-                            <!-- Hidden input that actually gets submitted -->
                             <input type="hidden" id="splitRatioHidden" name="split_ratio" value="" disabled>
-
-                            <!-- DP Recommendations panel -->
-                            <div class="alert alert-info py-2 px-3 mb-0 mt-2 small" id="dpRecommendations" style="display:none;">
-                                <strong><i class="bi bi-shield-lock me-1"></i>DP Budget Recommendations</strong>
-                                <div id="dpRec-high" class="d-none mt-1">
-                                    <span class="fw-semibold">High sensitivity</span> (genetic, psychiatric)<br>
-                                    ε ≤ <code>0.5</code>/job · lifetime ≤ <code>2.0</code><br>
-                                    <span class="text-muted">Dwork &amp; Roth 2014; Apple DP Team 2017</span>
-                                </div>
-                                <div id="dpRec-medium" class="d-none mt-1">
-                                    <span class="fw-semibold">Medium sensitivity</span> (lab results, diagnoses)<br>
-                                    ε ≤ <code>1.0</code>/job · lifetime ≤ <code>5.0</code><br>
-                                    <span class="text-muted">Erlingsson et al. 2014; US Census ε=17.14</span>
-                                </div>
-                                <div id="dpRec-low" class="d-none mt-1">
-                                    <span class="fw-semibold">Low sensitivity</span> (aggregate stats)<br>
-                                    ε ≤ <code>3.0</code>/job · lifetime ≤ <code>15.0</code><br>
-                                    <span class="text-muted">Abowd 2018; no consensus below ε=10</span>
-                                </div>
-                                <div id="dpRec-placeholder" class="mt-1 text-muted">
-                                    Select a <em>Medical Domain</em> above to see sensitivity-based recommendations.
-                                </div>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn-upload" id="uploadBtn" disabled>
-                            <i class="bi bi-cloud-upload me-2"></i>
-                            Upload Dataset
-                        </button>
-                        <a href="{% url 'dataset:dashboard' %}" class="btn-secondary-custom text-center">
-                            <i class="bi bi-arrow-left me-2"></i>
-                            Back to Dashboard
-                        </a>
+                    <!-- DP recommendations — always visible when domain is set -->
+                    <div class="p-2 mt-3 rounded small" id="dpRecommendations"
+                         style="display:none;background:rgba(66,165,245,.08);border:1px solid rgba(66,165,245,.2)">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-lightbulb text-primary"></i>
+                            <span class="fw-semibold text-primary">Recommended for your domain</span>
+                        </div>
+                        <div id="dpRec-high" class="d-none">
+                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 me-1">High sensitivity</span>
+                            <span class="text-muted">genetic, psychiatric data</span><br>
+                            <span class="mt-1 d-inline-block">Max ε/job: <strong>0.5</strong> &nbsp;·&nbsp; Lifetime: <strong>2.0</strong></span>
+                        </div>
+                        <div id="dpRec-medium" class="d-none">
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 me-1">Medium sensitivity</span>
+                            <span class="text-muted">lab results, diagnoses</span><br>
+                            <span class="mt-1 d-inline-block">Max ε/job: <strong>1.0</strong> &nbsp;·&nbsp; Lifetime: <strong>5.0</strong></span>
+                        </div>
+                        <div id="dpRec-low" class="d-none">
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 me-1">Low sensitivity</span>
+                            <span class="text-muted">aggregate statistics</span><br>
+                            <span class="mt-1 d-inline-block">Max ε/job: <strong>3.0</strong> &nbsp;·&nbsp; Lifetime: <strong>15.0</strong></span>
+                        </div>
+                        <div id="dpRec-placeholder" class="text-muted">
+                            Select a medical domain in the previous step to see recommendations.
+                        </div>
                     </div>
-                </form>
+
+                    <!-- Production DP Budget — always visible -->
+                    <div class="mt-3" id="dpBudgetInputs">
+                        <p class="small fw-semibold mb-2">
+                            <i class="bi bi-shield-check me-1"></i>
+                            Production DP Budget
+                            <span class="text-muted fw-normal">(applied to the full dataset)</span>
+                        </p>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label for="maxEpsPerJob" class="form-label small mb-1">Max ε / job</label>
+                                <input type="number" class="form-control form-control-sm" id="maxEpsPerJob"
+                                       name="max_epsilon_per_job" min="0.01" max="100" step="0.01"
+                                       placeholder="e.g. 1.0">
+                            </div>
+                            <div class="col-6">
+                                <label for="lifetimeBudget" class="form-label small mb-1">Lifetime ε budget</label>
+                                <input type="number" class="form-control form-control-sm" id="lifetimeBudget"
+                                       name="lifetime_budget" min="0.01" max="1000" step="0.01"
+                                       placeholder="e.g. 5.0">
+                            </div>
+                        </div>
+                        <div class="form-text small mt-1">
+                            Leave blank to skip — budget can be set later from the dataset detail page.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Step 4: Review ── -->
+                <div class="wiz-step-content" id="step4">
+                    <h5 class="text-primary mb-3"><i class="bi bi-clipboard-check me-2"></i>Review &amp; Upload</h5>
+
+                    <div class="review-grid mb-4">
+                        <div class="rv-item">
+                            <div class="rv-label">File</div>
+                            <div class="rv-value" id="rvFile">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Size</div>
+                            <div class="rv-value" id="rvSize">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Name</div>
+                            <div class="rv-value" id="rvName">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Domain</div>
+                            <div class="rv-value" id="rvDomain">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Data Type</div>
+                            <div class="rv-value" id="rvDataType">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Target Column</div>
+                            <div class="rv-value" id="rvTarget">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">Exp. Split</div>
+                            <div class="rv-value" id="rvSplit">—</div>
+                        </div>
+                        <div class="rv-item">
+                            <div class="rv-label">DP Budget (max/lifetime)</div>
+                            <div class="rv-value" id="rvBudget">—</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 p-3 rounded"
+                         style="background:rgba(66,165,245,.05);border:1px solid rgba(66,165,245,.15)">
+                        <i class="bi bi-info-circle text-primary"></i>
+                        <small class="text-muted">
+                            Your dataset will be validated, anonymised, and optimised for federated learning automatically.
+                        </small>
+                    </div>
+                </div>
+            </div><!-- /wiz-body -->
+
+            <!-- Navigation -->
+            <div class="wiz-nav">
+                <button type="button" class="btn-wiz-prev" id="prevBtn" style="visibility:hidden">
+                    <i class="bi bi-arrow-left me-1"></i>Back
+                </button>
+                <button type="button" class="btn-wiz-next" id="nextBtn" disabled>
+                    Next <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                <button type="submit" class="btn-wiz-next" id="submitBtn" style="display:none">
+                    <i class="bi bi-cloud-upload me-1"></i>Upload Dataset
+                </button>
             </div>
 
-            <!-- Security Information -->
-            <div class="security-info">
-                <h6>
-                    <i class="bi bi-shield-check"></i>
-                    Security Validations
-                </h6>
-                <ul class="security-list">
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        File type verification
-                    </li>
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Automatic PHI detection
-                    </li>
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        K-anonymity validation (k≥5)
-                    </li>
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Null value rejection
-                    </li>
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        MD5/SHA256 checksums
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
+        </form>
+    </div><!-- /wiz-wrap -->
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script nonce="{% csp_nonce %}">
-document.addEventListener('DOMContentLoaded', function() {
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const fileInfo = document.getElementById('fileInfo');
-    const progressContainer = document.getElementById('progressContainer');
-    const uploadForm = document.getElementById('uploadForm');
-    const uploadBtn = document.getElementById('uploadBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const alertContainer = document.getElementById('alert-container');
-    
-    let currentFile = null;
-    let uploadInProgress = false;
-    let uploadSessionId = null;
-    let startTime = null;
-    
-    // Drag and drop handlers
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, highlight, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, unhighlight, false);
-    });
-    
-    function highlight(e) {
-        dropZone.classList.add('drag-over');
-    }
-    
-    function unhighlight(e) {
-        dropZone.classList.remove('drag-over');
-    }
-    
-    // Handle dropped files
-    dropZone.addEventListener('drop', handleDrop, false);
-    fileInput.addEventListener('change', handleFileSelect, false);
-    
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-    }
-    
-    function handleFileSelect(e) {
-        const files = e.target.files;
-        handleFiles(files);
-    }
-    
-    function handleFiles(files) {
-        if (files.length > 0) {
-            const file = files[0];
-            validateAndShowFile(file);
-        }
-    }
-    
-    async function validateAndShowFile(file) {
-        // Basic client-side validation
-        const allowedExtensions = ['.csv', '.json', '.parquet', '.h5', '.npy'];
-        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-        
-        if (!allowedExtensions.includes(fileExtension)) {
-            showAlert('danger', 'File type not allowed. Accepted formats: CSV, JSON, Parquet, H5, NPY');
-            return;
-        }
-        
-        currentFile = file;
-        showFileInfo(file);
-        
-        // Show/hide target column selector based on file type and data type
-        updateTargetColumnVisibility();
-        
-        // Additional server-side validation
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const response = await fetch('{% url "dataset:api_validate_file" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-            
-            const result = await response.json();
-            
-            if (!result.valid) {
-                showAlert('danger', result.error);
-                uploadBtn.disabled = true;
-                return;
-            }
-            
-            showAlert('success', 'File validated successfully. Ready to upload.');
-            
-            // Detect columns for CSV files
-            if (fileExtension === '.csv') {
-                await detectColumns(file);
-            }
-            
-            updateUploadButtonState();
-            
-        } catch (error) {
-            console.error('Error validating file:', error);
-            showAlert('warning', 'Could not validate file on server, but you can continue.');
-            updateUploadButtonState();
-        }
-    }
-    
-    function showFileInfo(file) {
-        document.getElementById('fileName').textContent = file.name;
-        document.getElementById('fileSize').textContent = formatFileSize(file.size);
-        document.getElementById('fileType').textContent = file.type || 'Unknown';
-        fileInfo.style.display = 'block';
-    }
-    
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-    
-    function showAlert(type, message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        alertContainer.appendChild(alertDiv);
-        
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
-    
-    // Form submission
-    uploadForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        if (!currentFile || uploadInProgress) return;
-        
-        uploadInProgress = true;
-        startTime = Date.now();
-        uploadSessionId = generateSessionId();
-        
-        showUploadProgress();
-        
-        const formData = new FormData(uploadForm);
-        formData.append('file', currentFile);
-        formData.append('session_id', uploadSessionId);
-        
-        try {
-            const response = await fetch('{% url "dataset:upload" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                showAlert('success', result.message || 'Dataset uploaded successfully!');
-                setTimeout(() => {
-                    window.location.href = '{% url "dataset:dashboard" %}';
-                }, 2000);
-            } else {
-                showAlert('danger', result.error || 'Error uploading dataset');
-            }
-        } catch (error) {
-            console.error('Upload error:', error);
-            showAlert('danger', 'Connection error while uploading file');
-        } finally {
-            uploadInProgress = false;
-            hideUploadProgress();
-        }
-    });
-    
-    function showUploadProgress() {
-        progressContainer.style.display = 'block';
-        cancelBtn.style.display = 'inline-block';
-        dropZone.classList.add('uploading');
-        uploadBtn.disabled = true;
-        
-        // Simulate progress (in real implementation, this would come from server)
-        simulateProgress();
-    }
-    
-    function hideUploadProgress() {
-        progressContainer.style.display = 'none';
-        cancelBtn.style.display = 'none';
-        dropZone.classList.remove('uploading');
-        uploadBtn.disabled = false;
-    }
-    
-    function simulateProgress() {
-        let progress = 0;
-        const interval = setInterval(() => {
-            if (!uploadInProgress) {
-                clearInterval(interval);
-                return;
-            }
-            
-            progress += Math.random() * 10;
-            if (progress > 100) progress = 100;
-            
-            updateProgress(progress);
-            
-            if (progress >= 100) {
-                clearInterval(interval);
-            }
-        }, 500);
-    }
-    
-    function updateProgress(percent) {
-        const progressBar = document.getElementById('progressBar');
-        const progressPercent = document.getElementById('progressPercent');
-        
-        progressBar.style.width = percent + '%';
-        progressPercent.textContent = Math.round(percent) + '%';
-        
-        // Calculate speed and remaining time (simulated)
-        if (startTime && currentFile) {
-            const elapsed = (Date.now() - startTime) / 1000;
-            const speed = (currentFile.size * percent / 100) / elapsed;
-            document.getElementById('currentSpeed').textContent = formatFileSize(speed) + '/s';
-            
-            if (percent > 0) {
-                const remaining = (elapsed * (100 - percent)) / percent;
-                document.getElementById('timeRemaining').textContent = formatTime(remaining);
-            }
-        }
-        
-        // Update status
-        if (percent < 25) {
-            document.getElementById('uploadStatus').textContent = 'Validating...';
-        } else if (percent < 75) {
-            document.getElementById('uploadStatus').textContent = 'Uploading...';
-        } else if (percent < 100) {
-            document.getElementById('uploadStatus').textContent = 'Processing...';
-        } else {
-            document.getElementById('uploadStatus').textContent = 'Completed';
-        }
-    }
-    
-    function formatTime(seconds) {
-        if (seconds < 60) return Math.round(seconds) + 's';
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = Math.round(seconds % 60);
-        return minutes + 'm ' + remainingSeconds + 's';
-    }
-    
-    // Cancel upload
-    cancelBtn.addEventListener('click', async function() {
-        if (uploadSessionId) {
-            try {
-                await fetch(`/datasets/api/cancel-upload/${uploadSessionId}/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
-                    }
-                });
-            } catch (error) {
-                console.error('Error canceling upload:', error);
-            }
-        }
-        
-        uploadInProgress = false;
-        hideUploadProgress();
-        showAlert('info', 'Upload cancelled');
-    });
-    
-    function generateSessionId() {
-        return 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-    
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-    
-    async function detectColumns(file) {
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const response = await fetch('{% url "dataset:api_detect_columns" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                populateTargetColumnOptions(result.columns);
-                showAlert('info', result.message);
-            } else {
-                showAlert('warning', result.error);
-            }
-            
-        } catch (error) {
-            console.error('Error detecting columns:', error);
-            showAlert('warning', 'Could not detect columns from CSV file');
-        }
-    }
-    
-    function populateTargetColumnOptions(columns) {
-        const targetColumnSelect = document.getElementById('targetColumn');
-        
-        // Clear existing options except the first one
-        targetColumnSelect.innerHTML = '<option value="">Select target column...</option>';
-        
-        // Add columns as options
-        columns.forEach(column => {
-            const option = document.createElement('option');
-            option.value = column;
-            option.textContent = column;
-            targetColumnSelect.appendChild(option);
-        });
-    }
-    
-    function updateTargetColumnVisibility() {
-        const dataType = document.getElementById('dataType').value;
-        const targetColumnGroup = document.getElementById('targetColumnGroup');
-        const fileExtension = currentFile ? '.' + currentFile.name.split('.').pop().toLowerCase() : '';
-        
-        // Show target column selector for tabular CSV files
-        if (dataType === 'tabular' && fileExtension === '.csv') {
-            targetColumnGroup.style.display = 'block';
-        } else {
-            targetColumnGroup.style.display = 'none';
-        }
-        
-        updateUploadButtonState();
-    }
-    
-    function updateUploadButtonState() {
-        const dataType = document.getElementById('dataType').value;
-        const targetColumn = document.getElementById('targetColumn').value;
-        const targetColumnGroup = document.getElementById('targetColumnGroup');
-        const isTargetColumnVisible = targetColumnGroup.style.display !== 'none';
-        
-        // Enable upload button if file is selected and target column is selected (when required)
-        if (currentFile) {
-            if (isTargetColumnVisible && !targetColumn) {
-                uploadBtn.disabled = true;
-            } else {
-                uploadBtn.disabled = false;
-            }
-        } else {
-            uploadBtn.disabled = true;
-        }
-    }
-    
-    // Event listeners for dynamic updates
-    document.getElementById('dataType').addEventListener('change', updateTargetColumnVisibility);
-    document.getElementById('targetColumn').addEventListener('change', updateUploadButtonState);
+document.addEventListener('DOMContentLoaded', function () {
 
-    // --- Experimental Split Logic ---
-    const enableSplit    = document.getElementById('enableSplit');
-    const splitOptions   = document.getElementById('splitOptions');
-    const splitRange     = document.getElementById('splitRangeInput');
-    const splitPct       = document.getElementById('splitPct');
-    const splitHidden    = document.getElementById('splitRatioHidden');
-    const dpPanel        = document.getElementById('dpRecommendations');
-    const domainSelect   = document.getElementById('medicalDomain');
+    // ── State ──
+    var currentStep   = 1;
+    var totalSteps    = 4;
+    var currentFile   = null;
+    var uploadRunning = false;
+    var startTime     = null;
 
-    // Domain → sensitivity (mirrors SENSITIVITY_DEFAULTS keys)
-    const sensitivityMap = {
-        cardiology:    'medium',
-        neurology:     'high',
-        oncology:      'high',
-        radiology:     'medium',
-        pathology:     'high',
-        dermatology:   'medium',
-        ophthalmology: 'low',
-        general:       'low',
-        other:         'low',
+    // ── Element refs ──
+    var dropZone       = document.getElementById('dropZone');
+    var fileInput      = document.getElementById('fileInput');
+    var fileInfoRow    = document.getElementById('fileInfoRow');
+    var progressWrap   = document.getElementById('progressWrap');
+    var alertContainer = document.getElementById('alert-container');
+    var prevBtn        = document.getElementById('prevBtn');
+    var nextBtn        = document.getElementById('nextBtn');
+    var submitBtn      = document.getElementById('submitBtn');
+    var wizardForm     = document.getElementById('wizardForm');
+
+    var enableSplit   = document.getElementById('enableSplit');
+    var splitOptions  = document.getElementById('splitOptions');
+    var splitRange    = document.getElementById('splitRangeInput');
+    var splitPct      = document.getElementById('splitPct');
+    var splitHidden   = document.getElementById('splitRatioHidden');
+    var dpPanel       = document.getElementById('dpRecommendations');
+    var domainSelect  = document.getElementById('medicalDomain');
+    var maxEpsInput   = document.getElementById('maxEpsPerJob');
+    var lifetimeInput = document.getElementById('lifetimeBudget');
+
+    // ── Sensitivity map ──
+    var sensitivityMap = {
+        cardiology:'medium', neurology:'high', oncology:'high',
+        radiology:'medium',  pathology:'high', dermatology:'medium',
+        ophthalmology:'low', general:'low',    other:'low'
+    };
+    var dpDefaults = {
+        high:   {max_eps:0.5,  lifetime:2.0},
+        medium: {max_eps:1.0,  lifetime:5.0},
+        low:    {max_eps:3.0,  lifetime:15.0}
     };
 
-    function refreshDpRec() {
-        const level = sensitivityMap[domainSelect.value] || null;
-        ['high', 'medium', 'low'].forEach(function(l) {
-            document.getElementById('dpRec-' + l).classList.add('d-none');
-        });
-        const placeholder = document.getElementById('dpRec-placeholder');
-        if (level) {
-            document.getElementById('dpRec-' + level).classList.remove('d-none');
-            placeholder.classList.add('d-none');
-        } else {
-            placeholder.classList.remove('d-none');
+    // ── Wizard navigation ──
+    function showStep(n) {
+        for (var i = 1; i <= totalSteps; i++) {
+            var panel = document.getElementById('step' + i);
+            var ind   = document.querySelector('.wiz-step[data-step="' + i + '"]');
+            if (panel) panel.classList.toggle('active', i === n);
+            if (ind) {
+                ind.classList.toggle('active', i === n);
+                ind.classList.toggle('done',   i < n);
+            }
+        }
+        prevBtn.style.visibility = (n === 1) ? 'hidden' : 'visible';
+        nextBtn.style.display    = (n < totalSteps) ? '' : 'none';
+        submitBtn.style.display  = (n === totalSteps) ? '' : 'none';
+
+        if (n === totalSteps) fillReview();
+        if (n === 3) refreshDpRec();
+        nextBtn.disabled = !canAdvance(n);
+    }
+
+    function canAdvance(step) {
+        if (step === 1) return currentFile !== null;
+        if (step === 2) {
+            var name   = document.getElementById('datasetName').value.trim();
+            var desc   = document.getElementById('description').value.trim();
+            var domain = domainSelect.value;
+            var tcg    = document.getElementById('targetColumnGroup');
+            var tc     = document.getElementById('targetColumn').value;
+            var tcRequired = (tcg.style.display !== 'none') && !tc;
+            return name && desc && domain && !tcRequired;
+        }
+        return true; // steps 3 & 4 always ok
+    }
+
+    nextBtn.addEventListener('click', function () {
+        if (!validateStep(currentStep)) return;
+        currentStep++;
+        showStep(currentStep);
+    });
+    prevBtn.addEventListener('click', function () {
+        if (currentStep > 1) { currentStep--; showStep(currentStep); }
+    });
+
+    function validateStep(step) {
+        if (step === 1 && !currentFile) { showAlert('danger', 'Please select a file first.'); return false; }
+        if (step === 2) {
+            var n = document.getElementById('datasetName').value.trim();
+            var d = document.getElementById('description').value.trim();
+            var m = domainSelect.value;
+            if (!n || !d || !m) { showAlert('danger', 'Please fill in all required fields.'); return false; }
+            var tcg = document.getElementById('targetColumnGroup');
+            var tc  = document.getElementById('targetColumn').value;
+            if (tcg.style.display !== 'none' && !tc) { showAlert('danger', 'Please select a target column.'); return false; }
+        }
+        return true;
+    }
+
+    // ── Review fill ──
+    function fillReview() {
+        document.getElementById('rvFile').textContent    = currentFile ? currentFile.name : '—';
+        document.getElementById('rvSize').textContent    = currentFile ? formatSize(currentFile.size) : '—';
+        document.getElementById('rvName').textContent    = document.getElementById('datasetName').value || '—';
+        document.getElementById('rvDomain').textContent  = domainSelect.options[domainSelect.selectedIndex] ? domainSelect.options[domainSelect.selectedIndex].text : '—';
+        document.getElementById('rvDataType').textContent= (function(){var s=document.getElementById('dataType');return s.options[s.selectedIndex].text;})();
+        var tc = document.getElementById('targetColumn').value;
+        document.getElementById('rvTarget').textContent  = tc || '(not set)';
+        var splitOn = enableSplit.checked;
+        document.getElementById('rvSplit').textContent   = splitOn ? splitPct.textContent + '% subset' : 'None';
+        var maxE = maxEpsInput.value; var life = lifetimeInput.value;
+        document.getElementById('rvBudget').textContent  = (maxE && life) ? (maxE + ' / ' + life) : '(set later)';
+    }
+
+    // ── Alert helper — no innerHTML ──
+    function showAlert(type, msg) {
+        // Remove old alerts
+        var old = alertContainer.querySelectorAll('.wiz-alert');
+        old.forEach(function(el){ el.remove(); });
+
+        var div = document.createElement('div');
+        div.className = 'alert alert-' + type + ' alert-dismissible fade show wiz-alert';
+
+        var icon = document.createElement('i');
+        var iconClass = (type === 'success') ? 'check-circle'
+                      : (type === 'danger')  ? 'exclamation-triangle'
+                      :                        'info-circle';
+        icon.className = 'bi bi-' + iconClass + ' me-2';
+
+        var txt  = document.createTextNode(msg);
+        var btn  = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-close';
+        btn.setAttribute('data-bs-dismiss', 'alert');
+
+        div.appendChild(icon);
+        div.appendChild(txt);
+        div.appendChild(btn);
+        alertContainer.appendChild(div);
+
+        setTimeout(function(){ if (div.parentNode) div.remove(); }, 6000);
+    }
+
+    // ── Drag & drop ──
+    ['dragenter','dragover','dragleave','drop'].forEach(function(ev){
+        dropZone.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); });
+    });
+    ['dragenter','dragover'].forEach(function(ev){
+        dropZone.addEventListener(ev, function(){ dropZone.classList.add('drag-over'); });
+    });
+    ['dragleave','drop'].forEach(function(ev){
+        dropZone.addEventListener(ev, function(){ dropZone.classList.remove('drag-over'); });
+    });
+    dropZone.addEventListener('drop', function(e){
+        handleFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', function(e){
+        handleFiles(e.target.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length > 0) pickFile(files[0]);
+    }
+
+    async function pickFile(file) {
+        var allowed = ['.csv','.json','.parquet','.h5','.npy'];
+        var ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowed.includes(ext)) {
+            showAlert('danger', 'File type not allowed. Accepted: CSV, JSON, Parquet, H5, NPY');
+            return;
+        }
+        currentFile = file;
+        showFileInfo(file);
+        nextBtn.disabled = false;
+
+        try {
+            var fd = new FormData();
+            fd.append('file', file);
+            var r = await fetch('{% url "dataset:api_validate_file" %}', {
+                method:'POST', body:fd,
+                headers:{'X-CSRFToken': getCookie('csrftoken')}
+            });
+            var res = await r.json();
+            if (!res.valid) { showAlert('danger', res.error); currentFile = null; nextBtn.disabled = true; return; }
+            showAlert('success', 'File validated — ready to continue.');
+            if (ext === '.csv') await detectColumns(file);
+        } catch(err) {
+            showAlert('warning', 'Server validation unavailable — you may continue.');
         }
     }
 
-    enableSplit.addEventListener('change', function() {
-        const on = this.checked;
+    function showFileInfo(file) {
+        document.getElementById('fiName').textContent = file.name;
+        document.getElementById('fiMeta').textContent = formatSize(file.size) + ' · ' + (file.type || 'Unknown type');
+        fileInfoRow.style.display = 'flex';
+    }
+
+    // ── Column detection ──
+    async function detectColumns(file) {
+        try {
+            var fd = new FormData(); fd.append('file', file);
+            var r  = await fetch('{% url "dataset:api_detect_columns" %}', {
+                method:'POST', body:fd,
+                headers:{'X-CSRFToken': getCookie('csrftoken')}
+            });
+            var res = await r.json();
+            if (res.success) {
+                populateColumns(res.columns);
+                updateTargetVisibility();
+            }
+        } catch(e){ /* silent */ }
+    }
+
+    function populateColumns(cols) {
+        var sel = document.getElementById('targetColumn');
+        while (sel.options.length > 1) sel.remove(1);
+        cols.forEach(function(c){
+            var opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            sel.appendChild(opt);
+        });
+    }
+
+    function updateTargetVisibility() {
+        var dt  = document.getElementById('dataType').value;
+        var ext = currentFile ? ('.' + currentFile.name.split('.').pop().toLowerCase()) : '';
+        var grp = document.getElementById('targetColumnGroup');
+        grp.style.display = (dt === 'tabular' && ext === '.csv') ? 'block' : 'none';
+        nextBtn.disabled = !canAdvance(currentStep);
+    }
+
+    document.getElementById('dataType').addEventListener('change', updateTargetVisibility);
+    document.getElementById('targetColumn').addEventListener('change', function(){
+        nextBtn.disabled = !canAdvance(currentStep);
+    });
+    document.getElementById('datasetName').addEventListener('input',  function(){ nextBtn.disabled = !canAdvance(currentStep); });
+    document.getElementById('description').addEventListener('input',  function(){ nextBtn.disabled = !canAdvance(currentStep); });
+    domainSelect.addEventListener('change', function(){
+        nextBtn.disabled = !canAdvance(currentStep);
+        if (enableSplit.checked) refreshDpRec();
+    });
+
+    // ── Experimental split ──
+    enableSplit.addEventListener('change', function(){
+        var on = this.checked;
         splitOptions.classList.toggle('d-none', !on);
         splitHidden.disabled = !on;
         if (on) {
-            splitHidden.value = (parseInt(splitRange.value) / 100).toFixed(2);
+            splitHidden.value = (parseInt(splitRange.value)/100).toFixed(2);
             dpPanel.style.display = 'block';
             refreshDpRec();
         } else {
             splitHidden.value = '';
             dpPanel.style.display = 'none';
+            maxEpsInput.value = '';
+            lifetimeInput.value = '';
         }
     });
 
-    splitRange.addEventListener('input', function() {
+    splitRange.addEventListener('input', function(){
         splitPct.textContent = this.value;
-        splitHidden.value = (parseInt(this.value) / 100).toFixed(2);
+        splitHidden.value = (parseInt(this.value)/100).toFixed(2);
     });
 
-    domainSelect.addEventListener('change', function() {
-        if (enableSplit.checked) refreshDpRec();
+    function refreshDpRec() {
+        var level = sensitivityMap[domainSelect.value] || null;
+        ['high','medium','low'].forEach(function(l){
+            document.getElementById('dpRec-'+l).classList.add('d-none');
+        });
+        var ph = document.getElementById('dpRec-placeholder');
+        if (level) {
+            document.getElementById('dpRec-'+level).classList.remove('d-none');
+            ph.classList.add('d-none');
+            if (!maxEpsInput.value)   maxEpsInput.value   = dpDefaults[level].max_eps;
+            if (!lifetimeInput.value) lifetimeInput.value = dpDefaults[level].lifetime;
+        } else {
+            ph.classList.remove('d-none');
+        }
+    }
+
+    // ── Form submit (AJAX) ──
+    wizardForm.addEventListener('submit', async function(e){
+        e.preventDefault();
+        if (!currentFile || uploadRunning) return;
+
+        uploadRunning = true;
+        startTime = Date.now();
+        progressWrap.style.display = 'block';
+        dropZone.classList.add('uploading');
+        submitBtn.disabled = true;
+        simulateProgress();
+
+        try {
+            var fd = new FormData(wizardForm);
+            fd.append('file', currentFile);
+            var r = await fetch('{% url "dataset:upload" %}', {
+                method:'POST', body:fd,
+                headers:{'X-CSRFToken': getCookie('csrftoken')}
+            });
+            var res = await r.json();
+            if (res.success) {
+                showAlert('success', res.message || 'Dataset uploaded successfully!');
+                setTimeout(function(){ window.location.href = '{% url "dataset:dashboard" %}'; }, 2000);
+            } else {
+                showAlert('danger', res.error || 'Error uploading dataset');
+            }
+        } catch(err) {
+            showAlert('danger', 'Connection error while uploading file');
+        } finally {
+            uploadRunning = false;
+            progressWrap.style.display = 'none';
+            dropZone.classList.remove('uploading');
+            submitBtn.disabled = false;
+        }
     });
+
+    function simulateProgress() {
+        var pct = 0;
+        var iv = setInterval(function(){
+            if (!uploadRunning){ clearInterval(iv); return; }
+            pct = Math.min(pct + Math.random()*10, 99);
+            document.getElementById('progressFill').style.width = pct + '%';
+            document.getElementById('progressPct').textContent  = Math.round(pct) + '%';
+            var elapsed = (Date.now() - startTime) / 1000;
+            if (currentFile && pct > 0) {
+                var spd = (currentFile.size * pct / 100) / elapsed;
+                document.getElementById('uploadSpeed').textContent  = formatSize(spd) + '/s';
+            }
+            var st = document.getElementById('uploadStatus');
+            st.textContent = pct < 25 ? 'Validating…' : pct < 75 ? 'Uploading…' : 'Processing…';
+            if (pct >= 99) clearInterval(iv);
+        }, 500);
+    }
+
+    // ── Utilities ──
+    function formatSize(bytes) {
+        if (bytes === 0) return '0 B';
+        var k = 1024, sizes = ['B','KB','MB','GB','TB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes/Math.pow(k,i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function getCookie(name) {
+        var v = null;
+        if (document.cookie) {
+            document.cookie.split(';').forEach(function(c){
+                c = c.trim();
+                if (c.indexOf(name+'=') === 0)
+                    v = decodeURIComponent(c.substring(name.length+1));
+            });
+        }
+        return v;
+    }
+
+    // Initialise
+    showStep(1);
 });
 </script>
 {% endblock %}

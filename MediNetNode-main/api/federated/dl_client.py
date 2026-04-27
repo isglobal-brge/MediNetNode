@@ -47,8 +47,12 @@ def set_parameters(net, parameters: List[np.ndarray]):
                 # Parameter processing error
                 raise
         
-        # Carregar l'state_dict actualitzat
-        net.load_state_dict(state_dict, strict=False)  # Canviat a strict=False per ser més permissiu
+        # Carregar l'state_dict actualitzat.
+        # strict=True is intentional: the count guard above already validated
+        # that len(keys) == len(parameters), so any shape mismatch indicates a
+        # Hub/Node model definition mismatch that should fail loudly rather than
+        # silently loading mismatched tensors.
+        net.load_state_dict(state_dict, strict=True)
         
     except Exception as e:
         # Parameter setting error
@@ -232,10 +236,13 @@ class DLFlowerClient(NumPyClient):
         """        
         print(f"[Client {self.partition_id}] evaluate, config: {config}")
         set_parameters(self.net, parameters)
-        
+
         # Use global TABLE_NAME for consistent data loading
         print(f"DEBUG EVALUATE: Using TABLE_NAME: {self.table_name}")
-        
-        loss, accuracy = test(self.net, self.valloader, self.device)
+
+        # Pass the same loss_function that was used during training so test()
+        # branches on the correct output shape and metric mode.
+        loss_function = self.model_json.get("model", {}).get("training", {}).get("loss_function", "bce_with_logits")
+        loss, accuracy = test(self.net, self.valloader, self.device, loss_function=loss_function)
         num_val_samples = len(self.valloader.dataset) if self.valloader else 0
         return float(loss), num_val_samples, {"accuracy": float(accuracy), "loss": float(loss)}

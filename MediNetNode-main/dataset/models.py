@@ -203,6 +203,7 @@ class DatasetAccess(models.Model):
     # Permission fields
     can_train = models.BooleanField(default=True)
     can_view_metadata = models.BooleanField(default=True)
+    can_use_experiment = models.BooleanField(default=False)
     
     class Meta:
         unique_together = ('dataset', 'user_id')
