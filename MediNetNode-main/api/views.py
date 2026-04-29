@@ -189,8 +189,8 @@ def get_data_info(request):
                 'error': 'No datasets available for this user'
             }, status=403)
         
-        # Format data to match client_api.py structure
-        data_dict = format_datasets_for_client(accessible_datasets)
+        # Format data to match client_api.py structure (include privacy budget per researcher)
+        data_dict = format_datasets_for_client(accessible_datasets, researcher_user=user)
         logger.info(f"Returning {len(accessible_datasets)} datasets to user {user.username}")
         return JsonResponse(data_dict)
         
@@ -655,16 +655,20 @@ def get_user_datasets(user):
         return []
 
 
-def format_datasets_for_client(datasets):
+def format_datasets_for_client(datasets, researcher_user=None):
     """
     Format datasets to match the structure expected by client_api.py.
-    
+
     Args:
-        datasets: List of Dataset objects
-        
+        datasets:         List of Dataset objects
+        researcher_user:  Optional api_user — when supplied, per-researcher
+                          epsilon budgets are included in the response.
+
     Returns:
         dict: Formatted data compatible with client expectations
     """
+    from dataset.models import DatasetPrivacyPolicy
+
     data_dict = {
         'dataset_id': [],
         'dataset_name': [],
@@ -676,9 +680,10 @@ def format_datasets_for_client(datasets):
         'target_column': [],
         'num_columns': [],
         'created_at': [],
-        'metadata': []
+        'metadata': [],
+        'privacy_policy': [],
     }
-    
+
     for dataset in datasets:
         data_dict['dataset_id'].append(dataset.id)
         data_dict['dataset_name'].append(dataset.name)
@@ -690,8 +695,8 @@ def format_datasets_for_client(datasets):
         data_dict['target_column'].append(dataset.target_column or '')
         data_dict['num_columns'].append(dataset.columns_count or 0)
         data_dict['created_at'].append(dataset.uploaded_at.isoformat() if dataset.uploaded_at else '')
-        
-        # Get metadata if available
+
+        # Metadata
         metadata_info = {}
         try:
             if hasattr(dataset, 'metadata') and dataset.metadata:
@@ -702,15 +707,50 @@ def format_datasets_for_client(datasets):
                     'quality_score': dataset.metadata.quality_score,
                     'completeness_percentage': dataset.metadata.completeness_percentage,
                     'generated_at': dataset.metadata.generated_at.isoformat() if dataset.metadata.generated_at else None,
-                    'updated_at': dataset.metadata.updated_at.isoformat() if dataset.metadata.updated_at else None
+                    'updated_at': dataset.metadata.updated_at.isoformat() if dataset.metadata.updated_at else None,
                 }
         except Exception as e:
             logger.error(f"Error retrieving metadata for dataset {dataset.id}: {str(e)}")
-            metadata_info = {}
-        
         data_dict['metadata'].append(metadata_info)
-        #data_dict['client_version'] = CLIENT_VERSION
-    
+
+        # ── Privacy budget ──────────────────────────────────────────────
+        # Dataset-level policy (set by Node admin)
+        privacy_info = None
+        try:
+            policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset.id)
+            privacy_info = {
+                'sensitivity':        policy.sensitivity,
+                'max_epsilon_per_job': policy.max_epsilon_per_job,
+                'lifetime_budget':    policy.lifetime_budget,
+                'spent_epsilon':      round(policy.spent_epsilon, 4),
+                'remaining_budget':   round(policy.remaining_budget, 4),
+            }
+
+            # Per-researcher budget (finer-grained, if it exists)
+            if researcher_user is not None:
+                try:
+                    rb = ResearcherEpsilonBudget.objects.get(
+                        dataset_id=dataset.id,
+                        researcher_id=researcher_user.id,
+                    )
+                    privacy_info['researcher_budget'] = {
+                        'lifetime_budget':  rb.lifetime_budget,
+                        'spent_epsilon':    round(rb.spent_epsilon, 4),
+                        'remaining_budget': round(rb.remaining_budget, 4),
+                        'max_epsilon_per_job': rb.max_epsilon_per_job,
+                        'period':           rb.period,
+                    }
+                except ResearcherEpsilonBudget.DoesNotExist:
+                    pass  # No per-researcher record yet — dataset policy is enough
+
+        except DatasetPrivacyPolicy.DoesNotExist:
+            # Dataset has no policy configured yet
+            privacy_info = None
+        except Exception as e:
+            logger.error(f"Error retrieving privacy policy for dataset {dataset.id}: {str(e)}")
+
+        data_dict['privacy_policy'].append(privacy_info)
+
     return data_dict
 
 
