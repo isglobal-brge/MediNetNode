@@ -70,7 +70,7 @@ class TestServerHeaderRemoval:
         client = Client()
 
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key,
             REMOTE_ADDR='127.0.0.1'
         )
@@ -134,7 +134,7 @@ class TestServerHeaderRemoval:
 
         # Test POST to API endpoint
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='{"invalid": "json"}',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,

@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load csp_tags %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style nonce="{% csp_nonce %}">
+    .info-card {
+        border-left: 4px solid #1976d2;
+        border-radius: 8px;
+        background: var(--card-bg, #fff);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .status-badge { font-size: 0.75rem; font-weight: 600; padding: 0.3rem 0.9rem;
+                    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .status-pending  { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d1e7dd; color: #0f5132; }
+    .status-rejected { background: #f8d7da; color: #842029; }
+
+    .budget-bar-track {
+        background: #e9ecef; border-radius: 8px; height: 14px; overflow: hidden;
+    }
+    .budget-bar-fill {
+        height: 100%; border-radius: 8px;
+        background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+        transition: width 0.5s ease;
+    }
+
+    .session-row { transition: background 0.15s ease; }
+    .session-row:hover { background-color: rgba(25, 118, 210, 0.04); }
+
+    .stat-chip {
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        padding: 0.35rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+    }
+    .stat-chip.completed { background: #d1e7dd; color: #0f5132; }
+    .stat-chip.failed    { background: #f8d7da; color: #842029; }
+    .stat-chip.active    { background: #cff4fc; color: #055160; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- Page header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{% url 'trainings:dashboard' %}">Training</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'trainings:budget_reset_list' %}">Budget Resets</a></li>
+                    <li class="breadcrumb-item active">#{{ reset_req.id }}</li>
+                </ol>
+            </nav>
+            <h2 class="mb-0">
+                Budget Reset Request #{{ reset_req.id }}
+                <span class="status-badge status-{{ reset_req.status }} ms-2 align-middle">
+                    {{ reset_req.get_status_display }}
+                </span>
+            </h2>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="mb-3">
+        {% for msg in messages %}
+        <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Left column: request details + action -->
+        <div class="col-lg-5">
+
+            <!-- Request info card -->
+            <div class="card info-card mb-4">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <h5 class="mb-0">Request Details</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4 text-muted small">Researcher</dt>
+                        <dd class="col-sm-8">
+                            {% if researcher %}
+                            <strong>{{ researcher.username }}</strong>
+                            {% if researcher.get_full_name %}<br><small class="text-muted">{{ researcher.get_full_name }}</small>{% endif %}
+                            {% if researcher.email %}<br><small class="text-muted">{{ researcher.email }}</small>{% endif %}
+                            {% else %}
+                            <span class="text-muted">ID {{ reset_req.researcher_id }}</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4 text-muted small">Dataset</dt>
+                        <dd class="col-sm-8">
+                            {% if dataset %}
+                            <strong>{{ dataset.name }}</strong>
+                            {% if dataset.description %}<br><small class="text-muted">{{ dataset.description|truncatewords:15 }}</small>{% endif %}
+                            {% else %}
+                            <span class="text-muted">Dataset #{{ reset_req.dataset_id }}</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4 text-muted small">Requested</dt>
+                        <dd class="col-sm-8"><small>{{ reset_req.requested_at|date:"Y-m-d H:i:s" }}</small></dd>
+
+                        {% if reset_req.reviewed_at %}
+                        <dt class="col-sm-4 text-muted small">Reviewed</dt>
+                        <dd class="col-sm-8">
+                            <small>{{ reset_req.reviewed_at|date:"Y-m-d H:i:s" }}</small>
+                            {% if reset_req.reviewed_by %}
+                            <br><small class="text-muted">by {{ reset_req.reviewed_by.username }}</small>
+                            {% endif %}
+                        </dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Researcher justification -->
+            <div class="card mb-4">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <h6 class="mb-0 text-muted">Researcher's Justification</h6>
+                </div>
+                <div class="card-body">
+                    <blockquote class="blockquote mb-0 fs-6" style="border-left:3px solid #dee2e6; padding-left:1rem;">
+                        {{ reset_req.reason|linebreaks }}
+                    </blockquote>
+                </div>
+            </div>
+
+            <!-- Admin review notes (if already reviewed) -->
+            {% if reset_req.review_notes %}
+            <div class="card mb-4">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <h6 class="mb-0 text-muted">Admin Notes</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ reset_req.review_notes|linebreaks }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Action buttons (only for pending requests) -->
+            {% if reset_req.status == 'pending' %}
+            <div class="card border-warning">
+                <div class="card-header bg-warning bg-opacity-10 border-bottom-0">
+                    <h6 class="mb-0">Admin Decision</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes <small class="text-muted">(optional)</small></label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3"
+                                      placeholder="Provide context for the researcher…"></textarea>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="action" value="approve"
+                                    class="btn btn-success flex-fill"
+                                    onclick="return confirm('Approve this budget reset? The researcher\'s ε budget will be reset immediately.')">
+                                ✓ Approve &amp; Reset Budget
+                            </button>
+                            <button type="submit" name="action" value="reject"
+                                    class="btn btn-outline-danger flex-fill"
+                                    onclick="return confirm('Reject this request?')">
+                                ✗ Reject
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        <!-- Right column: ε budget status + training history -->
+        <div class="col-lg-7">
+
+            <!-- Epsilon budget summary -->
+            {% if epsilon_budget %}
+            <div class="card mb-4">
+                <div class="card-header bg-transparent border-0">
+                    <h5 class="mb-0">Privacy Budget Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-4 text-danger">{{ epsilon_budget.spent_epsilon|floatformat:4 }}</div>
+                            <div class="text-muted small">ε spent</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-4 text-success">{{ epsilon_budget.remaining_budget|floatformat:4 }}</div>
+                            <div class="text-muted small">ε remaining</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-4">{{ epsilon_budget.lifetime_budget|floatformat:4 }}</div>
+                            <div class="text-muted small">ε lifetime limit</div>
+                        </div>
+                    </div>
+
+                    {% with pct=epsilon_budget.spent_epsilon|floatformat:0 %}
+                    <div class="budget-bar-track">
+                        {% if epsilon_budget.lifetime_budget > 0 %}
+                        {% widthratio epsilon_budget.spent_epsilon epsilon_budget.lifetime_budget 100 as fill_pct %}
+                        <div class="budget-bar-fill" style="width: {{ fill_pct|default:0 }}%;"></div>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-muted">0</small>
+                        <small class="text-muted">{{ epsilon_budget.lifetime_budget|floatformat:2 }}</small>
+                    </div>
+
+                    <div class="mt-3 row g-2 text-center">
+                        <div class="col-6">
+                            <div class="text-muted small">Max ε per job</div>
+                            <div class="fw-semibold">{{ epsilon_budget.max_epsilon_per_job|floatformat:4 }}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-muted small">Reset period</div>
+                            <div class="fw-semibold">{{ epsilon_budget.get_period_display }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Training activity log -->
+            <div class="card">
+                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Training History on This Dataset</h5>
+                    <span class="badge bg-secondary">{{ training_sessions.count }}</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if training_sessions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Rounds</th>
+                                    <th>Accuracy</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in training_sessions %}
+                                <tr class="session-row">
+                                    <td>
+                                        <small>{{ session.started_at|date:"Y-m-d H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="stat-chip {% if session.status == 'COMPLETED' %}completed{% elif session.status == 'FAILED' %}failed{% else %}active{% endif %}">
+                                            {{ session.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {{ session.current_round }}/{{ session.total_rounds }}
+                                    </td>
+                                    <td>
+                                        {% if session.final_accuracy %}
+                                        {{ session.final_accuracy|floatformat:4 }}
+                                        {% else %}—{% endif %}
+                                    </td>
+                                    <td class="text-end text-muted">—</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <p class="mb-0">No training sessions found for this researcher on this dataset.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

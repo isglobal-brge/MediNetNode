@@ -96,7 +96,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(valid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -116,7 +116,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(invalid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -146,7 +146,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(invalid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -176,7 +176,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(valid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -209,7 +209,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(ssrf_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -243,7 +243,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(oversized_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -264,7 +264,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(invalid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -288,7 +288,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(invalid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -328,7 +328,7 @@ class TestTrainingConfigValidation:
             }
 
             response = client.post(
-                '/api/v1/start-client',
+                '/api/v2/start-client',
                 data=json.dumps(config),
                 content_type='application/json',
                 HTTP_X_API_KEY=api_key,
@@ -368,7 +368,7 @@ class TestTrainingConfigValidation:
             }
 
             response = client.post(
-                '/api/v1/start-client',
+                '/api/v2/start-client',
                 data=json.dumps(config),
                 content_type='application/json',
                 HTTP_X_API_KEY=api_key,
@@ -408,7 +408,7 @@ class TestTrainingConfigValidation:
             }
 
             response = client.post(
-                '/api/v1/start-client',
+                '/api/v2/start-client',
                 data=json.dumps(config),
                 content_type='application/json',
                 HTTP_X_API_KEY=api_key,
@@ -438,7 +438,7 @@ class TestTrainingConfigValidation:
         }
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(invalid_config),
             content_type='application/json',
             HTTP_X_API_KEY=api_key,

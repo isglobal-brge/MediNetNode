@@ -95,7 +95,7 @@ Auto-logs out authenticated users after `SESSION_IDLE_TIMEOUT` seconds of
 inactivity (default: 7200 s / 2 h, configurable per deployment).  AJAX
 requests receive a `401` JSON response instead of a redirect.
 
-Also enforces that **RESEARCHER** users can only access `/api/v1/` and
+Also enforces that **RESEARCHER** users can only access `/api/v2/` and
 `/info/researcher` — any other path is blocked and logged as a security
 violation.
 

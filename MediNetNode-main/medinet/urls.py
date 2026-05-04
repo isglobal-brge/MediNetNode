@@ -35,7 +35,7 @@ def protected_media(request, path):
 schema_view = get_schema_view(
     openapi.Info(
         title="MediNet RESEARCHER API",
-        default_version='v1',
+        default_version='v2',
         description="Stateless API for RESEARCHER users - Federated Learning Platform",
         terms_of_service="https://www.google.com/policies/terms/",
         contact=openapi.Contact(email="admin@medinet.com"),

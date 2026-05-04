@@ -62,7 +62,7 @@ class TestIPWhitelistSecurity:
 
         # Attacker tries to spoof IP via X-Client-IP header
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key_single_ip,
             HTTP_X_CLIENT_IP='203.0.113.10',  # Spoofed IP
             REMOTE_ADDR='192.0.2.1'  # Actual IP (different)
@@ -81,7 +81,7 @@ class TestIPWhitelistSecurity:
 
         # Request from load balancer with X-Forwarded-For
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key_single_ip,
             HTTP_X_FORWARDED_FOR='203.0.113.10',  # Real client IP
             REMOTE_ADDR='10.0.0.1'  # Trusted proxy IP
@@ -99,7 +99,7 @@ class TestIPWhitelistSecurity:
 
         # Attacker tries to spoof IP via X-Forwarded-For
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key_single_ip,
             HTTP_X_FORWARDED_FOR='203.0.113.10',  # Spoofed IP
             REMOTE_ADDR='192.0.2.1'  # Actual attacker IP
@@ -118,7 +118,7 @@ class TestIPWhitelistSecurity:
 
         for ip_addr in valid_ips:
             response = client.get(
-                '/api/v1/ping',
+                '/api/v2/ping',
                 HTTP_X_API_KEY=api_key_cidr_range,
                 REMOTE_ADDR=ip_addr
             )
@@ -133,7 +133,7 @@ class TestIPWhitelistSecurity:
 
         for ip_addr in invalid_ips:
             response = client.get(
-                '/api/v1/ping',
+                '/api/v2/ping',
                 HTTP_X_API_KEY=api_key_cidr_range,
                 REMOTE_ADDR=ip_addr
             )
@@ -148,7 +148,7 @@ class TestIPWhitelistSecurity:
 
         # X-Forwarded-For with multiple IPs (client, proxy1, proxy2)
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key_single_ip,
             HTTP_X_FORWARDED_FOR='203.0.113.10, 192.0.2.5, 10.0.0.2',
             REMOTE_ADDR='10.0.0.1'  # Trusted proxy
@@ -172,7 +172,7 @@ class TestIPWhitelistSecurity:
 
         # Should fall back to string comparison and allow exact match
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=raw_key,
             REMOTE_ADDR='203.0.113.10'
         )
@@ -193,7 +193,7 @@ class TestIPWhitelistSecurity:
         client = Client()
 
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=raw_key,
             REMOTE_ADDR='2001:db8::1'
         )
@@ -215,7 +215,7 @@ class TestIPWhitelistSecurity:
 
         # IP within range
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=raw_key,
             REMOTE_ADDR='2001:db8:0:0:0:0:0:1'
         )
@@ -223,7 +223,7 @@ class TestIPWhitelistSecurity:
 
         # IP outside range
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=raw_key,
             REMOTE_ADDR='2001:db9::1'
         )
@@ -243,7 +243,7 @@ class TestIPWhitelistSecurity:
         client = Client()
 
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=raw_key,
             REMOTE_ADDR='203.0.113.10'
         )

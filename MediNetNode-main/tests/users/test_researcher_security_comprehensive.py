@@ -100,8 +100,8 @@ class ResearcherSecurityComprehensiveTests(TestCase):
             '/info/researcher/../../django-admin/',
             '/info/researcher/../users/',
             '/info/researcher/../system/logs/',
-            '/api/v1/../../admin/',
-            '/api/v1/../users/',
+            '/api/v2/../../admin/',
+            '/api/v2/../users/',
         ]
 
         for url in attack_urls:
@@ -197,8 +197,8 @@ class ResearcherSecurityComprehensiveTests(TestCase):
         """Verify API endpoints are accessible."""
         # Note: These might return 404 if endpoints don't exist, but should NOT redirect
         api_urls = [
-            '/api/v1/ping',
-            '/api/v1/get-data-info',
+            '/api/v2/ping',
+            '/api/v2/get-data-info',
         ]
 
         for url in api_urls:
@@ -228,7 +228,7 @@ class ResearcherSecurityComprehensiveTests(TestCase):
         attack_urls = [
             '/admin/?next=/info/researcher/',
             '/users/?redirect=/info/researcher/',
-            '/django-admin/?next=/api/v1/ping',
+            '/django-admin/?next=/api/v2/ping',
         ]
 
         for url in attack_urls:

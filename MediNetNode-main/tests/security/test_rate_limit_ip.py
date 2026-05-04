@@ -4,7 +4,7 @@ from django.test import RequestFactory
 from medinet_core.security.middleware import RateLimitMiddleware
 
 
-def _make_unauth_request(ip='10.0.0.1', path='/api/v1/ping/'):
+def _make_unauth_request(ip='10.0.0.1', path='/api/v2/ping/'):
     factory = RequestFactory()
     req = factory.get(path, REMOTE_ADDR=ip)
     # No api_user — simulates unauthenticated request

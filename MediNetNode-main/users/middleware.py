@@ -108,7 +108,7 @@ class SessionTimeoutMiddleware:
 
         # WHITELIST: Only allow these specific paths for RESEARCHER users
         allowed_patterns = [
-            '/api/v1/',           # Their legitimate API endpoints
+            '/api/v2/',           # Their legitimate API endpoints
             '/info/researcher',   # Their info page (with or without trailing slash)
             '/auth/logout',       # Logout functionality (with or without trailing slash)
         ]

@@ -43,10 +43,10 @@ Los researchers pueden solicitar un reset de su presupuesto cuando lo agoten (p.
 
 | Método | URL | Rol | Descripción |
 |--------|-----|-----|-------------|
-| `POST` | `/api/v1/budget-reset/` | RESEARCHER | Solicitar reset |
-| `GET` | `/api/v1/budget-reset/` | RESEARCHER | Ver mis solicitudes |
-| `POST` | `/api/v1/budget-reset/<id>/approve/` | ADMIN | Aprobar + aplicar reset |
-| `POST` | `/api/v1/budget-reset/<id>/reject/` | ADMIN | Rechazar con notas |
+| `POST` | `/api/v2/budget-reset/` | RESEARCHER | Solicitar reset |
+| `GET` | `/api/v2/budget-reset/` | RESEARCHER | Ver mis solicitudes |
+| `POST` | `/api/v2/budget-reset/<id>/approve/` | ADMIN | Aprobar + aplicar reset |
+| `POST` | `/api/v2/budget-reset/<id>/reject/` | ADMIN | Rechazar con notas |
 
 **Restricciones:** solo una solicitud pendiente por (dataset, researcher) a la vez. El researcher nunca puede resetearse a sí mismo.
 

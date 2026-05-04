@@ -48,7 +48,7 @@ class TestConcurrentSessionLimit:
         _make_active_session(self.researcher, n=MAX_CONCURRENT)
         from api.views import start_client
         request = self.factory.post(
-            '/api/v1/start-client/',
+            '/api/v2/start-client/',
             data=json.dumps({'model_json': {}, 'server_address': 'hub:8080'}),
             content_type='application/json',
         )

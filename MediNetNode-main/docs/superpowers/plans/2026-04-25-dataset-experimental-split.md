@@ -632,7 +632,7 @@ class TestValidateTrainingPermissionsExperiment:
             MockPolicy.objects.using.return_value.filter.return_value.first.return_value = mock_policy
 
             response = client.post(
-                '/api/v1/start-client/',
+                '/api/v2/start-client/',
                 data=json.dumps(model_json),
                 content_type='application/json',
             )

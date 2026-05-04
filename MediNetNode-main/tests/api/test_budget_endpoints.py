@@ -61,7 +61,7 @@ class TestBudgetResetEndpoints:
 
     def test_researcher_can_request_reset(self):
         from api.budget_views import request_budget_reset
-        req = self._api_request('post', '/api/v1/budget-reset/', self.researcher, {
+        req = self._api_request('post', '/api/v2/budget-reset/', self.researcher, {
             'dataset_id': self.dataset.id,
             'reason': 'Nuevo proyecto aprobado por comité.',
         })
@@ -78,7 +78,7 @@ class TestBudgetResetEndpoints:
             reason='Motivo válido.',
         )
         from api.budget_views import approve_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/approve/', self.admin, {
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/approve/', self.admin, {
             'notes': 'Aprobado por revisión ética.',
         })
         resp = approve_budget_reset(req, reset_req.id)
@@ -97,7 +97,7 @@ class TestBudgetResetEndpoints:
             reason='Motivo.',
         )
         from api.budget_views import reject_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/reject/', self.admin, {
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/reject/', self.admin, {
             'notes': 'No procede.',
         })
         resp = reject_budget_reset(req, reset_req.id)
@@ -115,6 +115,6 @@ class TestBudgetResetEndpoints:
             reason='x',
         )
         from api.budget_views import approve_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/approve/', self.researcher, {})
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/approve/', self.researcher, {})
         resp = approve_budget_reset(req, reset_req.id)
         assert resp.status_code == 403

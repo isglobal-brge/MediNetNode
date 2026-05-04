@@ -1,10 +1,10 @@
 """
 Endpoints para gestión del presupuesto epsilon por researcher.
 
-- POST /api/v1/budget-reset/                     — researcher solicita reset
-- POST /api/v1/budget-reset/<id>/approve/        — admin aprueba
-- POST /api/v1/budget-reset/<id>/reject/         — admin rechaza
-- GET  /api/v1/budget-reset/                     — researcher/admin lista solicitudes
+- POST /api/v2/budget-reset/                     — researcher solicita reset
+- POST /api/v2/budget-reset/<id>/approve/        — admin aprueba
+- POST /api/v2/budget-reset/<id>/reject/         — admin rechaza
+- GET  /api/v2/budget-reset/                     — researcher/admin lista solicitudes
 """
 import json
 import logging

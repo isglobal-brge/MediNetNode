@@ -1255,7 +1255,7 @@ class TestConcurrentSessionLimit:
     def test_allows_first_session(self):
         from api.views import start_client
         request = self.factory.post(
-            '/api/v1/start-client/',
+            '/api/v2/start-client/',
             data=json.dumps({'model_json': {}, 'server_address': 'hub:8080'}),
             content_type='application/json',
         )
@@ -1275,7 +1275,7 @@ class TestConcurrentSessionLimit:
         _make_active_session(self.researcher, n=MAX_CONCURRENT)
         from api.views import start_client
         request = self.factory.post(
-            '/api/v1/start-client/',
+            '/api/v2/start-client/',
             data=json.dumps({'model_json': {}, 'server_address': 'hub:8080'}),
             content_type='application/json',
         )
@@ -1357,7 +1357,7 @@ from django.test import RequestFactory
 from medinet_core.security.middleware import RateLimitMiddleware
 
 
-def _make_unauth_request(ip='10.0.0.1', path='/api/v1/ping/'):
+def _make_unauth_request(ip='10.0.0.1', path='/api/v2/ping/'):
     factory = RequestFactory()
     req = factory.get(path, HTTP_REMOTE_ADDR=ip)
     # Sin api_user — simula petición no autenticada
@@ -1547,7 +1547,7 @@ class TestBudgetResetEndpoints:
 
     def test_researcher_can_request_reset(self):
         from api.budget_views import request_budget_reset
-        req = self._api_request('post', '/api/v1/budget-reset/', self.researcher, {
+        req = self._api_request('post', '/api/v2/budget-reset/', self.researcher, {
             'dataset_id': self.dataset.id,
             'reason': 'Nuevo proyecto aprobado por comité.',
         })
@@ -1564,7 +1564,7 @@ class TestBudgetResetEndpoints:
             reason='Motivo válido.',
         )
         from api.budget_views import approve_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/approve/', self.admin, {
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/approve/', self.admin, {
             'notes': 'Aprobado por revisión ética.',
         })
         resp = approve_budget_reset(req, reset_req.id)
@@ -1583,7 +1583,7 @@ class TestBudgetResetEndpoints:
             reason='Motivo.',
         )
         from api.budget_views import reject_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/reject/', self.admin, {
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/reject/', self.admin, {
             'notes': 'No procede.',
         })
         resp = reject_budget_reset(req, reset_req.id)
@@ -1601,7 +1601,7 @@ class TestBudgetResetEndpoints:
             reason='x',
         )
         from api.budget_views import approve_budget_reset
-        req = self._api_request('post', f'/api/v1/budget-reset/{reset_req.id}/approve/', self.researcher, {})
+        req = self._api_request('post', f'/api/v2/budget-reset/{reset_req.id}/approve/', self.researcher, {})
         resp = approve_budget_reset(req, reset_req.id)
         assert resp.status_code == 403
 ```
@@ -1618,10 +1618,10 @@ python3.11 -m pytest tests/api/test_budget_endpoints.py -v --tb=short 2>&1 | hea
 """
 Endpoints para gestión del presupuesto epsilon por researcher.
 
-- POST /api/v1/budget-reset/                     — researcher solicita reset
-- POST /api/v1/budget-reset/<id>/approve/        — admin aprueba
-- POST /api/v1/budget-reset/<id>/reject/         — admin rechaza
-- GET  /api/v1/budget-reset/                     — admin lista pendientes
+- POST /api/v2/budget-reset/                     — researcher solicita reset
+- POST /api/v2/budget-reset/<id>/approve/        — admin aprueba
+- POST /api/v2/budget-reset/<id>/reject/         — admin rechaza
+- GET  /api/v2/budget-reset/                     — admin lista pendientes
 """
 import json
 import logging
@@ -2334,7 +2334,7 @@ Para reset manual supervisado, ver `docs/features/budget-reset-workflow.md`.
 ## Flujo de validación completo
 
 ```
-POST /api/v1/start-client
+POST /api/v2/start-client
   validate_training_permissions()
     1. DatasetPrivacyPolicy.can_accept_job(eps)        ← límite global del dataset
     2. ResearcherEpsilonBudget.get_or_create_for(...)  ← crear si es primera vez
@@ -2380,10 +2380,10 @@ Researcher                           Node (ADMIN)
 
 | Método | URL | Rol requerido | Descripción |
 |--------|-----|---------------|-------------|
-| `POST` | `/api/v1/budget-reset/` | RESEARCHER | Crear solicitud con motivo |
-| `GET`  | `/api/v1/budget-reset/` | RESEARCHER | Ver mis solicitudes |
-| `POST` | `/api/v1/budget-reset/<id>/approve/` | ADMIN | Aprobar y aplicar reset |
-| `POST` | `/api/v1/budget-reset/<id>/reject/`  | ADMIN | Rechazar con notas |
+| `POST` | `/api/v2/budget-reset/` | RESEARCHER | Crear solicitud con motivo |
+| `GET`  | `/api/v2/budget-reset/` | RESEARCHER | Ver mis solicitudes |
+| `POST` | `/api/v2/budget-reset/<id>/approve/` | ADMIN | Aprobar y aplicar reset |
+| `POST` | `/api/v2/budget-reset/<id>/reject/`  | ADMIN | Rechazar con notas |
 
 ## Restricciones de seguridad
 

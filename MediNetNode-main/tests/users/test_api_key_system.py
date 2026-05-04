@@ -186,7 +186,7 @@ class APIRequestModelTests(TestCase):
         request_log = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET',
             ip_address='192.168.1.100',
             user_agent='TestClient/1.0',
@@ -197,7 +197,7 @@ class APIRequestModelTests(TestCase):
         
         self.assertEqual(request_log.api_key, self.api_key)
         self.assertEqual(request_log.user, self.researcher_user)
-        self.assertEqual(request_log.endpoint, '/api/v1/ping')
+        self.assertEqual(request_log.endpoint, '/api/v2/ping')
         self.assertEqual(request_log.method, 'GET')
         self.assertEqual(request_log.status_code, 200)
         self.assertTrue(request_log.is_successful)
@@ -207,7 +207,7 @@ class APIRequestModelTests(TestCase):
         failed_request = APIRequest.objects.create(
             api_key=None,  # No API key for failed auth
             user=None,     # No user for failed auth
-            endpoint='/api/v1/get-data-info',
+            endpoint='/api/v2/get-data-info',
             method='GET',
             ip_address='192.168.1.200',  # Unauthorized IP
             user_agent='TestClient/1.0',
@@ -229,7 +229,7 @@ class APIRequestModelTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -328,7 +328,7 @@ class APIKeySecurityTests(TestCase):
         APIRequest.objects.create(
             api_key=api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET',
             ip_address='192.168.1.100',
             status_code=200,

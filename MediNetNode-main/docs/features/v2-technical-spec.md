@@ -74,7 +74,7 @@ La condición `spent_epsilon__lte=F('lifetime_budget')` actúa como guard atómi
 ## 3. Flujo de validación de un job de entrenamiento
 
 ```
-POST /api/v1/start-client/
+POST /api/v2/start-client/
 │
 ├── [NUEVO] Límite sesiones concurrentes
 │   TrainingSession.objects.filter(user=researcher, status__in=['STARTING','ACTIVE']).count()
@@ -96,7 +96,7 @@ POST /api/v1/start-client/
         │   Si |actual - expected| > 1e-4 → fail_training_session()
         └── [NUEVO ML] Incluir privacy_epsilon=max_epsilon_per_job en round_metrics
 
-POST /api/v1/complete-training/ (interno, al finalizar)
+POST /api/v2/complete-training/ (interno, al finalizar)
 └── _record_privacy_spend(session)
     ├── DatasetPrivacyPolicy.record_spent(actual_epsilon)
     └── [NUEVO] ResearcherEpsilonBudget.objects.filter(...).update(F('spent_epsilon') + eps)
@@ -166,7 +166,7 @@ class BudgetResetRequest(models.Model):
 
 ## 5. Endpoints REST nuevos
 
-### `POST /api/v1/budget-reset/`
+### `POST /api/v2/budget-reset/`
 
 **Rol requerido:** RESEARCHER
 
@@ -183,7 +183,7 @@ class BudgetResetRequest(models.Model):
 
 ---
 
-### `POST /api/v1/budget-reset/<id>/approve/`
+### `POST /api/v2/budget-reset/<id>/approve/`
 
 **Rol requerido:** ADMIN
 
@@ -195,7 +195,7 @@ class BudgetResetRequest(models.Model):
 
 ---
 
-### `POST /api/v1/budget-reset/<id>/reject/`
+### `POST /api/v2/budget-reset/<id>/reject/`
 
 **Rol requerido:** ADMIN
 
@@ -279,7 +279,7 @@ El partial muestra:
 Nueva sección en `templates/users/researcher_info.html`:
 - Tabla: dataset_id, gastado, restante, límite total
 - Botón "Solicitar reset" por dataset → abre modal con textarea para justificación
-- Formulario POST a `/api/v1/budget-reset/` con `dataset_id` y `reason`
+- Formulario POST a `/api/v2/budget-reset/` con `dataset_id` y `reason`
 
 ---
 

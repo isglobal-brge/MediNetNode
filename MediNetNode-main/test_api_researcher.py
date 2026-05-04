@@ -11,9 +11,9 @@ from datetime import datetime
 # Configuration
 API_BASE_URL = "http://localhost:5001"  # Django API port
 API_ENDPOINTS = {
-    'ping': f"{API_BASE_URL}/api/v1/ping",
-    'get_data_info': f"{API_BASE_URL}/api/v1/get-data-info", 
-    'start_client': f"{API_BASE_URL}/api/v1/start-client"
+    'ping': f"{API_BASE_URL}/api/v2/ping",
+    'get_data_info': f"{API_BASE_URL}/api/v2/get-data-info", 
+    'start_client': f"{API_BASE_URL}/api/v2/start-client"
 }
 
 # Test credentials - Replace with actual values
@@ -45,7 +45,7 @@ def test_ping():
         
         if response.status_code == 200:
             data = response.json()
-            if data.get('status') == 'pong':
+            if data.get('status') == 'ok':
                 print("[OK] Ping test PASSED")
                 return True
             else:

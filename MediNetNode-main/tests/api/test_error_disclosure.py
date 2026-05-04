@@ -49,7 +49,7 @@ class TestErrorInformationDisclosure:
 
         # Trigger an error by sending invalid JSON
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='invalid-json',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -116,7 +116,7 @@ class TestErrorInformationDisclosure:
 
         # Try to access with wrong IP
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key,
             REMOTE_ADDR='192.0.2.1'  # Not whitelisted
         )
@@ -140,7 +140,7 @@ class TestErrorInformationDisclosure:
 
         # Send invalid config
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='{"model_json": "not_an_object"}',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -165,7 +165,7 @@ class TestErrorInformationDisclosure:
 
         # This will cause an internal error (no datasets)
         response = client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             HTTP_X_API_KEY=api_key,
             REMOTE_ADDR='127.0.0.1'
         )
@@ -195,9 +195,9 @@ class TestErrorInformationDisclosure:
 
         # Try various endpoints that might error
         endpoints = [
-            ('/api/v1/ping', 'GET'),
-            ('/api/v1/get-data-info', 'GET'),
-            ('/api/v1/start-client', 'POST')
+            ('/api/v2/ping', 'GET'),
+            ('/api/v2/get-data-info', 'GET'),
+            ('/api/v2/start-client', 'POST')
         ]
 
         for endpoint, method in endpoints:
@@ -240,7 +240,7 @@ class TestErrorInformationDisclosure:
 
         # Send invalid JSON to trigger error
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='invalid-json',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,
@@ -259,7 +259,7 @@ class TestErrorInformationDisclosure:
 
         # Get data info (might trigger DB queries)
         response = client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             HTTP_X_API_KEY=api_key,
             REMOTE_ADDR='127.0.0.1'
         )
@@ -295,7 +295,7 @@ class TestErrorInformationDisclosure:
         client = Client()
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='invalid-json',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,

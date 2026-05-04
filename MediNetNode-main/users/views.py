@@ -224,7 +224,7 @@ def create_user(request):
                             user=user,
                             name="Auto-generated API Key",
                             ip_whitelist=['0.0.0.0/0'],
-                            expires_at=None
+                            expires_at=timezone.now() + timedelta(days=30)
                         )
 
                     AuditLog.objects.create(
@@ -315,19 +315,19 @@ def download_user_info(request):
             "url": base_url,
             "api_key": user_data['api_key'],
             "created_at": user_data['api_key_created'],
-            "expires_at": None,
+            "expires_at": api_key.expires_at.isoformat() if api_key else None,
             "endpoints": {
                 "base_url": base_url,
-                "ping": "/api/v1/ping",
-                "get_data": "/api/v1/get-data-info",
-                "start_training": "/api/v1/start-client",
-                "cancel_training": "/api/v1/cancel-training/<session_id>"
+                "ping": "/api/v2/ping",
+                "get_data": "/api/v2/get-data-info",
+                "start_training": "/api/v2/start-client",
+                "cancel_training": "/api/v2/cancel-training/<session_id>"
             }
         },
         "usage_instructions": {
             "authentication": "Include 'X-API-Key' header in all requests",
             "client_ip": "Include 'X-Client-IP' header with your IP address",
-            "example_curl": f"curl -H 'X-API-Key: {user_data['api_key']}' -H 'X-Client-IP: YOUR_IP' {base_url}/api/v1/ping"
+            "example_curl": f"curl -H 'X-API-Key: {user_data['api_key']}' -H 'X-Client-IP: YOUR_IP' {base_url}/api/v2/ping"
         }
     }
     

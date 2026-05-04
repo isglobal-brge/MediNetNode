@@ -50,7 +50,7 @@ Para reset manual supervisado, ver `docs/features/budget-reset-workflow.md`.
 ## Flujo de validación completo
 
 ```
-POST /api/v1/start-client
+POST /api/v2/start-client
   validate_training_permissions()
     1. DatasetPrivacyPolicy.can_accept_job(eps)        ← límite global del dataset
     2. ResearcherEpsilonBudget.get_or_create_for(...)  ← crear si es primera vez

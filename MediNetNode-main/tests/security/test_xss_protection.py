@@ -76,7 +76,7 @@ class TestCSPHeaders:
         client = Client()
 
         response = client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=api_key,
             REMOTE_ADDR='127.0.0.1'
         )
@@ -204,7 +204,7 @@ class TestAutoescaping:
         xss_payload = '<script>alert("XSS")</script>'
 
         response = client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=f'{{"model_json": "{xss_payload}"}}',
             content_type='application/json',
             HTTP_X_API_KEY=api_key,

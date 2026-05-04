@@ -40,7 +40,7 @@ class AuditMiddlewareTests(TestCase):
         """Test that API paths are logged."""
         before_count = AuditEvent.objects.count()
         
-        response = self.client.get('/api/v1/test/')
+        response = self.client.get('/api/v2/test/')
         after_count = AuditEvent.objects.count()
         
         # API paths should be logged, but other middleware might intercept
@@ -48,7 +48,7 @@ class AuditMiddlewareTests(TestCase):
         if after_count > before_count:
             latest_event = AuditEvent.objects.latest('timestamp')
             self.assertIn('API', latest_event.action)
-            self.assertIn('/api/v1/test/', latest_event.resource)
+            self.assertIn('/api/v2/test/', latest_event.resource)
             self.assertEqual(latest_event.category, 'API')
 
     def test_data_access_path_logging(self):

@@ -290,6 +290,11 @@
                 <i class="bi bi-list-ul"></i>
                 Browse Training History
             </a>
+            <a href="{% url 'trainings:budget_reset_list' %}" class="btn-action secondary">
+                <i class="bi bi-shield-exclamation"></i>
+                Privacy Budget Resets
+                {% if pending_count %}<span class="badge bg-warning text-dark ms-1">{{ pending_count }}</span>{% endif %}
+            </a>
             <a href="#" class="btn-action secondary" onclick="exportTrainingData()">
                 <i class="bi bi-download"></i>
                 Export Training Data

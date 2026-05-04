@@ -157,7 +157,7 @@ class SessionTimeoutMiddleware:
         normalized_path = self._normalize_path(original_path)
 
         allowed_patterns = [
-            '/api/v1/',
+            '/api/v2/',
             '/info/researcher',
             '/auth/logout',
         ]

@@ -99,18 +99,18 @@ class APIEndpointTests(TestCase):
     def test_ping_endpoint_success(self):
         """Test ping endpoint with valid authentication."""
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
         
         self.assertEqual(response.status_code, 200)
         
         data = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(data['status'], 'pong')
+        self.assertEqual(data['status'], 'ok')
     
     def test_ping_endpoint_no_auth(self):
         """Test ping endpoint without authentication."""
-        response = self.client.get('/api/v1/ping')
+        response = self.client.get('/api/v2/ping')
         
         self.assertEqual(response.status_code, 401)
         
@@ -120,7 +120,7 @@ class APIEndpointTests(TestCase):
     def test_ping_endpoint_invalid_key(self):
         """Test ping endpoint with invalid API key."""
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key_12345',
             HTTP_X_CLIENT_IP='127.0.0.1'
         )
@@ -133,7 +133,7 @@ class APIEndpointTests(TestCase):
     def test_ping_endpoint_wrong_ip(self):
         """Test ping endpoint from unauthorized IP."""
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             HTTP_X_CLIENT_IP='192.168.2.100'  # Not in whitelist
         )
@@ -146,7 +146,7 @@ class APIEndpointTests(TestCase):
     def test_get_data_info_success(self):
         """Test get_data_info endpoint with valid authentication."""
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
@@ -167,7 +167,7 @@ class APIEndpointTests(TestCase):
     
     def test_get_data_info_no_auth(self):
         """Test get_data_info endpoint without authentication."""
-        response = self.client.get('/api/v1/get-data-info')
+        response = self.client.get('/api/v2/get-data-info')
         
         self.assertEqual(response.status_code, 401)
     
@@ -179,7 +179,7 @@ class APIEndpointTests(TestCase):
         ).delete()
         
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
@@ -211,7 +211,7 @@ class APIEndpointTests(TestCase):
         }
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
@@ -229,7 +229,7 @@ class APIEndpointTests(TestCase):
         payload = {"model_json": {"framework": "pytorch"}}
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -244,7 +244,7 @@ class APIEndpointTests(TestCase):
         }
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
@@ -258,7 +258,7 @@ class APIEndpointTests(TestCase):
     def test_start_client_invalid_json(self):
         """Test start_client endpoint with invalid JSON."""
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='invalid json data',
             content_type='application/json',
             **self.get_auth_headers()
@@ -286,7 +286,7 @@ class APIEndpointTests(TestCase):
         }
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
@@ -303,7 +303,7 @@ class APIEndpointTests(TestCase):
         
         # Make a request
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
         
@@ -312,7 +312,7 @@ class APIEndpointTests(TestCase):
         # Check that request was logged
         log_entry = APIRequest.objects.filter(
             api_key=self.api_key,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET'
         ).first()
         
@@ -330,7 +330,7 @@ class APIEndpointTests(TestCase):
         
         # Make a request
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
         
@@ -344,7 +344,7 @@ class APIEndpointTests(TestCase):
     def test_dataset_format_compatibility(self):
         """Test that dataset format matches client_api.py expectations."""
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
@@ -384,15 +384,15 @@ class APIErrorHandlingTests(TestCase):
     def test_invalid_endpoint_returns_401(self):
         """Test that invalid endpoints return 401 (auth required first)."""
         # API middleware checks auth first, so invalid endpoints return 401 without auth
-        response = self.client.get('/api/v1/invalid-endpoint')
+        response = self.client.get('/api/v2/invalid-endpoint')
         self.assertEqual(response.status_code, 401)
     
     def test_wrong_http_method(self):
         """Test endpoints with wrong HTTP methods."""
         # API middleware checks authentication first, so wrong methods return 401 without auth
         # This is actually correct behavior for a secure API
-        response = self.client.post('/api/v1/ping')
+        response = self.client.post('/api/v2/ping')
         self.assertEqual(response.status_code, 401)  # Unauthorized (auth required first)
         
-        response = self.client.get('/api/v1/start-client')
+        response = self.client.get('/api/v2/start-client')
         self.assertEqual(response.status_code, 401)  # Unauthorized (auth required first)

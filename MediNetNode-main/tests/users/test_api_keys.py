@@ -338,7 +338,7 @@ class APIRequestAuditTests(TestCase):
         api_request = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET',
             ip_address='127.0.0.1',
             user_agent='TestAgent/1.0',
@@ -347,7 +347,7 @@ class APIRequestAuditTests(TestCase):
             is_successful=True
         )
         
-        self.assertEqual(api_request.endpoint, '/api/v1/ping')
+        self.assertEqual(api_request.endpoint, '/api/v2/ping')
         self.assertEqual(api_request.method, 'GET')
         self.assertEqual(api_request.status_code, 200)
         self.assertTrue(api_request.is_successful)
@@ -359,7 +359,7 @@ class APIRequestAuditTests(TestCase):
         api_request = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/invalid',
+            endpoint='/api/v2/invalid',
             method='POST',
             ip_address='127.0.0.1',
             user_agent='TestAgent/1.0',
@@ -378,13 +378,13 @@ class APIRequestAuditTests(TestCase):
         api_request = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/test',
+            endpoint='/api/v2/test',
             method='GET',
             ip_address='127.0.0.1',
             status_code=200
         )
         
-        expected_str = f"{self.researcher_user.username} - GET /api/v1/test (200)"
+        expected_str = f"{self.researcher_user.username} - GET /api/v2/test (200)"
         self.assertEqual(str(api_request), expected_str)
 
 

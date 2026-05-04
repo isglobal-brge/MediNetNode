@@ -349,7 +349,7 @@ class AuditLoggerTests(TestCase):
     def test_api_access_logging(self):
         """Test API access logging convenience method."""
         event = AuditLogger.log_api_access(
-            endpoint='/api/v1/datasets',
+            endpoint='/api/v2/datasets',
             user=self.user,
             method='GET',
             success=True,
@@ -360,7 +360,7 @@ class AuditLoggerTests(TestCase):
         
         self.assertEqual(event.category, 'API')
         self.assertEqual(event.action, 'API_GET')
-        self.assertEqual(event.resource, 'api:/api/v1/datasets')
+        self.assertEqual(event.resource, 'api:/api/v2/datasets')
         self.assertEqual(event.request_size, 1024)
         self.assertEqual(event.request_duration_ms, 150)
 

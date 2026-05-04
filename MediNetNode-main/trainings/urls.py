@@ -9,6 +9,10 @@ from . import views
 app_name = 'trainings'
 
 urlpatterns = [
+    # Budget Reset Request management (ADMIN only)
+    path('budget-reset/', views.budget_reset_list, name='budget_reset_list'),
+    path('budget-reset/<int:request_id>/', views.budget_reset_detail, name='budget_reset_detail'),
+
     # Dashboard - Overview and active trainings
     path('', views.dashboard, name='dashboard'),
     

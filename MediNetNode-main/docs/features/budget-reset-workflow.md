@@ -29,10 +29,10 @@ Researcher                           Node (ADMIN)
 
 | Método | URL | Rol requerido | Descripción |
 |--------|-----|---------------|-------------|
-| `POST` | `/api/v1/budget-reset/` | RESEARCHER | Crear solicitud con motivo |
-| `GET`  | `/api/v1/budget-reset/` | RESEARCHER | Ver mis solicitudes |
-| `POST` | `/api/v1/budget-reset/<id>/approve/` | ADMIN | Aprobar y aplicar reset |
-| `POST` | `/api/v1/budget-reset/<id>/reject/`  | ADMIN | Rechazar con notas |
+| `POST` | `/api/v2/budget-reset/` | RESEARCHER | Crear solicitud con motivo |
+| `GET`  | `/api/v2/budget-reset/` | RESEARCHER | Ver mis solicitudes |
+| `POST` | `/api/v2/budget-reset/<id>/approve/` | ADMIN | Aprobar y aplicar reset |
+| `POST` | `/api/v2/budget-reset/<id>/reject/`  | ADMIN | Rechazar con notas |
 
 ## Restricciones de seguridad
 

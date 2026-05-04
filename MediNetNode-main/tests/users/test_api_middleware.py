@@ -58,7 +58,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     
     def test_missing_api_key_returns_401(self):
         """Test that requests without X-API-Key header return 401."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         
         response = self.middleware(request)
         
@@ -72,7 +72,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_invalid_api_key_returns_401(self):
         """Test that invalid API key returns 401."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key_12345',
             REMOTE_ADDR='192.168.1.100'
         )
@@ -96,7 +96,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         )
         
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=expired_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -110,7 +110,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_unauthorized_ip_returns_403(self):
         """Test that unauthorized IP address returns 403."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.200'  # Not in whitelist
         )
@@ -138,7 +138,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         )
         
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=admin_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -155,7 +155,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         self.researcher_user.save()
         
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -172,7 +172,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         self.researcher_user.save()
         
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -186,7 +186,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_valid_authentication_sets_request_attributes(self):
         """Test that valid authentication sets api_key and api_user on request."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -206,7 +206,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_successful_request_logging(self):
         """Test that successful requests are logged."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.100',
             HTTP_USER_AGENT='TestClient/1.0'
@@ -222,7 +222,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         # Check that request was logged
         log_entry = APIRequest.objects.get(
             api_key=self.api_key,
-            endpoint='/api/v1/ping'
+            endpoint='/api/v2/ping'
         )
         self.assertEqual(log_entry.method, 'GET')
         self.assertEqual(log_entry.ip_address, '192.168.1.100')
@@ -233,7 +233,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_failed_request_logging(self):
         """Test that failed authentication requests are logged."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key',
             REMOTE_ADDR='192.168.1.100'
         )
@@ -241,7 +241,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         response = self.middleware(request)
         
         # Check that failed request was logged
-        log_entry = APIRequest.objects.get(endpoint='/api/v1/ping')
+        log_entry = APIRequest.objects.get(endpoint='/api/v2/ping')
         self.assertIsNone(log_entry.api_key)
         self.assertIsNone(log_entry.user)
         self.assertEqual(log_entry.status_code, 401)
@@ -254,7 +254,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         initial_last_ip = self.api_key.last_used_ip
         
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY=self.api_key.key,
             REMOTE_ADDR='192.168.1.100'
         )
@@ -333,7 +333,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_unauthenticated_api_requests_pass_through(self):
         """Test that unauthenticated API requests bypass rate limiting."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         
         mock_response = Mock()
         self.middleware.get_response = Mock(return_value=mock_response)
@@ -344,7 +344,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_rate_limit_enforcement(self):
         """Test that rate limits are enforced."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create 100 recent successful requests (at the limit)
@@ -352,7 +352,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -371,7 +371,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_rate_limit_not_exceeded(self):
         """Test that requests under rate limit pass through."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create only 50 recent requests (under the limit)
@@ -379,7 +379,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -396,7 +396,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_ping_endpoint_higher_rate_limit(self):
         """Test that ping endpoint has higher rate limit."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         request.api_user = self.researcher_user
         
         # Create 500 ping requests (should still be allowed)
@@ -404,7 +404,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint='/api/v1/ping',
+                endpoint='/api/v2/ping',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -422,7 +422,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_old_requests_not_counted(self):
         """Test that requests outside the time window are not counted."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create 100 old requests (outside 1-hour window) 
@@ -434,7 +434,7 @@ class RateLimitMiddlewareTests(TestCase):
             bulk_requests.append(APIRequest(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,

@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
+from django.utils import timezone
 import json
 import os
 import logging
@@ -157,13 +158,28 @@ def api_view_required(view_func):
 @api_view_required
 def ping(request):
     """
-    Health check endpoint compatible with client_api.py.
-    
+    Health check endpoint. Returns status and API key expiry info so the Hub
+    can warn researchers before their key expires.
+
     Returns:
-        JsonResponse: {'status': 'pong'}
+        JsonResponse: {
+            'status': 'ok',
+            'api_key': {'expires_at': <iso>, 'days_remaining': <int>} | null
+        }
     """
     logger.info(f"Ping request from user {request.api_user.username}")
-    return JsonResponse({'status': 'pong'})
+
+    api_key_info = None
+    api_key = request.api_key
+    if api_key.expires_at:
+        delta = api_key.expires_at - timezone.now()
+        days_remaining = max(0, delta.days)
+        api_key_info = {
+            'expires_at': api_key.expires_at.isoformat(),
+            'days_remaining': days_remaining,
+        }
+
+    return JsonResponse({'status': 'ok', 'api_key': api_key_info})
 
 
 @require_http_methods(["GET"])
@@ -598,7 +614,11 @@ def validate_training_permissions(user, model_json):
                         user.username, reason
                     )
                     return JsonResponse(
-                        {'error': f'Presupuesto de privacidad del researcher agotado: {reason}'},
+                        {
+                            'error': f'Presupuesto de privacidad del researcher agotado: {reason}',
+                            'budget_exhausted': True,
+                            'dataset_id': dataset_id,
+                        },
                         status=403,
                     )
             except Exception as exc:
@@ -820,3 +840,177 @@ def cancel_training(request, session_id):
         'session_id': str(session_id),
         'process_killed': process_killed
     }, status=200)
+
+
+# ---------------------------------------------------------------------------
+# Budget visibility endpoints
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def budget_status(request):
+    """
+    GET /api/v2/budget-status/
+
+    Returns the researcher's current ε budget for every dataset they have
+    access to (or a single dataset when ?dataset_name=X is supplied).
+
+    Response shape:
+        {
+          "datasets": [
+            {
+              "dataset_id": 3,
+              "dataset_name": "Hospital_BCN",
+              "is_experimental": false,
+              "spent_epsilon": 1.23,
+              "remaining_budget": 3.77,
+              "lifetime_budget": 5.0,
+              "max_epsilon_per_job": 1.0,
+              "period": "annual"
+            },
+            ...
+          ]
+        }
+
+    Experimental datasets are included but flagged — budget is always null for
+    them because no tracking takes place on the experimental split.
+    """
+    user = getattr(request, 'api_user', None)
+    if not user:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    dataset_name_filter = request.GET.get('dataset_name', '').strip()
+
+    try:
+        accesses = DatasetAccess.objects.using('datasets_db').filter(
+            user_id=user.id,
+            can_train=True,
+        ).select_related('dataset')
+
+        if dataset_name_filter:
+            accesses = accesses.filter(dataset__name=dataset_name_filter)
+
+        results = []
+        for access in accesses:
+            ds = access.dataset
+            budget = ResearcherEpsilonBudget.objects.using('datasets_db').filter(
+                dataset=ds,
+                researcher_id=user.id,
+            ).first()
+
+            if budget:
+                entry = {
+                    'dataset_id': ds.id,
+                    'dataset_name': ds.name,
+                    'is_experimental': False,
+                    'spent_epsilon': round(budget.spent_epsilon, 6),
+                    'remaining_budget': round(budget.remaining_budget, 6),
+                    'lifetime_budget': round(budget.lifetime_budget, 6),
+                    'max_epsilon_per_job': round(budget.max_epsilon_per_job, 6),
+                    'period': budget.period,
+                }
+            else:
+                # Access exists but no budget record yet — treat as fresh
+                from dataset.models import DatasetPrivacyPolicy
+                policy = DatasetPrivacyPolicy.objects.using('datasets_db').filter(
+                    dataset=ds
+                ).first()
+                entry = {
+                    'dataset_id': ds.id,
+                    'dataset_name': ds.name,
+                    'is_experimental': False,
+                    'spent_epsilon': 0.0,
+                    'remaining_budget': policy.lifetime_budget if policy else None,
+                    'lifetime_budget': policy.lifetime_budget if policy else None,
+                    'max_epsilon_per_job': policy.max_epsilon_per_job if policy else None,
+                    'period': 'annual',
+                }
+            results.append(entry)
+
+        return JsonResponse({'datasets': results})
+
+    except Exception as exc:
+        logger.error("[budget_status] Error: %s", exc)
+        return JsonResponse({'error': 'Internal error fetching budget status'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def estimate_epsilon(request):
+    """
+    POST /api/v2/estimate-epsilon/
+
+    Returns the pre-flight ε estimate for a given training configuration
+    without starting any training session.  Reuses the same
+    `estimate_job_epsilon()` logic used by the real training gate.
+
+    Request body:
+        {
+          "dataset_name": "Hospital_BCN",
+          "model_json": { ... }   // same shape as start-client
+        }
+
+    Response:
+        {
+          "estimated_epsilon": 0.87,
+          "delta": 1e-5,
+          "dataset_id": 3,
+          "dataset_size": 4200
+        }
+
+    Returns 422 when estimation is not possible (missing DP config, import
+    error, etc.) so the Hub can display "unable to estimate" rather than crash.
+    """
+    user = getattr(request, 'api_user', None)
+    if not user:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    dataset_name = (body.get('dataset_name') or '').strip()
+    model_json = body.get('model_json')
+
+    if not dataset_name:
+        return JsonResponse({'error': 'dataset_name is required'}, status=400)
+    if not isinstance(model_json, dict):
+        return JsonResponse({'error': 'model_json must be an object'}, status=400)
+
+    try:
+        access = DatasetAccess.objects.using('datasets_db').filter(
+            user_id=user.id,
+            can_train=True,
+            dataset__name=dataset_name,
+        ).select_related('dataset').first()
+
+        if not access:
+            return JsonResponse({'error': f'Dataset "{dataset_name}" not found or access denied'}, status=404)
+
+        ds = access.dataset
+        dataset_size = ds.patient_count or 0
+
+        if dataset_size <= 0:
+            return JsonResponse({'error': 'Dataset has no patient records — cannot estimate ε'}, status=422)
+
+        estimated_eps = estimate_job_epsilon(model_json, dataset_size)
+
+        import math
+        if not math.isfinite(estimated_eps):
+            return JsonResponse(
+                {'error': 'Could not estimate ε — check DP parameters (noise_multiplier, epochs)'},
+                status=422,
+            )
+
+        from api.federated.train_functions import _DP_DELTA
+        return JsonResponse({
+            'estimated_epsilon': round(estimated_eps, 6),
+            'delta': _DP_DELTA,
+            'dataset_id': ds.id,
+            'dataset_size': dataset_size,
+        })
+
+    except Exception as exc:
+        logger.error("[estimate_epsilon] Error: %s", exc)
+        return JsonResponse({'error': 'Internal error during epsilon estimation'}, status=500)

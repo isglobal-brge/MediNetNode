@@ -1,5 +1,5 @@
 """
-Integration tests for the /api/v1/start-client endpoint.
+Integration tests for the /api/v2/start-client endpoint.
 
 Validates authentication, SSRF protection, payload validation,
 and successful Process dispatch without starting a real Flower client.
@@ -41,7 +41,7 @@ def _build_model_json(dataset_id: int) -> dict:
 
 def _post_start_client(client, auth_headers: dict, body: dict):
     return client.post(
-        "/api/v1/start-client",
+        "/api/v2/start-client",
         data=json.dumps(body),
         content_type="application/json",
         **auth_headers,
@@ -63,7 +63,7 @@ class TestStartClientAuth:
             "ssl_enabled": False,
         }
         response = client.post(
-            "/api/v1/start-client",
+            "/api/v2/start-client",
             data=json.dumps(body),
             content_type="application/json",
             REMOTE_ADDR="127.0.0.1",
@@ -77,7 +77,7 @@ class TestStartClientAuth:
             "ssl_enabled": False,
         }
         response = client.post(
-            "/api/v1/start-client",
+            "/api/v2/start-client",
             data=json.dumps(body),
             content_type="application/json",
             HTTP_X_API_KEY="totally-invalid-key",
