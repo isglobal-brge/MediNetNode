@@ -63,3 +63,4 @@ config/
 Thumbs.db
 documentacion/
 */log.txt
+.superpowers/
