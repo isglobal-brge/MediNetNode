@@ -49,7 +49,7 @@ def main():
 
     print("\nUpdated output_schema:")
     print(model.output_schema)
-    print("\n✅ Model updated successfully!")
+    print("\nModel updated successfully!")
     print("\nYou can customize the class names by editing the model in the admin panel")
     print("or by modifying this script.")
 

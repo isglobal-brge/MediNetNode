@@ -11,7 +11,7 @@ import json
 import os
 import logging
 from .federated import client
-from dataset.models import Dataset, DatasetAccess, ResearcherEpsilonBudget
+from dataset.models import Dataset, DatasetAccess, ResearcherEpsilonBudget, DatasetPrivacyPolicy
 from trainings.models import TrainingSession
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 CLIENT_VERSION = "0.1" # Version of the client API, used for versioning and compatibility checks
 
-MAX_CONCURRENT_TRAINING_SESSIONS = 2
+MAX_CONCURRENT_TRAINING_SESSIONS = 3
 
 # JSON schema for training configuration validation
 TRAINING_CONFIG_SCHEMA = {
@@ -120,13 +120,15 @@ def validate_training_config(data, request_body_size):
     server_address = data.get("server_address", "localhost:8080")
     server_host = server_address.split(':')[0].lower()
 
-    # Always block localhost/loopback
-    for blocked_pattern in ALWAYS_BLOCKED_PATTERNS:
-        if server_host.startswith(blocked_pattern):
-            logger.warning(f"Blocked localhost server address: {server_address}")
-            return JsonResponse({
-                'error': 'Localhost addresses not allowed'
-            }, status=403)
+    # Always block localhost/loopback (unless explicitly allowed for local dev/testing)
+    allow_localhost = getattr(settings, 'ALLOW_LOCALHOST_FL_SERVERS', False)
+    if not allow_localhost:
+        for blocked_pattern in ALWAYS_BLOCKED_PATTERNS:
+            if server_host.startswith(blocked_pattern):
+                logger.warning(f"Blocked localhost server address: {server_address}")
+                return JsonResponse({
+                    'error': 'Localhost addresses not allowed'
+                }, status=403)
 
     # Block private networks only if not explicitly allowed (check dynamically)
     allow_private = getattr(settings, 'ALLOW_PRIVATE_FL_SERVERS', False)
@@ -314,7 +316,8 @@ def start_client(request):
                 model_config=model_json,
                 server_address=server_address,
                 status='STARTING',
-                process_id=current_process.pid
+                process_id=current_process.pid,
+                use_experiment=bool(model_json.get('use_experiment', False)),
             )
             training_session.save()
             
@@ -353,7 +356,7 @@ def start_client(request):
             with open(doc_file, 'w', encoding='utf-8') as f:
                 json.dump(debug_data, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"📄 Training request saved to: {filename}")
+            logger.info(f"Training request saved to: {filename}")
 
         except Exception as e:
             logger.error(f"[ERROR] Failed to save training request to documentation: {e}")
@@ -1014,3 +1017,133 @@ def estimate_epsilon(request):
     except Exception as exc:
         logger.error("[estimate_epsilon] Error: %s", exc)
         return JsonResponse({'error': 'Internal error during epsilon estimation'}, status=500)
+
+
+@require_http_methods(["GET"])
+@api_view_required
+def min_noise_multiplier(request):
+    """
+    GET /api/v2/min-noise-multiplier/
+
+    Returns the minimum noise multiplier (σ) the Node will enforce for a given
+    dataset and training configuration, derived analytically from the RDP
+    accountant so that DP-SGD consumes at most the dataset's per_job_max
+    epsilon budget.
+
+    The Hub calls this endpoint as the researcher configures batch_size and
+    epochs, displaying the value in real time so they can set σ ≥ the floor.
+    At runtime the Node recalculates and clamps regardless of what the Hub sends.
+
+    Query parameters:
+        dataset_name    (required) — name of the dataset
+        batch_size      (required) — integer, mini-batch size
+        epochs          (required) — integer, local epochs per federated round
+        use_experiment  (optional) — "true"/"1" to compute σ for the experimental
+                                     partition (experiment_row_count) instead of the
+                                     full dataset. A smaller partition requires a higher
+                                     σ floor to maintain the same ε guarantee, so this
+                                     must match the actual training mode.
+
+    Response:
+        {
+          "min_noise_multiplier": 0.957,
+          "target_epsilon":       4.5,
+          "dataset_name":         "test_split_3",
+          "dataset_size":         1752,
+          "use_experiment":       true,
+          "batch_size":           32,
+          "epochs":               20,
+          "delta":                1e-5,
+          "note":                 "..."
+        }
+    """
+    try:
+        dataset_name   = (request.GET.get("dataset_name") or "").strip()
+        batch_size     = request.GET.get("batch_size")
+        epochs         = request.GET.get("epochs")
+        use_experiment = request.GET.get("use_experiment", "false").lower() in ("1", "true", "yes")
+
+        if not dataset_name:
+            return JsonResponse({"error": "dataset_name is required"}, status=400)
+        if not batch_size or not epochs:
+            return JsonResponse(
+                {"error": "batch_size and epochs are required query parameters"},
+                status=400,
+            )
+
+        try:
+            batch_size = int(batch_size)
+            epochs     = int(epochs)
+        except ValueError:
+            return JsonResponse(
+                {"error": "batch_size and epochs must be integers"},
+                status=400,
+            )
+
+        if batch_size <= 0 or epochs <= 0:
+            return JsonResponse(
+                {"error": "batch_size and epochs must be positive integers"},
+                status=400,
+            )
+
+        # Resolve dataset and privacy policy
+        try:
+            dataset = Dataset.objects.select_related("privacy_policy").get(
+                name=dataset_name
+            )
+        except Dataset.DoesNotExist:
+            return JsonResponse(
+                {"error": f"Dataset '{dataset_name}' not found"},
+                status=404,
+            )
+
+        if not hasattr(dataset, "privacy_policy"):
+            return JsonResponse(
+                {"error": f"Dataset '{dataset_name}' has no privacy policy configured"},
+                status=400,
+            )
+
+        # Use the experimental partition size when requested and available.
+        # This matters because a smaller n requires a higher σ floor to achieve
+        # the same ε guarantee — computing against the full dataset would
+        # underestimate the required noise and silently violate the budget.
+        exp_n        = dataset.experiment_row_count or 0
+        is_exp_mode  = use_experiment and exp_n > 0
+        n_records    = exp_n if is_exp_mode else (dataset.rows_count or dataset.patient_count or 0)
+        target_epsilon = dataset.privacy_policy.max_epsilon_per_job
+
+        if n_records <= 0:
+            return JsonResponse(
+                {"error": "Dataset has no record count — upload may be incomplete"},
+                status=400,
+            )
+
+        from api.federated.train_functions import compute_min_noise_multiplier, _DP_DELTA
+        min_sigma = compute_min_noise_multiplier(
+            n=n_records,
+            batch_size=batch_size,
+            epochs=epochs,
+            target_epsilon=target_epsilon,
+        )
+
+        partition_label = "experimental partition" if is_exp_mode else "full dataset"
+        return JsonResponse({
+            "min_noise_multiplier": round(min_sigma, 6),
+            "target_epsilon":       target_epsilon,
+            "dataset_name":         dataset_name,
+            "dataset_size":         n_records,
+            "use_experiment":       is_exp_mode,
+            "batch_size":           batch_size,
+            "epochs":               epochs,
+            "delta":                _DP_DELTA,
+            "note": (
+                f"Minimum sigma such that DP-SGD with batch={batch_size}, "
+                f"epochs={epochs} on n={n_records} records ({partition_label}) consumes "
+                f"at most epsilon={target_epsilon} (delta={_DP_DELTA}) per job, "
+                "derived from the RDP accountant."
+            ),
+        })
+
+    except Exception as exc:
+        logger.error("[min_noise_multiplier] Error: %s", exc)
+        return SafeErrorResponse.internal_error(request, exc, "min_noise_multiplier")

@@ -333,9 +333,9 @@ class DatasetPrivacyPolicy(models.Model):
     """
 
     SENSITIVITY_CHOICES = [
-        ('high',   'Alta — diagnóstico, salud mental, genómica'),
-        ('medium', 'Media — riesgo cardiovascular, general'),
-        ('low',    'Baja — estadísticas agregadas'),
+        ('high',   'High — diagnostics, mental health, genomics'),
+        ('medium', 'Medium — cardiovascular risk, general clinical'),
+        ('low',    'Low — aggregate statistics'),
     ]
 
     # Literature-backed presets (npj Digital Medicine 2025, OpenMined guide).

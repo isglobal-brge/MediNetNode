@@ -286,6 +286,21 @@ def download_user_info(request):
     if not user_data:
         return HttpResponseForbidden("No user data available for download")
 
+    # Resolve the APIKey ORM object so we can read expires_at.
+    # The model stores key_prefix + key_hash, not the raw key, so look up
+    # by prefix (first 8 chars) to find the key just created for this user.
+    from .models import APIKey
+    api_key_str = user_data.get('api_key', '')
+    try:
+        api_key = (
+            APIKey.objects
+            .filter(key_prefix=api_key_str[:8], is_active=True)
+            .order_by('-created_at')
+            .first()
+        ) if api_key_str else None
+    except Exception:
+        api_key = None
+
     # Get system configuration for center info
     system_config = SystemConfiguration.get_instance()
     if system_config:

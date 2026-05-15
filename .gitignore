@@ -34,6 +34,9 @@ db.sqlite3-journal
 .env
 .env.local
 
+# Test credentials — contains API keys and passwords, never commit
+MediNetNode-main/test_config.json
+
 # IDE
 .vscode/
 .idea/

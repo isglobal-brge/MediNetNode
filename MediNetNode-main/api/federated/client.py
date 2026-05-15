@@ -82,7 +82,7 @@ def client_fn(context: Context):
     # ==================== ML CLIENT INITIALIZATION ====================
     if model_type == 'ml':
         print(f"\n{'='*70}")
-        print(f"🤖 INITIALIZING ML CLIENT (Machine Learning)")
+        print(f"INITIALIZING ML CLIENT (Machine Learning)")
         print(f"{'='*70}")
 
         # Extract ML algorithm configuration
@@ -136,7 +136,7 @@ def client_fn(context: Context):
     # ==================== DL CLIENT INITIALIZATION ====================
     else:
         print(f"\n{'='*70}")
-        print(f"🧠 INITIALIZING DL CLIENT (Deep Learning)")
+        print(f"INITIALIZING DL CLIENT (Deep Learning)")
         print(f"{'='*70}")
 
         net = DynamicModel(model_config).to(DEVICE)
@@ -184,7 +184,7 @@ def client_fn(context: Context):
     # Set the client_id if available (common for both ML and DL)
     if ASSIGNED_CLIENT_ID:
         flower_client.set_client_id(ASSIGNED_CLIENT_ID)
-        print(f"🆔 FlowerClient ID set to: {ASSIGNED_CLIENT_ID}")
+        print(f"FlowerClient ID set to: {ASSIGNED_CLIENT_ID}")
     else:
         print("[WARNING] Warning: No client_id assigned")
 
@@ -206,7 +206,7 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     # Set the assigned client_id and user
     ASSIGNED_CLIENT_ID = client_id
     CURRENT_USER = user
-    print(f"🆔 CLIENT_ID assigned globally: {ASSIGNED_CLIENT_ID}")
+    print(f"CLIENT_ID assigned globally: {ASSIGNED_CLIENT_ID}")
     
     #Get client IP automatically
     import socket
@@ -218,7 +218,7 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     except:
         CLIENT_IP = "localhost"
     
-    print(f"🌐 Client IP detected: {CLIENT_IP}")
+    print(f"Client IP detected: {CLIENT_IP}")
     
     # Pass the complete model configuration, not just layers
     MODEL_JSON = model_json  # Full config instead of just layers

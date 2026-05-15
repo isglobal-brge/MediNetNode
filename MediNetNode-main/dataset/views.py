@@ -447,37 +447,36 @@ def dataset_upload(request):
                         status=400,
                     )
 
-            # Optional production DP budget (only parsed when split is enabled)
+            # DP budget — always parsed, independent of experimental split
             max_epsilon_per_job: float | None = None
             lifetime_budget: float | None = None
-            if split_ratio is not None:
-                try:
-                    raw_eps = request.POST.get('max_epsilon_per_job', '').strip()
-                    raw_lt  = request.POST.get('lifetime_budget', '').strip()
-                    if raw_eps:
-                        max_epsilon_per_job = float(raw_eps)
-                        if max_epsilon_per_job <= 0:
-                            return JsonResponse(
-                                {'success': False, 'error': 'max_epsilon_per_job must be positive'},
-                                status=400,
-                            )
-                    if raw_lt:
-                        lifetime_budget = float(raw_lt)
-                        if lifetime_budget <= 0:
-                            return JsonResponse(
-                                {'success': False, 'error': 'lifetime_budget must be positive'},
-                                status=400,
-                            )
-                    if max_epsilon_per_job and lifetime_budget and max_epsilon_per_job > lifetime_budget:
+            try:
+                raw_eps = request.POST.get('max_epsilon_per_job', '').strip()
+                raw_lt  = request.POST.get('lifetime_budget', '').strip()
+                if raw_eps:
+                    max_epsilon_per_job = float(raw_eps)
+                    if max_epsilon_per_job <= 0:
                         return JsonResponse(
-                            {'success': False, 'error': 'max_epsilon_per_job cannot exceed lifetime_budget'},
+                            {'success': False, 'error': 'max_epsilon_per_job must be positive'},
                             status=400,
                         )
-                except ValueError:
+                if raw_lt:
+                    lifetime_budget = float(raw_lt)
+                    if lifetime_budget <= 0:
+                        return JsonResponse(
+                            {'success': False, 'error': 'lifetime_budget must be positive'},
+                            status=400,
+                        )
+                if max_epsilon_per_job and lifetime_budget and max_epsilon_per_job > lifetime_budget:
                     return JsonResponse(
-                        {'success': False, 'error': 'DP budget values must be numbers'},
+                        {'success': False, 'error': 'max_epsilon_per_job cannot exceed lifetime_budget'},
                         status=400,
                     )
+            except ValueError:
+                return JsonResponse(
+                    {'success': False, 'error': 'DP budget values must be numbers'},
+                    status=400,
+                )
 
             # Get uploaded file
             uploaded_file = request.FILES.get('file')

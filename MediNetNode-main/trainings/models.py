@@ -38,6 +38,10 @@ class TrainingSession(models.Model):
     model_config = models.JSONField(default=dict, help_text="Complete model configuration JSON")
     server_address = models.CharField(max_length=200, default="localhost:8080")
     total_rounds = models.PositiveIntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(1000)])
+    use_experiment = models.BooleanField(
+        default=False,
+        help_text="True when the job runs on the experimental subset — epsilon spend is not recorded.",
+    )
     
     # Status Tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='STARTING')

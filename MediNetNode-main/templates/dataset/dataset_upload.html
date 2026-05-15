@@ -186,6 +186,17 @@
     .rv-label { font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.4px; }
     .rv-value { font-weight:600;color:var(--primary-dark);margin-top:.2rem;word-break:break-all; }
 
+    /* ── Tooltip icon ── */
+    .tip-icon {
+        display:inline-flex;align-items:center;justify-content:center;
+        width:16px;height:16px;border-radius:50%;
+        background:rgba(66,165,245,.15);color:var(--primary-color);
+        font-size:.65rem;cursor:help;margin-left:.35rem;
+        vertical-align:middle;transition:background .2s;
+        flex-shrink:0;
+    }
+    .tip-icon:hover { background:rgba(66,165,245,.35); }
+
     /* ── Security tips ── */
     .security-tips {
         background:rgba(76,175,80,.05);border:1px solid rgba(76,175,80,.2);
@@ -397,6 +408,13 @@
                             <input class="form-check-input" type="checkbox" id="enableSplit">
                             <label class="form-check-label fw-semibold" for="enableSplit">
                                 <i class="bi bi-scissors me-1"></i>Create experimental subset
+                                <span class="tip-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="right"
+                                      data-bs-html="true"
+                                      title="Reserves a small portion of records as a <strong>sandbox for researchers</strong>. Training on this subset consumes <strong>no privacy budget (ε)</strong>, allowing free iteration on model architecture and hyperparameters before committing to the production dataset. The split is performed as a physical separation of records at ingest time.">
+                                    <i class="bi bi-question"></i>
+                                </span>
                             </label>
                         </div>
                         <div class="form-text mb-2">
@@ -407,6 +425,12 @@
                         <div id="splitOptions" class="d-none mt-3">
                             <label for="splitRangeInput" class="form-label mb-1">
                                 Subset size: <strong><span id="splitPct">20</span>%</strong> of rows
+                                <span class="tip-icon"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="right"
+                                      title="Percentage of total records reserved for the experimental subset. 20% is recommended as a balance between having representative data and preserving the production dataset size.">
+                                    <i class="bi bi-question"></i>
+                                </span>
                             </label>
                             <input type="range" class="form-range mb-2" id="splitRangeInput"
                                    min="10" max="50" step="5" value="20">
@@ -447,16 +471,41 @@
                             <i class="bi bi-shield-check me-1"></i>
                             Production DP Budget
                             <span class="text-muted fw-normal">(applied to the full dataset)</span>
+                            <span class="tip-icon"
+                                  data-bs-toggle="tooltip"
+                                  data-bs-placement="right"
+                                  data-bs-html="true"
+                                  title="Differential Privacy (DP) budget controls how much information can be extracted from this dataset through model training. Each training job consumes a portion of the total budget (ε). Once exhausted, no further DP training is allowed unless the Administrator approves a budget reset. <strong>Set these values carefully — the budget is finite and irrecoverable.</strong>">
+                                <i class="bi bi-question"></i>
+                            </span>
                         </p>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label for="maxEpsPerJob" class="form-label small mb-1">Max ε / job</label>
+                                <label for="maxEpsPerJob" class="form-label small mb-1">
+                                    Max ε / job
+                                    <span class="tip-icon"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          data-bs-html="true"
+                                          title="Maximum privacy budget a <strong>single training job</strong> may consume. Lower values provide stronger privacy guarantees. Literature recommends ε &lt; 1 for strong guarantees, ε ∈ [1–10] for practical utility, and ε &gt; 10 offers limited protection for sensitive health data.">
+                                        <i class="bi bi-question"></i>
+                                    </span>
+                                </label>
                                 <input type="number" class="form-control form-control-sm" id="maxEpsPerJob"
                                        name="max_epsilon_per_job" min="0.01" max="100" step="0.01"
                                        placeholder="e.g. 1.0">
                             </div>
                             <div class="col-6">
-                                <label for="lifetimeBudget" class="form-label small mb-1">Lifetime ε budget</label>
+                                <label for="lifetimeBudget" class="form-label small mb-1">
+                                    Lifetime ε budget
+                                    <span class="tip-icon"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-placement="top"
+                                          data-bs-html="true"
+                                          title="Total privacy budget allocated to this dataset <strong>across all training jobs</strong>. Once fully consumed, no further DP training can be performed. A budget reset requires explicit Administrator approval and is logged in the audit trail.">
+                                        <i class="bi bi-question"></i>
+                                    </span>
+                                </label>
                                 <input type="number" class="form-control form-control-sm" id="lifetimeBudget"
                                        name="lifetime_budget" min="0.01" max="1000" step="0.01"
                                        placeholder="e.g. 5.0">
@@ -792,8 +841,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             splitHidden.value = '';
             dpPanel.style.display = 'none';
-            maxEpsInput.value = '';
-            lifetimeInput.value = '';
+            // budget fields remain — DP policy is independent of the split
         }
     });
 
@@ -894,6 +942,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialise
     showStep(1);
+
+    // Bootstrap tooltips
+    var tooltipEls = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipEls.forEach(function(el){
+        new bootstrap.Tooltip(el, { trigger: 'hover focus' });
+    });
 });
 </script>
 {% endblock %}

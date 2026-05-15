@@ -159,7 +159,7 @@ class MLFlowerClient(NumPyClient):
 
             if converged:
                 print(f"\n{'='*70}")
-                print(f"🏁 CONVERGENCE DETECTED - Round {current_round}")
+                print(f"CONVERGENCE DETECTED - Round {current_round}")
                 print(f"{'='*70}")
                 print(f"   Server signaled convergence - skipping training (no-op)")
                 print(f"   Returning current parameters without modification")

@@ -70,7 +70,7 @@ def load_data_from_django(dataset_id: int, use_experiment: bool = False) -> Tupl
             print(f"[ERROR] Dataset file not found: {file_path}")
             return None, None
 
-        print(f"📂 Loading data from: {file_path}")
+        print(f"Loading data from: {file_path}")
 
         # Load CSV data
         data_df = pd.read_csv(file_path)
@@ -234,7 +234,7 @@ def load_ml_data(
         print(f"   Target column: {target_column}")
 
         # Split data into train and validation sets
-        print(f"\n🔀 Splitting data...")
+        print(f"\nSplitting data...")
         train_df, val_df = train_test_split(
             data_df,
             test_size=val_size,
@@ -352,7 +352,7 @@ def create_train_val_loaders(
         
         # Split data into train and validation sets — use stratify to preserve
         # class balance across splits (critical for imbalanced clinical datasets).
-        print(f"🔀 Splitting data: {1-val_size:.1%} train, {val_size:.1%} validation...")
+        print(f"Splitting data: {1-val_size:.1%} train, {val_size:.1%} validation...")
         try:
             stratify_col = data_df[target_column] if data_df[target_column].nunique() > 1 else None
             train_df, val_df = train_test_split(
@@ -395,7 +395,7 @@ def create_train_val_loaders(
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        print(f"🚀 DataLoaders created successfully with batch_size={batch_size}")
+        print(f"DataLoaders created successfully with batch_size={batch_size}")
         return train_loader, val_loader
         
     except (ValueError, RuntimeError):

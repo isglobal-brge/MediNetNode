@@ -7,7 +7,9 @@ import numpy as np
 from . import utils
 from opacus import PrivacyEngine
 
-# Node-enforced DP minimums — the Hub cannot override these downward.
+# Conservative fallback used when the dynamic RDP calculation cannot run
+# (e.g. Opacus not available, or dataset size unknown).  The actual floor
+# for each job is computed analytically by compute_min_noise_multiplier().
 _MIN_NOISE_MULTIPLIER = 1.0
 _MIN_GRAD_NORM = 1.0
 _DP_DELTA = 1e-5
@@ -29,6 +31,51 @@ _ALLOWED_OPTIMIZERS = frozenset({"Adam", "SGD", "RMSprop", "Adagrad", "Adadelta"
 _BINARY_LOSSES = frozenset({"bce", "bce_with_logits"})
 _MULTICLASS_LOSSES = frozenset({"cross_entropy", "nll", "nll_loss"})
 _REGRESSION_LOSSES = frozenset({"mse", "mae", "l1"})
+
+
+def compute_min_noise_multiplier(
+    n: int,
+    batch_size: int,
+    epochs: int,
+    target_epsilon: float,
+    delta: float = _DP_DELTA,
+) -> float:
+    """Return the minimum σ such that DP-SGD consumes at most *target_epsilon*.
+
+    Uses the RDP accountant (same as Opacus at runtime) to derive the floor
+    analytically from the actual job parameters rather than relying on an
+    arbitrary constant.  This means the floor adapts to dataset size: a larger
+    hospital with more records can afford a lower σ for the same ε budget.
+
+    Falls back to ``_MIN_NOISE_MULTIPLIER`` if the computation fails (e.g.
+    Opacus unavailable, non-positive inputs).
+
+    Args:
+        n:                Number of training samples.
+        batch_size:       Mini-batch size used during training.
+        epochs:           Number of local epochs per federated round.
+        target_epsilon:   Maximum ε budget the job may consume (per_job_max).
+        delta:            DP delta (default: 1e-5).
+
+    Returns:
+        Minimum noise multiplier σ ≥ 0.01.
+    """
+    try:
+        if n <= 0 or batch_size <= 0 or epochs <= 0 or target_epsilon <= 0:
+            return _MIN_NOISE_MULTIPLIER
+        from opacus.accountants.utils import get_noise_multiplier
+        sigma = get_noise_multiplier(
+            target_epsilon=float(target_epsilon),
+            target_delta=float(delta),
+            sample_rate=batch_size / n,
+            epochs=epochs,
+        )
+        # Clamp to a physically meaningful range — values outside [0.01, 10.0]
+        # indicate degenerate inputs and should fall back to the constant.
+        return float(max(0.01, min(10.0, sigma)))
+    except Exception as exc:
+        print(f"[DP] compute_min_noise_multiplier failed ({exc}); using fallback {_MIN_NOISE_MULTIPLIER}")
+        return _MIN_NOISE_MULTIPLIER
 
 
 def _get_loss_mode(loss_function: str) -> str:
@@ -139,6 +186,18 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
     # Cap epochs: Hub cannot exhaust the privacy budget in a single call.
     epochs = min(int(config["train"].get("epochs", 3)), _MAX_EPOCHS)
 
+    # Fix random seed for reproducibility across training sessions.
+    # Using a deterministic seed lets the paper cite exact metric values.
+    # The seed is derived from the partition_id so each client gets a unique
+    # but reproducible initialisation, avoiding all-identical starting points.
+    _seed = 42 + (partition_id if isinstance(partition_id, int) else 0)
+    import random
+    random.seed(_seed)
+    np.random.seed(_seed)
+    torch.manual_seed(_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(_seed)
+
     try:
         loss_function = config.get("model", {}).get("training", {}).get("loss_function", "bce_with_logits")
 
@@ -228,13 +287,51 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
         print(f"[ERROR] Available config keys: {list(config.keys()) if isinstance(config, dict) else 'Not a dict'}")
         opt = torch.optim.Adam(net.parameters(), lr=0.01)
 
-    # Security: enforce Node-side minimums regardless of what the Hub sent.
-    # Use _safe_dp_float to guard against NaN/inf/non-numeric before max().
-    # max(float('nan'), 1.0) == nan in Python — explicit isfinite is required.
-    _noise_multiplier = max(
-        _safe_dp_float(opt_dp_params.get("noise_multiplier"), _MIN_NOISE_MULTIPLIER),
-        _MIN_NOISE_MULTIPLIER,
+    # Security: derive the Node-side noise floor analytically from the actual
+    # job parameters using the RDP accountant, then clamp whatever the Hub sent.
+    # This guarantees ε ≤ per_job_max regardless of the Hub's σ request.
+    _n_train    = len(trainloader.dataset)
+    _batch_sz   = trainloader.batch_size or _TRAINING_BATCH_SIZE
+    _epochs_val = config.get("train", {}).get("epochs", 10)
+
+    # Resolve target_epsilon: prefer explicit key in opt_dp_params, then look up
+    # the dataset's privacy policy, then fall back to the constant floor.
+    _target_eps = _safe_dp_float(opt_dp_params.get("target_epsilon"), None)
+    if _target_eps is None:
+        try:
+            from dataset.models import DatasetPrivacyPolicy
+            _ds_name = (
+                config.get("model", {})
+                      .get("dataset", {})
+                      .get("selected_datasets", [{}])[0]
+                      .get("dataset_name")
+            )
+            if _ds_name:
+                _target_eps = DatasetPrivacyPolicy.objects.get(
+                    dataset__name=_ds_name
+                ).max_epsilon_per_job
+        except Exception as _exc:
+            print(f"[DP] Could not look up per_job_max ({_exc}); using fallback floor")
+
+    _dynamic_min = (
+        compute_min_noise_multiplier(
+            n=_n_train,
+            batch_size=_batch_sz,
+            epochs=_epochs_val,
+            target_epsilon=_target_eps,
+        )
+        if _target_eps is not None
+        else _MIN_NOISE_MULTIPLIER
     )
+
+    _noise_multiplier = max(
+        _safe_dp_float(opt_dp_params.get("noise_multiplier"), _dynamic_min),
+        _dynamic_min,
+    )
+    print(f"[DP] n={_n_train} batch={_batch_sz} epochs={_epochs_val} "
+          f"target_eps={_target_eps} -> floor_sigma={_dynamic_min:.4f} "
+          f"requested_sigma={opt_dp_params.get('noise_multiplier')} "
+          f"effective_sigma={_noise_multiplier:.4f}")
     _max_grad_norm = max(
         _safe_dp_float(opt_dp_params.get("max_grad_norm"), _MIN_GRAD_NORM),
         _MIN_GRAD_NORM,

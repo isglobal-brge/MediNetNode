@@ -104,7 +104,7 @@ class DLFlowerClient(NumPyClient):
     def set_client_id(self, client_id):
         """Método para asignar ID desde la configuración"""
         self.assigned_client_id = client_id
-        print(f"🆔 CLIENT_ID_SET: Client assigned ID: {client_id}")
+        print(f"CLIENT_ID_SET: Client assigned ID: {client_id}")
 
     def get_parameters(self, config):
         """
@@ -159,7 +159,8 @@ class DLFlowerClient(NumPyClient):
                         f"DP parameters tampered: expected noise_multiplier={expected_noise}, "
                         f"actual={actual_noise}. Training aborted for security.",
                     )
-                    return self.get_parameters({}), 0, {}
+                    # Return 1 (not 0) to avoid ZeroDivisionError in Hub aggregation.
+                    return self.get_parameters({}), 1, {}
 
             # float("inf") is not JSON-serializable; use -1.0 as sentinel meaning
             # "epsilon measurement failed — treat as unbounded privacy cost".
@@ -218,10 +219,14 @@ class DLFlowerClient(NumPyClient):
             return get_parameters(self.net), num_examples, metrics
         except Exception as e:
             print(f"Error in fit: {e}")
-            # Mark training session as failed
             import traceback
-            fail_training_session(self.training_session, str(e), traceback.format_exc())
-            return parameters, 0, {}
+            tb = traceback.format_exc()
+            print(f"Traceback:\n{tb}")
+            fail_training_session(self.training_session, str(e), tb)
+            # Return num_examples=1 (never 0) — returning 0 causes a ZeroDivisionError
+            # in the Hub's FedAvg weighted aggregation which would crash the entire
+            # Flower server and prevent other clients from completing their rounds.
+            return parameters, 1, {}
 
     def evaluate(self, parameters, config):
         """

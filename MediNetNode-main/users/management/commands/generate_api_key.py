@@ -90,7 +90,7 @@ class Command(BaseCommand):
             # Output results - show raw key ONLY THIS ONE TIME
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'\n✓ Successfully created API key for {username}'
+                    f'\nSuccessfully created API key for {username}'
                 )
             )
             self.stdout.write(self.style.WARNING('\n' + '='*60))
@@ -108,7 +108,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.WARNING(
-                    '\n⚠️  SECURITY WARNING: The API key above is hashed in the database.\n'
+                    '\nWARNING: SECURITY WARNING: The API key above is hashed in the database.\n'
                     '   It cannot be retrieved later. Store it securely now!\n'
                 )
             )

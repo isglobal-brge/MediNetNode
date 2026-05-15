@@ -180,6 +180,16 @@ def _record_privacy_spend(training_session) -> None:
     This function never raises — recording failure must not affect training status.
     """
     try:
+        # Experimental sessions run on the small subset without budget accounting.
+        # The use_experiment flag is stored on the session so this check survives
+        # subprocess restarts where the original model_json is unavailable.
+        if getattr(training_session, 'use_experiment', False):
+            logger.info(
+                "[DP] Skipping epsilon budget record for experimental session %s",
+                getattr(training_session, 'session_id', '?'),
+            )
+            return
+
         dataset_id = getattr(training_session, 'dataset_id', None)
         if not dataset_id:
             logger.warning(

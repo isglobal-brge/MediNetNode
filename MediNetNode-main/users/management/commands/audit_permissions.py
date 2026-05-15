@@ -175,11 +175,11 @@ class Command(BaseCommand):
                 )
             else:
                 self.stdout.write(
-                    self.style.ERROR("✗ Failed to fix role permissions")
+                    self.style.ERROR("Failed to fix role permissions")
                 )
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f"✗ Error during auto-fix: {e}")
+                self.style.ERROR(f"Error during auto-fix: {e}")
             )
 
     def _show_permission_matrix(self):
@@ -195,7 +195,7 @@ class Command(BaseCommand):
             self.stdout.write(f"\n{role.name}:")
             if role.permissions:
                 for perm, value in sorted(role.permissions.items()):
-                    status = "[OK]" if value else "✗"
+                    status = "[OK]" if value else "[MISSING]"
                     self.stdout.write(f"  {status} {perm}")
             else:
                 self.stdout.write("  (no permissions)")

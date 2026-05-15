@@ -29,4 +29,7 @@ urlpatterns = [
     # Budget visibility endpoints
     path('v2/budget-status/', views.budget_status, name='budget_status'),
     path('v2/estimate-epsilon/', views.estimate_epsilon, name='estimate_epsilon'),
+
+    # for a given dataset + training config; used by the Hub UI in real time.
+    path('v2/min-noise-multiplier/', views.min_noise_multiplier, name='min_noise_multiplier'),
 ]

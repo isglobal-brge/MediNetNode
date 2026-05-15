@@ -197,10 +197,10 @@ def test_invalid_api_key():
 
 def main():
     """Run all API tests."""
-    print("🚀 Starting MediNet API Tests")
+    print("Starting MediNet API Tests")
     print(f"[INFO] Base URL: {API_BASE_URL}")
-    print(f"🔑 API Key: {API_KEY[:10]}..." if len(API_KEY) > 10 else "[ERROR] API_KEY_NOT_SET")
-    print(f"🌐 Client IP: {CLIENT_IP}")
+    print(f"API Key: {API_KEY[:10]}..." if len(API_KEY) > 10 else "[ERROR] API_KEY_NOT_SET")
+    print(f"Client IP: {CLIENT_IP}")
     print("=" * 60)
     
     if API_KEY == "YOUR_API_KEY_HERE":
@@ -230,7 +230,7 @@ def main():
     print(f"\nOverall: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests PASSED! API is working correctly.")
+        print("All tests PASSED! API is working correctly.")
     else:
         print("[WARNING]  Some tests FAILED. Check the logs above for details.")
 
