@@ -723,36 +723,37 @@ class TestCanAcceptJobCorruptStoredLimits(TestCase):
 # 13. record_spent conditional update — budget ceiling respected
 # ---------------------------------------------------------------------------
 
-class TestRecordSpentConditionalUpdate(TestCase):
-    """record_spent uses a conditional WHERE clause to close the TOCTOU gap.
-    If spent_epsilon + delta would exceed lifetime_budget, the update is
-    skipped (and an error is logged) rather than silently overrunning."""
+class TestRecordSpentAuditAggregate(TestCase):
+    """record_spent on the policy is an AUDIT aggregate: it accumulates the
+    real total privacy leakage across all researchers, truthfully and
+    unconditionally. The policy no longer blocks training (the per-researcher
+    budget is the enforcement gate), so the aggregate legitimately exceeds the
+    per-researcher template value and must never be dropped."""
 
     databases = {"default", "datasets_db"}
 
-    def test_record_spent_skipped_when_budget_already_exhausted(self):
+    def test_record_spent_records_even_when_already_at_budget(self):
         policy = _make_policy("high")  # lifetime_budget=2.0
-        # Manually set spent to budget so there is no room
         DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=2.0)
         policy.refresh_from_db()
-        # Attempting to record any positive epsilon should be skipped
+        # Aggregate of all researchers may exceed the template — record it.
         policy.record_spent(0.5)
         policy.refresh_from_db()
-        self.assertAlmostEqual(policy.spent_epsilon, 2.0)  # unchanged
+        self.assertAlmostEqual(policy.spent_epsilon, 2.5, places=5)
 
     def test_record_spent_partial_room_succeeds(self):
         policy = _make_policy("low")  # lifetime=15.0
         DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=13.0)
         policy.refresh_from_db()
-        policy.record_spent(2.0)  # 13.0 + 2.0 = 15.0 exactly (should fit)
+        policy.record_spent(2.0)  # 13.0 + 2.0 = 15.0
         policy.refresh_from_db()
         self.assertAlmostEqual(policy.spent_epsilon, 15.0, places=5)
 
-    def test_record_spent_exactly_one_delta_over_budget_is_skipped(self):
+    def test_record_spent_accumulates_past_template_budget(self):
         policy = _make_policy("medium")  # lifetime=5.0
         DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=4.5)
         policy.refresh_from_db()
-        # 4.5 + 0.6 = 5.1 > 5.0 — should NOT be recorded
+        # 4.5 + 0.6 = 5.1 > 5.0 — recorded truthfully for audit, not dropped.
         policy.record_spent(0.6)
         policy.refresh_from_db()
-        self.assertAlmostEqual(policy.spent_epsilon, 4.5)  # unchanged
+        self.assertAlmostEqual(policy.spent_epsilon, 5.1, places=5)

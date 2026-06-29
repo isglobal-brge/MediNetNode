@@ -97,7 +97,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=expired_key.key,
+            HTTP_X_API_KEY=expired_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -111,7 +111,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         """Test that unauthorized IP address returns 403."""
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.200'  # Not in whitelist
         )
         
@@ -139,7 +139,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=admin_key.key,
+            HTTP_X_API_KEY=admin_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -156,7 +156,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -173,7 +173,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -187,7 +187,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         """Test that valid authentication sets api_key and api_user on request."""
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -207,7 +207,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         """Test that successful requests are logged."""
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100',
             HTTP_USER_AGENT='TestClient/1.0'
         )
@@ -255,7 +255,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         request = self.factory.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -274,22 +274,26 @@ class APIAuthenticationMiddlewareTests(TestCase):
         self.assertEqual(self.api_key.last_used_ip, '192.168.1.100')
     
     def test_client_ip_extraction(self):
-        """Test client IP extraction from various headers."""
-        # Test X-Forwarded-For header
+        """Client IP comes from REMOTE_ADDR; X-Forwarded-For is only honored when
+        the request originates from a trusted proxy (security hardening — never
+        trust client-supplied forwarding headers from arbitrary sources)."""
+        from django.test import override_settings
+
+        # Untrusted source: client-supplied X-Forwarded-For is ignored.
         request = self.factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.1, 192.168.1.100')
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '203.0.113.1')
-        
-        # Test X-Client-IP header
-        request = self.factory.get('/', HTTP_X_CLIENT_IP='10.0.0.100')
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '10.0.0.100')
-        
-        # Test REMOTE_ADDR fallback
-        request = self.factory.get('/')
         request.META['REMOTE_ADDR'] = '127.0.0.1'
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '127.0.0.1')
+        self.assertEqual(self.middleware.get_client_ip(request), '127.0.0.1')
+
+        # Trusted proxy: the first X-Forwarded-For entry is used.
+        with override_settings(TRUSTED_PROXIES=['127.0.0.1']):
+            request = self.factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.1, 192.168.1.100')
+            request.META['REMOTE_ADDR'] = '127.0.0.1'
+            self.assertEqual(self.middleware.get_client_ip(request), '203.0.113.1')
+
+        # REMOTE_ADDR fallback when no forwarding involved.
+        request = self.factory.get('/')
+        request.META['REMOTE_ADDR'] = '10.0.0.100'
+        self.assertEqual(self.middleware.get_client_ip(request), '10.0.0.100')
 
 
 class RateLimitMiddlewareTests(TestCase):

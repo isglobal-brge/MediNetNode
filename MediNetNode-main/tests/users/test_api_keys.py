@@ -464,16 +464,25 @@ class SecurityTests(TestCase):
         session['new_user_data'] = {
             'user_id': user.id,
             'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'role': user.role.name,
             'api_key': raw_api_key,  # Use raw key
             'api_key_created': api_key.created_at.isoformat()
         }
         session.save()
 
-        # Access success page
+        # Access success page (credentials are displayed there).
         response = client.get(reverse('user_created_success'))
         self.assertEqual(response.status_code, 200)
 
-        # Session data should be cleaned up after first access
-        # Access again to verify cleanup
+        # Downloading the credentials consumes and clears the sensitive session
+        # data (cleanup happens on download, so the success page link keeps
+        # working until the admin has actually downloaded the file).
+        download = client.get(reverse('download_user_info'))
+        self.assertEqual(download.status_code, 200)
+
+        # Now the sensitive data is gone → the success page redirects away.
         response = client.get(reverse('user_created_success'))
-        self.assertEqual(response.status_code, 302)  # Should redirect since no session data
+        self.assertEqual(response.status_code, 302)

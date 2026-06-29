@@ -42,17 +42,17 @@ class APIKeyModelTests(TestCase):
             ip_whitelist=['192.168.1.100', '10.0.0.50']
         )
         
-        # API key should be generated automatically
-        self.assertIsNotNone(api_key.key)
-        self.assertEqual(len(api_key.key), 64)
-        
+        # API key should be generated automatically (raw key exposed once on create)
+        self.assertIsNotNone(api_key._raw_key)
+        self.assertEqual(len(api_key._raw_key), 64)
+
         # Key should be unique
         api_key2 = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key 2',
             ip_whitelist=['192.168.1.200']
         )
-        self.assertNotEqual(api_key.key, api_key2.key)
+        self.assertNotEqual(api_key._raw_key, api_key2._raw_key)
     
     def test_api_key_generation_security(self):
         """Test API key generation produces secure random keys."""
@@ -269,14 +269,15 @@ class APIKeySecurityTests(TestCase):
             ip_whitelist=['192.168.1.100']
         )
         
-        # Try to create another key with same key value
+        # Try to create another key with the same stored hash → the unique
+        # constraint on key_hash must reject it.
         from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             APIKey.objects.create(
                 user=self.researcher_user,
                 name='Key 2',
                 ip_whitelist=['192.168.1.100'],
-                key=api_key1.key  # Same key should fail
+                key_hash=api_key1.key_hash  # Same hash should fail
             )
     
     def test_api_key_deactivation(self):

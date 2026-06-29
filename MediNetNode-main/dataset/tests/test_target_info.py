@@ -307,8 +307,13 @@ class TargetInfoMetadataTest(TestCase):
             os.unlink(file_path)
 
 
-class TargetInfoIntegrationTest(TestCase):
-    """Integration tests for target_info in full upload flow."""
+class TargetInfoIntegrationTest(TransactionTestCase):
+    """Integration tests for target_info in full upload flow.
+
+    Uses TransactionTestCase: the uploader manages its own DB transaction
+    (set_autocommit/commit/rollback), which is forbidden inside the atomic
+    block that a regular TestCase wraps each test in.
+    """
 
     databases = {'default', 'datasets_db'}
 

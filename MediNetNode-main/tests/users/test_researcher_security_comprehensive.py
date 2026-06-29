@@ -13,6 +13,8 @@ User = get_user_model()
 class ResearcherSecurityComprehensiveTests(TestCase):
     """Test comprehensive security blocking for RESEARCHER users."""
 
+    databases = {'default', 'datasets_db'}
+
     def setUp(self):
         """Set up test users and client."""
         self.client = Client()
@@ -53,7 +55,7 @@ class ResearcherSecurityComprehensiveTests(TestCase):
             '/admin/',
             '/Admin/',  # Case variation
             '/admin/users/',
-            '/admin/../info/researcher/',  # Path traversal
+            '/info/researcher/../../admin/',  # Path traversal escaping to /admin/
         ]
 
         for url in attack_urls:

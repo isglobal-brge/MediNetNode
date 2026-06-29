@@ -69,7 +69,7 @@ class DatasetModelTest(TestCase):
             'columns_count': 3,
             'rows_count': 2,
             'file_size': os.path.getsize(self.test_file_path),
-            'checksum_md5': self._calculate_test_file_checksum()
+            'checksum_sha256': self._calculate_test_file_checksum()
         }
         
         # Use bulk_create to avoid FK validation
@@ -86,8 +86,8 @@ class DatasetModelTest(TestCase):
         retrieved_dataset = Dataset.objects.using('datasets_db').get(pk=dataset.pk)
         self.assertEqual(retrieved_dataset.name, 'Test Cardiology Dataset')
 
-    def test_checksum_md5_calculated_automatically(self):
-        """Test that MD5 checksum is calculated automatically."""
+    def test_checksum_sha256_calculated_automatically(self):
+        """Test that the SHA-256 checksum is calculated automatically on save."""
         dataset = Dataset.objects.using('datasets_db').create(
             name='Test Checksum Dataset',
             description='Test dataset for checksum validation',
@@ -98,14 +98,14 @@ class DatasetModelTest(TestCase):
             data_type='tabular',
             file_format='csv'
         )
-        
+
         # Verify checksum was calculated
-        self.assertIsNotNone(dataset.checksum_md5)
-        self.assertEqual(len(dataset.checksum_md5), 32)  # MD5 is 32 characters
-        
+        self.assertIsNotNone(dataset.checksum_sha256)
+        self.assertEqual(len(dataset.checksum_sha256), 64)  # SHA-256 is 64 hex chars
+
         # Verify checksum is correct
         expected_checksum = self._calculate_test_file_checksum()
-        self.assertEqual(dataset.checksum_md5, expected_checksum)
+        self.assertEqual(dataset.checksum_sha256, expected_checksum)
 
     def test_file_size_calculated_automatically(self):
         """Test that file size is calculated automatically."""
@@ -198,8 +198,8 @@ class DatasetModelTest(TestCase):
         return Dataset.objects.using('datasets_db').create(**defaults)
 
     def _calculate_test_file_checksum(self):
-        """Helper method to calculate the expected checksum."""
-        hash_md5 = hashlib.md5()
+        """Helper method to calculate the expected SHA-256 checksum."""
+        hash_md5 = hashlib.sha256()
         with open(self.test_file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)

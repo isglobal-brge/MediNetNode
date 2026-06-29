@@ -192,24 +192,20 @@ class SecureDatasetUploaderTest(TestCase):
             os.unlink(temp_file.name)
     
     def test_checksum_calculation(self):
-        """Test MD5 and SHA256 checksum calculation."""
+        """Test SHA-256 checksum calculation."""
         content = "test content for checksum"
         temp_file = self._create_temp_file(content, '.csv')
-        
+
         try:
-            md5_hash, sha256_hash = self.uploader._calculate_checksums(temp_file.name)
-            
-            # Verify checksums are correct length
-            self.assertEqual(len(md5_hash), 32)  # MD5 is 32 hex chars
+            sha256_hash = self.uploader._calculate_checksum(temp_file.name)
+
+            # Verify checksum is correct length
             self.assertEqual(len(sha256_hash), 64)  # SHA256 is 64 hex chars
-            
-            # Verify checksums are correct
-            expected_md5 = hashlib.md5(content.encode()).hexdigest()
+
+            # Verify checksum is correct
             expected_sha256 = hashlib.sha256(content.encode()).hexdigest()
-            
-            self.assertEqual(md5_hash, expected_md5)
             self.assertEqual(sha256_hash, expected_sha256)
-            
+
         finally:
             os.unlink(temp_file.name)
     
@@ -349,8 +345,8 @@ class DatasetUploadIntegrationTest(TransactionTestCase):
                 self.assertTrue(dataset.is_active)
                 
                 # Verify checksum was calculated
-                self.assertIsNotNone(dataset.checksum_md5)
-                self.assertEqual(len(dataset.checksum_md5), 32)
+                self.assertIsNotNone(dataset.checksum_sha256)
+                self.assertEqual(len(dataset.checksum_sha256), 64)
                 
                 # Verify upload info
                 self.assertIn('phi_columns_removed', upload_info)

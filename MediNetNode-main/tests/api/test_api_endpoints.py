@@ -7,8 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 import json
+from unittest.mock import patch
 from users.models import CustomUser, Role, APIKey
-from dataset.models import Dataset, DatasetAccess
+from dataset.models import Dataset, DatasetAccess, DatasetPrivacyPolicy
 
 
 class APIEndpointTests(TestCase):
@@ -92,7 +93,7 @@ class APIEndpointTests(TestCase):
     def get_auth_headers(self):
         """Get authentication headers for API requests."""
         return {
-            'HTTP_X_API_KEY': self.api_key.key,
+            'HTTP_X_API_KEY': self.api_key._raw_key,
             'HTTP_X_CLIENT_IP': '127.0.0.1'
         }
     
@@ -134,8 +135,8 @@ class APIEndpointTests(TestCase):
         """Test ping endpoint from unauthorized IP."""
         response = self.client.get(
             '/api/v2/ping',
-            HTTP_X_API_KEY=self.api_key.key,
-            HTTP_X_CLIENT_IP='192.168.2.100'  # Not in whitelist
+            HTTP_X_API_KEY=self.api_key._raw_key,
+            REMOTE_ADDR='192.168.2.100'  # Not in whitelist (client IP comes from REMOTE_ADDR)
         )
         
         self.assertEqual(response.status_code, 403)
@@ -207,22 +208,34 @@ class APIEndpointTests(TestCase):
                 }
             },
             "server_address": "localhost:8080",
-            "client_id": "client_123"
+            "client_id": "client_123",
+            "ssl_enabled": False
         }
-        
-        response = self.client.post(
-            '/api/v2/start-client',
-            data=json.dumps(payload),
-            content_type='application/json',
-            **self.get_auth_headers()
+
+        # The dataset needs a privacy policy (Node fail-closes without one).
+        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+            dataset=self.dataset1, sensitivity='medium',
+            max_epsilon_per_job=1.0, lifetime_budget=5.0,
         )
-        
+
+        # Patch the epsilon estimator (deterministic, avoids heavy DP math) and
+        # the Flower client subprocess (do not spawn a real process in tests).
+        with patch('api.views.estimate_job_epsilon', return_value=0.5), \
+             patch('api.views.Process') as MockProcess:
+            response = self.client.post(
+                '/api/v2/start-client',
+                data=json.dumps(payload),
+                content_type='application/json',
+                **self.get_auth_headers()
+            )
+
         self.assertEqual(response.status_code, 200)
-        
+
         data = json.loads(response.content.decode('utf-8'))
         self.assertEqual(data['status'], 'Flower Client started')
         self.assertEqual(data['client_id'], 'client_123')
         self.assertEqual(data['user'], 'researcher_api_test')
+        MockProcess.assert_called_once()
     
     def test_start_client_no_auth(self):
         """Test start_client endpoint without authentication."""
@@ -253,7 +266,7 @@ class APIEndpointTests(TestCase):
         self.assertEqual(response.status_code, 400)
         
         data = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(data['error'], 'model_json is required')
+        self.assertEqual(data['error'], 'Invalid configuration format')
     
     def test_start_client_invalid_json(self):
         """Test start_client endpoint with invalid JSON."""
@@ -282,18 +295,19 @@ class APIEndpointTests(TestCase):
         payload = {
             "model_json": {"framework": "pytorch"},
             "server_address": "localhost:8080",
-            "client_id": "client_123"
+            "client_id": "client_123",
+            "ssl_enabled": False
         }
-        
+
         response = self.client.post(
             '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 403)
-        
+
         data = json.loads(response.content.decode('utf-8'))
         self.assertEqual(data['error'], 'User does not have training permissions')
     

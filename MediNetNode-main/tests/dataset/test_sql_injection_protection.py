@@ -6,9 +6,9 @@ Validates that parameterized queries prevent SQL injection attacks.
 import os
 import tempfile
 import pytest
-from django.test import TestCase
+from django.test import TransactionTestCase
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import connections
 from users.models import Role
 from dataset.models import Dataset, DatasetMetadata
 from dataset.uploader import SecureDatasetUploader
@@ -16,9 +16,13 @@ from dataset.uploader import SecureDatasetUploader
 User = get_user_model()
 
 
-@pytest.mark.django_db(databases=['default', 'datasets_db'])
-class SQLInjectionProtectionTests(TestCase):
-    """Test SQL injection protection in dataset upload functionality."""
+class SQLInjectionProtectionTests(TransactionTestCase):
+    """Test SQL injection protection in dataset upload functionality.
+
+    Uses TransactionTestCase because the uploader manages its own DB
+    transaction (set_autocommit/commit/rollback), which is forbidden inside the
+    atomic block a regular TestCase wraps each test in.
+    """
 
     databases = ['default', 'datasets_db']
 
@@ -77,7 +81,7 @@ class SQLInjectionProtectionTests(TestCase):
         assert dataset.name == malicious_name  # Name stored as-is (safe with parameterized queries)
 
         # Verify table still exists
-        with connection['datasets_db'].cursor() as cursor:
+        with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
             count = cursor.fetchone()[0]
             assert count > 0  # Table exists and has records
@@ -129,7 +133,7 @@ class SQLInjectionProtectionTests(TestCase):
             assert dataset is not None
 
             # Verify table still exists
-            with connection['datasets_db'].cursor() as cursor:
+            with connections['datasets_db'].cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
                 count = cursor.fetchone()[0]
                 assert count > 0
@@ -194,7 +198,7 @@ class SQLInjectionProtectionTests(TestCase):
         )
 
         # Verify metadata table still exists
-        with connection['datasets_db'].cursor() as cursor:
+        with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_datasetmetadata")
             count = cursor.fetchone()[0]
             assert count > 0
@@ -271,7 +275,7 @@ class SQLInjectionProtectionTests(TestCase):
                 pass
 
         # Verify table structure is intact
-        with connection['datasets_db'].cursor() as cursor:
+        with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
             final_count = cursor.fetchone()[0]
             # Table should exist and have initial count (since we deleted created datasets)

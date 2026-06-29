@@ -142,8 +142,13 @@ class SessionTimeoutMiddleware:
             return False
 
     def _normalize_path(self, path):
+        import posixpath
         decoded_path = urllib.parse.unquote(path)
         normalized = decoded_path.replace('\\', '/')
+        # Collapse '.' and '..' segments BEFORE the allow-list check so a path
+        # traversal (e.g. '/api/v2/../../admin') cannot bypass the prefix
+        # allow-list by hiding behind an allowed prefix.
+        normalized = posixpath.normpath(normalized)
         while '//' in normalized:
             normalized = normalized.replace('//', '/')
         if not normalized.startswith('/'):

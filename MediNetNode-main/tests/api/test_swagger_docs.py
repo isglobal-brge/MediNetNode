@@ -41,7 +41,7 @@ class SwaggerDocumentationTests(TestCase):
         
         # Verify API info
         self.assertEqual(data['info']['title'], 'MediNet RESEARCHER API')
-        self.assertEqual(data['info']['version'], 'v1')
+        self.assertEqual(data['info']['version'], 'v2')
         
         # Note: endpoints might be empty in paths due to schema generation during tests
         # But we can verify security definitions are there

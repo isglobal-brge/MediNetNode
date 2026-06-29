@@ -2,7 +2,7 @@ import sys
 sys.modules.setdefault('magic', None)
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from django.contrib.auth import get_user_model
 from dataset.models import Dataset, DatasetPrivacyPolicy, ResearcherEpsilonBudget
 from users.models import Role
@@ -36,33 +36,73 @@ def _setup_fixtures(username="rps_r1", ds_name="rps_ds1"):
     return researcher, ds, policy, budget
 
 
+def _make_session(*, dataset_id, user_id, epsilon, use_experiment=False):
+    """Minimal stand-in for a TrainingSession that _record_privacy_spend reads.
+
+    Only the attributes the function touches are stubbed; the DB managers are
+    NOT mocked, so the real policy / researcher-budget rows get debited.
+    """
+    session = MagicMock()
+    session.use_experiment = use_experiment
+    session.dataset_id = dataset_id
+    session.user_id = user_id
+    session.session_id = "sess-1"
+    round_mock = MagicMock()
+    round_mock.metrics = {'privacy_epsilon': epsilon}
+    round_mock.round_number = 1
+    session.rounds.order_by.return_value.first.return_value = round_mock
+    return session
+
+
 @pytest.mark.django_db(databases=['default', 'datasets_db'])
 class TestRecordPrivacySpendUpdatesResearcherBudget:
 
     def setup_method(self):
         self.researcher, self.ds, self.policy, self.budget = _setup_fixtures()
 
-    def test_researcher_budget_updated_after_job(self):
+    def test_researcher_budget_debited_after_job(self):
         from api.federated.utils import _record_privacy_spend
 
-        session = MagicMock()
-        session.user_id = self.researcher.id
+        session = _make_session(
+            dataset_id=self.ds.id, user_id=self.researcher.id, epsilon=0.4,
+        )
+        _record_privacy_spend(session)
 
-        round_mock = MagicMock()
-        round_mock.metrics = {'privacy_epsilon': 0.4}
-        session.rounds.order_by.return_value.first.return_value = round_mock
+        self.budget.refresh_from_db()
+        self.policy.refresh_from_db()
+        assert self.budget.spent_epsilon == pytest.approx(0.4)
+        assert self.policy.spent_epsilon == pytest.approx(0.4)
 
-        with patch('api.federated.utils.DatasetPrivacyPolicy.objects') as mock_policy_qs, \
-             patch('api.federated.utils.ResearcherEpsilonBudget.objects') as mock_budget_qs:
+    def test_experimental_session_is_not_debited(self):
+        from api.federated.utils import _record_privacy_spend
 
-            mock_policy_qs.get.return_value = self.policy
-            mock_budget_qs.get.return_value = self.budget
-            mock_budget_qs.filter.return_value.update.return_value = 1
+        session = _make_session(
+            dataset_id=self.ds.id, user_id=self.researcher.id, epsilon=0.4,
+            use_experiment=True,
+        )
+        _record_privacy_spend(session)
 
-            session.model_config = {
-                'model': {'dataset': {'selected_datasets': [{'dataset_id': self.ds.id}]}}
-            }
+        self.budget.refresh_from_db()
+        self.policy.refresh_from_db()
+        assert self.budget.spent_epsilon == 0.0
+        assert self.policy.spent_epsilon == 0.0
 
-            _record_privacy_spend(session)
+    def test_researcher_budget_records_real_spend_even_past_budget(self):
+        """A job that already ran leaked real ε; recording must reflect that
+        truthfully even if it crosses the budget. Enforcement (the gate) blocks
+        the NEXT job — the spend is never dropped (DP accounting soundness)."""
+        from api.federated.utils import _record_privacy_spend
 
-            mock_budget_qs.filter.assert_called()
+        self.budget.lifetime_budget = 0.5
+        self.budget.spent_epsilon = 0.3
+        self.budget.save()
+
+        session = _make_session(
+            dataset_id=self.ds.id, user_id=self.researcher.id, epsilon=0.4,
+        )
+        _record_privacy_spend(session)
+
+        self.budget.refresh_from_db()
+        # 0.3 + 0.4 = 0.7: recorded truthfully; remaining clamps to 0.
+        assert self.budget.spent_epsilon == pytest.approx(0.7)
+        assert self.budget.remaining_budget == 0.0

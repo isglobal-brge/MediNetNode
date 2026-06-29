@@ -88,7 +88,7 @@ class DatasetDashboardViewTest(TestCase):
                     name, description, file_path, uploaded_by_id,
                     medical_domain, patient_count, data_type, anonymized,
                     file_size, file_format, columns_count, rows_count,
-                    checksum_md5, is_active, uploaded_at, last_accessed, access_count
+                    checksum_sha256, is_active, uploaded_at, last_accessed, access_count
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 'Cardiology Dataset 1',
@@ -117,7 +117,7 @@ class DatasetDashboardViewTest(TestCase):
                     name, description, file_path, uploaded_by_id,
                     medical_domain, patient_count, data_type, anonymized,
                     file_size, file_format, columns_count, rows_count,
-                    checksum_md5, is_active, uploaded_at, last_accessed, access_count
+                    checksum_sha256, is_active, uploaded_at, last_accessed, access_count
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 'Neurology Dataset 1',
@@ -144,28 +144,30 @@ class DatasetDashboardViewTest(TestCase):
             cursor.execute("""
                 INSERT INTO dataset_datasetaccess (
                     dataset_id, user_id, assigned_by_id, can_train,
-                    can_view_metadata, assigned_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    can_view_metadata, can_use_experiment, assigned_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 dataset1_id,
                 self.researcher_user.id,
                 self.admin_user.id,
                 True,
                 True,
+                False,  # can_use_experiment
                 timezone.now().isoformat()
             ))
             
             cursor.execute("""
                 INSERT INTO dataset_datasetaccess (
                     dataset_id, user_id, assigned_by_id, can_train,
-                    can_view_metadata, assigned_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    can_view_metadata, can_use_experiment, assigned_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 dataset2_id,
                 self.researcher_user.id,
                 self.admin_user.id,
                 False,
                 True,
+                False,  # can_use_experiment
                 timezone.now().isoformat()
             ))
         

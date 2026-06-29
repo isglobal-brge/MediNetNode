@@ -108,17 +108,13 @@ class SecureUploaderBasicTest(TestCase):
         temp_file.close()
         
         try:
-            md5_hash, sha256_hash = uploader._calculate_checksums(temp_file.name)
-            
-            # Verify checksums are correct length
-            self.assertEqual(len(md5_hash), 32)  # MD5 is 32 hex chars
+            sha256_hash = uploader._calculate_checksum(temp_file.name)
+
+            # Verify checksum is correct length
             self.assertEqual(len(sha256_hash), 64)  # SHA256 is 64 hex chars
-            
-            # Verify checksums are correct
-            expected_md5 = hashlib.md5(content.encode()).hexdigest()
+
+            # Verify checksum is correct
             expected_sha256 = hashlib.sha256(content.encode()).hexdigest()
-            
-            self.assertEqual(md5_hash, expected_md5)
             self.assertEqual(sha256_hash, expected_sha256)
             
         finally:
@@ -300,14 +296,14 @@ class DatasetModelsSecurityTest(TestCase):
             )
             
             # Verify security fields exist
-            self.assertTrue(hasattr(dataset, 'checksum_md5'))
+            self.assertTrue(hasattr(dataset, 'checksum_sha256'))
             self.assertTrue(hasattr(dataset, 'is_active'))
             self.assertTrue(hasattr(dataset, 'access_count'))
             self.assertTrue(hasattr(dataset, 'last_accessed'))
-            
+
             # Verify checksum is calculated
-            self.assertIsNotNone(dataset.checksum_md5)
-            self.assertEqual(len(dataset.checksum_md5), 32)
+            self.assertIsNotNone(dataset.checksum_sha256)
+            self.assertEqual(len(dataset.checksum_sha256), 64)
             
         finally:
             os.unlink(temp_file.name)

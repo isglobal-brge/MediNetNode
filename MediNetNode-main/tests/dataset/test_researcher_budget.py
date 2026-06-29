@@ -154,6 +154,50 @@ class TestResearcherEpsilonBudgetRecordSpent:
         self.budget.refresh_from_db()
         assert self.budget.spent_epsilon == 0.0
 
+    def test_refreshes_in_memory_value(self):
+        """After record_spent the in-memory instance must reflect the DB value
+        without a manual refresh_from_db (parity with DatasetPrivacyPolicy)."""
+        self.budget.record_spent(0.3)
+        assert self.budget.spent_epsilon == pytest.approx(0.3)
+
+    def test_records_truthfully_past_budget(self):
+        """A spend that crosses lifetime_budget must STILL be recorded — DP
+        accounting must reflect real privacy leakage, never drop it. The
+        enforcement gate (can_accept_job) is what blocks the NEXT job."""
+        self.budget.lifetime_budget = 0.5
+        self.budget.spent_epsilon = 0.0
+        self.budget.save()
+
+        self.budget.record_spent(0.4)
+        self.budget.refresh_from_db()
+        assert self.budget.spent_epsilon == pytest.approx(0.4)
+
+        # Second 0.4 totals 0.8 > 0.5 → recorded truthfully (not dropped).
+        self.budget.record_spent(0.4)
+        self.budget.refresh_from_db()
+        assert self.budget.spent_epsilon == pytest.approx(0.8)
+
+        # remaining clamps to 0 and the next job is blocked by the gate.
+        assert self.budget.remaining_budget == 0.0
+        ok, _ = self.budget.can_accept_job(0.1)
+        assert ok is False
+
+    def test_concurrent_record_spent_accumulates_no_lost_write(self):
+        """Two stale instances racing record_spent must both apply: the atomic
+        F() increment accumulates the real total with no lost write."""
+        self.budget.lifetime_budget = 0.5
+        self.budget.spent_epsilon = 0.0
+        self.budget.save()
+
+        instance_a = ResearcherEpsilonBudget.objects.get(pk=self.budget.pk)
+        instance_b = ResearcherEpsilonBudget.objects.get(pk=self.budget.pk)
+
+        instance_a.record_spent(0.4)   # DB → 0.4
+        instance_b.record_spent(0.4)   # stale in memory, F() adds at DB → 0.8
+
+        final = ResearcherEpsilonBudget.objects.get(pk=self.budget.pk)
+        assert final.spent_epsilon == pytest.approx(0.8)
+
 
 @pytest.mark.django_db(databases=['default', 'datasets_db'])
 class TestResearcherEpsilonBudgetPeriodReset:
@@ -186,4 +230,57 @@ class TestResearcherEpsilonBudgetPeriodReset:
             dataset=self.dataset, researcher_id=self.researcher.id,
             policy=self.policy, period='never',
         )
+        assert budget.is_period_expired() is False
+
+    def test_annual_period_expired_after_boundary(self):
+        from django.utils import timezone
+        from dateutil.relativedelta import relativedelta
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.researcher.id,
+            policy=self.policy, period='annual',
+        )
+        budget.period_start = timezone.now() - relativedelta(years=1, days=1)
+        budget.save()
+        assert budget.is_period_expired() is True
+
+    def test_monthly_period_expired_after_boundary(self):
+        from django.utils import timezone
+        from dateutil.relativedelta import relativedelta
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.researcher.id,
+            policy=self.policy, period='monthly',
+        )
+        budget.period_start = timezone.now() - relativedelta(months=1, days=1)
+        budget.save()
+        assert budget.is_period_expired() is True
+
+    def test_monthly_period_not_expired_before_boundary(self):
+        from django.utils import timezone
+        from dateutil.relativedelta import relativedelta
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.researcher.id,
+            policy=self.policy, period='monthly',
+        )
+        budget.period_start = timezone.now() - relativedelta(days=20)
+        budget.save()
+        assert budget.is_period_expired() is False
+
+    def test_reset_period_updates_period_start_and_last_reset(self):
+        from django.utils import timezone
+        from dateutil.relativedelta import relativedelta
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.researcher.id,
+            policy=self.policy, period='annual',
+        )
+        budget.spent_epsilon = 1.0
+        budget.period_start = timezone.now() - relativedelta(years=2)
+        budget.last_reset = None
+        budget.save()
+        assert budget.is_period_expired() is True
+
+        budget.reset_period()
+        budget.refresh_from_db()
+        assert budget.spent_epsilon == 0.0
+        assert budget.last_reset is not None
+        # period_start moved to ~now → no longer expired
         assert budget.is_period_expired() is False

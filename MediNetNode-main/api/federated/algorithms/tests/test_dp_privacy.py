@@ -74,7 +74,8 @@ class TestDifferentialPrivacyGuarantees:
                 'n_trees_per_client': n_trees,
                 'max_depth': 5,
                 'epsilon_total': epsilon_total,
-                'feature_bounds': feature_bounds
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 
@@ -164,6 +165,10 @@ class TestPrivacyBudgetManagement:
                 'feature_bounds': {
                     'min': X.min(axis=0).tolist(),
                     'max': X.max(axis=0).tolist()
+                },
+                'global_feature_bounds': {
+                    'min': X.min(axis=0).tolist(),
+                    'max': X.max(axis=0).tolist()
                 }
             }
         }
@@ -195,6 +200,10 @@ class TestPrivacyBudgetManagement:
                 'max_depth': 5,
                 'epsilon_total': epsilon_per_round,
                 'feature_bounds': {
+                    'min': X.min(axis=0).tolist(),
+                    'max': X.max(axis=0).tolist()
+                },
+                'global_feature_bounds': {
                     'min': X.min(axis=0).tolist(),
                     'max': X.max(axis=0).tolist()
                 }
@@ -435,7 +444,8 @@ class TestPrivacyUtilityTradeoff:
                 'n_trees_per_client': 10,
                 'max_depth': 8,
                 'epsilon_total': 0.1,
-                'feature_bounds': feature_bounds
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 
@@ -445,8 +455,9 @@ class TestPrivacyUtilityTradeoff:
                 'ml_method': 'dp_random_forest',
                 'n_trees_per_client': 10,
                 'max_depth': 8,
-                'epsilon_total': 10.0,
-                'feature_bounds': feature_bounds
+                'epsilon_total': 5.0,
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 

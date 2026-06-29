@@ -10,7 +10,6 @@ from django.utils import timezone
 import json
 import os
 import logging
-from .federated import client
 from dataset.models import Dataset, DatasetAccess, ResearcherEpsilonBudget, DatasetPrivacyPolicy
 from trainings.models import TrainingSession
 from drf_yasg.utils import swagger_auto_schema
@@ -361,7 +360,11 @@ def start_client(request):
         except Exception as e:
             logger.error(f"[ERROR] Failed to save training request to documentation: {e}")
         
-        # Pass training_session and SSL certificate to flower client
+        # Pass training_session and SSL certificate to flower client.
+        # Imported lazily: keeps the heavy ML stack (torch/numpy/flwr) out of
+        # module import, so the HTTP/permission layer (e.g. budget enforcement)
+        # can be imported and tested without it.
+        from .federated import client
         process = Process(target=client.start_flower_client, args=(model_json, server_address, client_id, user, training_session.session_id, ca_cert), daemon=True)
         process.start()
         
@@ -564,9 +567,14 @@ def validate_training_permissions(user, model_json):
                 pass  # Fall through to normal budget checks
 
         # 5. Privacy budget pre-check (Node protects itself; Hub is untrusted).
-        # Design invariants:
-        #   • Missing policy → BLOCK (fail-closed): datasets must have a policy.
-        #   • Estimation failure → can_accept_job(inf) handles it → BLOCK.
+        # Design invariants (see docs/superpowers/specs/
+        # 2026-06-28-researcher-budget-enforcement-design.md):
+        #   • Missing policy → BLOCK (fail-closed): datasets must have a policy
+        #     (it is the source of the per-researcher limits).
+        #   • The per-researcher ResearcherEpsilonBudget is the ENFORCEMENT GATE.
+        #     The dataset-level policy counter is audit-only and does NOT block,
+        #     so researchers never contend over a shared dataset pool.
+        #   • Estimation failure → researcher can_accept_job(inf) handles it → BLOCK.
         #   • DB / system error → 503 (fail-closed): if we cannot prove budget
         #     remains, we must not allow access to patient data.
         try:
@@ -589,21 +597,12 @@ def validate_training_permissions(user, model_json):
                 )
             dataset_size = access.dataset.patient_count or 0
             estimated_eps = estimate_job_epsilon(model_json, dataset_size)
-            can_proceed, reason = policy.can_accept_job(estimated_eps)
-            if not can_proceed:
-                logger.warning(
-                    "[DP] Budget check failed for user %s, dataset %s: %s",
-                    user.username, dataset_id, reason,
-                )
-                return JsonResponse({'error': reason}, status=403)
-            logger.info(
-                "[DP] Budget check passed: estimated ε=%.4f (remaining: %.4f) "
-                "for user %s, dataset %s",
-                estimated_eps, policy.remaining_budget,
-                user.username, dataset_id,
-            )
 
-            # --- Chequeo de presupuesto por researcher ---
+            # The dataset-level policy is the configuration source + audit
+            # aggregate ONLY; it no longer blocks. Enforcement is the
+            # per-researcher quota below (the policy supplies its limits).
+
+            # --- Enforcement gate: per-researcher epsilon budget ---
             try:
                 researcher_budget, _ = ResearcherEpsilonBudget.get_or_create_for(
                     dataset=access.dataset,

@@ -192,6 +192,9 @@ class TestTrainingConfigValidation:
 
         # Enable private networks but localhost should still be blocked
         settings.ALLOW_PRIVATE_FL_SERVERS = True
+        # The dev settings enable localhost FL servers; disable that here so the
+        # SSRF localhost block is exercised.
+        settings.ALLOW_LOCALHOST_FL_SERVERS = False
 
         ssrf_config = {
             "model_json": {
@@ -304,6 +307,9 @@ class TestTrainingConfigValidation:
 
         # Even with private networks enabled, localhost should be blocked
         settings.ALLOW_PRIVATE_FL_SERVERS = True
+        # The dev settings enable localhost FL servers; disable that here so the
+        # SSRF localhost block is exercised.
+        settings.ALLOW_LOCALHOST_FL_SERVERS = False
 
         localhost_addresses = [
             "localhost:8080",

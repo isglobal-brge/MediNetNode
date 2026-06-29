@@ -507,15 +507,15 @@ class DatasetPrivacyPolicy(models.Model):
         return True, "ok"
 
     def record_spent(self, actual_epsilon: float) -> None:
-        """Atomically add actual_epsilon to spent_epsilon.
+        """Atomically add actual_epsilon to spent_epsilon — audit aggregate.
 
-        Uses a conditional DB-level F() update: the row is only updated when
-        the current spent_epsilon still has room for the new value. This closes
-        the TOCTOU gap between can_accept_job() and record_spent() — if two
-        concurrent callers both pass can_accept_job() and both call
-        record_spent(), the second update's WHERE clause (spent <= budget -
-        delta) fails and the budget overrun is logged instead of silently
-        applied.
+        This policy-level counter is an AUDIT aggregate of the real privacy
+        leakage across ALL researchers; it no longer gates training (the
+        per-researcher ResearcherEpsilonBudget is the enforcement gate). The
+        aggregate therefore legitimately exceeds the per-researcher template
+        value, so the spend is accumulated unconditionally via an atomic F()
+        increment (which also prevents lost writes under concurrency). Dropping
+        a real spend would falsify the privacy-loss accounting.
 
         Silently skips non-positive or non-finite values (e.g., the -1.0
         sentinel meaning 'epsilon measurement failed').
@@ -523,19 +523,10 @@ class DatasetPrivacyPolicy(models.Model):
         if not math.isfinite(actual_epsilon) or actual_epsilon <= 0.0:
             return
         delta = round(actual_epsilon, 6)
-        updated = DatasetPrivacyPolicy.objects.filter(
-            pk=self.pk,
-            spent_epsilon__lte=F('lifetime_budget') - delta,
-        ).update(
+        DatasetPrivacyPolicy.objects.filter(pk=self.pk).update(
             spent_epsilon=F('spent_epsilon') + delta,
         )
         self.refresh_from_db(fields=['spent_epsilon'])
-        if updated == 0:
-            logger.error(
-                "[DP] Budget overrun on DatasetPrivacyPolicy pk=%s: "
-                "attempted to record ε=%.6f but budget was already exhausted.",
-                self.pk, delta,
-            )
 
 
 class ResearcherEpsilonBudget(models.Model):
@@ -615,14 +606,32 @@ class ResearcherEpsilonBudget(models.Model):
         return True, ""
 
     def record_spent(self, actual_epsilon: float) -> None:
-        import math as _math
-        if not _math.isfinite(actual_epsilon) or actual_epsilon <= 0:
+        """Atomically add actual_epsilon to spent_epsilon — truthfully.
+
+        DP accounting must reflect the REAL privacy leakage of a job that has
+        already run. The leakage is therefore recorded unconditionally via an
+        atomic F() increment (which also prevents lost writes under concurrency).
+        Enforcement happens at the gate (can_accept_job): once spent reaches the
+        budget, remaining_budget clamps to 0 and the NEXT job is blocked. We never
+        drop a real spend just because it crosses the ceiling — doing so would let
+        future jobs run against a budget that under-reports actual leakage.
+
+        Non-positive/non-finite values (e.g. the -1.0 'measurement failed'
+        sentinel) are ignored.
+        """
+        if not math.isfinite(actual_epsilon) or actual_epsilon <= 0:
             return
-        actual_epsilon = round(actual_epsilon, 6)
-        ResearcherEpsilonBudget.objects.filter(
-            pk=self.pk,
-            spent_epsilon__lte=models.F('lifetime_budget'),
-        ).update(spent_epsilon=models.F('spent_epsilon') + actual_epsilon)
+        delta = round(actual_epsilon, 6)
+        ResearcherEpsilonBudget.objects.filter(pk=self.pk).update(
+            spent_epsilon=models.F('spent_epsilon') + delta
+        )
+        self.refresh_from_db(fields=['spent_epsilon'])
+        if self.spent_epsilon > self.lifetime_budget:
+            logger.warning(
+                "[DP] ResearcherEpsilonBudget pk=%s now over budget "
+                "(spent=%.6f > lifetime=%.6f); further jobs will be blocked.",
+                self.pk, self.spent_epsilon, self.lifetime_budget,
+            )
 
     def is_period_expired(self) -> bool:
         if self.period == 'never':

@@ -57,7 +57,7 @@ class TestResearcherBudgetUIInDatasetDetail:
         resp = client.get(url)
         assert resp.status_code == 200
         content = resp.content.decode()
-        assert 'Presupuesto' in content
+        assert 'Budget per Researcher' in content
 
     def test_context_contains_researcher_budgets(self):
         client = Client()

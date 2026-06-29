@@ -108,3 +108,37 @@ class TestResearcherBudgetInStartClient:
         with patch('api.views.estimate_job_epsilon', return_value=0.3):
             result = self._call_validate(self.researcher)
         assert result is None
+
+    def test_allows_when_dataset_aggregate_full_but_researcher_fresh(self):
+        # H1: the dataset-level counter is audit-only and must NOT block. A
+        # researcher with a fresh personal quota is allowed even when the
+        # dataset aggregate is "full" (e.g. spent by other researchers).
+        self.policy.spent_epsilon = 99.0  # aggregate well past the template
+        self.policy.save()
+
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = self._call_validate(self.researcher)
+        assert result is None  # allowed — researcher quota governs
+
+    def test_second_job_blocked_after_budget_consumed(self):
+        # End-to-end exhaustion: a first job is allowed, the spend is recorded,
+        # and an identical second job is then blocked at the gate.
+        self.policy.lifetime_budget = 0.5  # one 0.5-job fills it
+        self.policy.save()
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset,
+            researcher_id=self.researcher.id,
+            policy=self.policy,  # inherits lifetime_budget=0.5
+        )
+
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            first = self._call_validate(self.researcher)
+            assert first is None  # allowed: exactly at budget
+
+            # Consume the budget at both levels (what _record_privacy_spend does).
+            self.policy.record_spent(0.5)
+            budget.record_spent(0.5)
+
+            second = self._call_validate(self.researcher)
+        assert second is not None
+        assert second.status_code == 403

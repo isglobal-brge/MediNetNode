@@ -1,5 +1,5 @@
 """
-Exhaustive tests for Tarea 3: Privacy Budget Enforcement in start-client view.
+Exhaustive tests for Privacy Budget Enforcement in the start-client view.
 
 Security model: The Hub (researcher) is UNTRUSTED. The Node (hospital) must
 protect patient data even when the Hub sends adversarial training configs.
@@ -477,13 +477,18 @@ class TestValidatePermissionsPrivacyStep(TestCase):
     # ------------------------------------------------------------------
 
     def test_budget_available_allows_training(self):
-        """Policy with ample budget → returns None (training allowed)."""
+        """Valid estimate within the researcher quota → None (training allowed).
+
+        The estimator is patched to a finite value to isolate the permission
+        gate from the ML stack (the estimator itself is covered by
+        TestEstimateJobEpsilon)."""
         _make_policy(
             self.dataset, sensitivity='low',
             max_epsilon_per_job=5.0, lifetime_budget=20.0,
         )
         mj = _model_json(self.dataset.id, noise_multiplier=1.5, epochs=3)
-        result = self._call(mj)
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = self._call(mj)
         self.assertIsNone(result)
 
     # ------------------------------------------------------------------
@@ -510,20 +515,99 @@ class TestValidatePermissionsPrivacyStep(TestCase):
     # Policy rejects job — lifetime budget exhausted
     # ------------------------------------------------------------------
 
-    def test_lifetime_budget_exhausted_returns_403(self):
-        """Spent budget at lifetime limit → 403."""
+    def test_researcher_budget_exhausted_returns_403(self):
+        """RESEARCHER quota exhausted → 403. The per-researcher budget is the
+        enforcement gate (H1)."""
+        from dataset.models import ResearcherEpsilonBudget
         policy = _make_policy(
             self.dataset, sensitivity='medium',
             max_epsilon_per_job=2.0, lifetime_budget=3.0,
         )
-        # Exhaust the budget directly in DB
-        DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=3.0)
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.user.id, policy=policy,
+        )
+        ResearcherEpsilonBudget.objects.filter(pk=budget.pk).update(spent_epsilon=3.0)
 
         mj = _model_json(self.dataset.id, noise_multiplier=1.5, epochs=3)
         with patch('api.views.estimate_job_epsilon', return_value=0.5):
             result = self._call(mj)
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 403)
+        import json
+        body = json.loads(result.content)
+        self.assertTrue(body.get('budget_exhausted'))
+
+    def test_policy_exhausted_alone_does_not_block(self):
+        """The dataset-level policy counter is audit-only: exhausting it must
+        NOT block a researcher who still has personal quota (H1 — no shared-pool
+        contention between researchers)."""
+        from dataset.models import ResearcherEpsilonBudget
+        policy = _make_policy(
+            self.dataset, sensitivity='medium',
+            max_epsilon_per_job=2.0, lifetime_budget=3.0,
+        )
+        # Dataset aggregate is "full" (e.g. other researchers spent it)...
+        DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=99.0)
+        # ...but THIS researcher has a fresh quota.
+        ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.user.id, policy=policy,
+        )
+        mj = _model_json(self.dataset.id, noise_multiplier=1.5, epochs=3)
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = self._call(mj)
+        self.assertIsNone(result)  # allowed
+
+    def test_reset_restores_training_ability(self):
+        """H1 acceptance: an exhausted researcher who gets an approved budget
+        reset can train again — even though the dataset-level aggregate stays
+        spent. Before the fix the policy pool kept blocking after the reset, so
+        the reset was a no-op."""
+        from django.test import RequestFactory
+        from django.contrib.auth import get_user_model
+        from users.models import Role
+        from dataset.models import ResearcherEpsilonBudget
+        from trainings.models import BudgetResetRequest
+        from api.budget_views import approve_budget_reset
+
+        policy = _make_policy(
+            self.dataset, sensitivity='medium',
+            max_epsilon_per_job=2.0, lifetime_budget=3.0,
+        )
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.user.id, policy=policy,
+        )
+        # The sole researcher drove BOTH counters to exhaustion.
+        ResearcherEpsilonBudget.objects.filter(pk=budget.pk).update(spent_epsilon=3.0)
+        DatasetPrivacyPolicy.objects.filter(pk=policy.pk).update(spent_epsilon=3.0)
+
+        mj = _model_json(self.dataset.id)
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            blocked = self._call(mj)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked.status_code, 403)
+
+        # Admin approves a reset request through the real endpoint.
+        User = get_user_model()
+        admin_role, _ = Role.objects.get_or_create(
+            name='ADMIN', defaults={'permissions': {'api.access': True}},
+        )
+        admin = User.objects.create_user(
+            username='t3_admin', password='x', email='admin@t3.com', role=admin_role,
+        )
+        reset_req = BudgetResetRequest.objects.create(
+            dataset_id=self.dataset.id, researcher_id=self.user.id, reason='ok',
+        )
+        approve_request = RequestFactory().post(
+            '/api/v2/budget-reset/approve/', data='{}', content_type='application/json',
+        )
+        approve_request.api_user = admin
+        approve_resp = approve_budget_reset(approve_request, reset_req.id)
+        self.assertEqual(approve_resp.status_code, 200)
+
+        # Reset is now effective: the researcher can train again.
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            allowed = self._call(mj)
+        self.assertIsNone(allowed)
 
     # ------------------------------------------------------------------
     # Inf epsilon from estimation → can_accept_job rejects
@@ -620,29 +704,27 @@ class TestValidatePermissionsPrivacyStep(TestCase):
     # Corrupted policy values → can_accept_job rejects
     # ------------------------------------------------------------------
 
-    def test_corrupted_policy_can_accept_job_false_returns_403(self):
-        """When can_accept_job returns (False, reason), step 5 returns 403.
+    def test_corrupted_researcher_limit_returns_403(self):
+        """Corrupt per-job limit on the enforcement budget → fail-closed 403.
 
-        Corrupt internal state (e.g. NaN max_epsilon from a non-SQLite backend)
-        causes can_accept_job to return False. Step 5 must surface this as 403.
-        We mock the policy object to isolate step 5's response logic from the
-        can_accept_job internals (which are tested exhaustively in test_privacy_policy.py).
+        With the per-researcher quota as the gate (H1), a corrupt stored limit
+        (here a negative value bypassing validation; NaN cannot be stored on
+        SQLite) must be caught by ResearcherEpsilonBudget.can_accept_job and
+        surfaced as 403 — never silently bypassed.
         """
-        _make_policy(self.dataset, sensitivity='medium')
+        from dataset.models import ResearcherEpsilonBudget
+        policy = _make_policy(self.dataset, sensitivity='medium')
+        budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=self.dataset, researcher_id=self.user.id, policy=policy,
+        )
+        # Corrupt the stored per-job limit (bypasses model validation).
+        ResearcherEpsilonBudget.objects.filter(pk=budget.pk).update(
+            max_epsilon_per_job=-1.0,
+        )
         mj = _model_json(self.dataset.id)
 
-        fake_policy = MagicMock(spec=DatasetPrivacyPolicy)
-        fake_policy.can_accept_job.return_value = (
-            False,
-            "Política de privacidad corrupta: límite por job inválido. "
-            "Contacte al administrador del Node.",
-        )
-        fake_policy.remaining_budget = 5.0
-
-        with patch('dataset.models.DatasetPrivacyPolicy.objects') as mock_mgr:
-            mock_mgr.get.return_value = fake_policy
-            with patch('api.views.estimate_job_epsilon', return_value=0.5):
-                result = self._call(mj)
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = self._call(mj)
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 403)
         import json
@@ -968,13 +1050,16 @@ class TestRecordPrivacySpendAdversarial(TestCase):
         self._call(session)
         self._assert_no_spend()
 
-    def test_very_large_epsilon_accepted_but_capped_by_budget(self):
-        """Huge valid epsilon → record_spent's conditional update enforces budget ceiling."""
+    def test_very_large_epsilon_recorded_truthfully_for_audit(self):
+        """Huge valid epsilon → recorded truthfully in the audit aggregate.
+
+        The policy counter is audit-only; it must reflect the REAL leakage even
+        when it exceeds the per-researcher template (the spend is never dropped).
+        """
         session = self._setup_session_with_epsilon(999.0)
         self._call(session)
-        # record_spent has conditional filter: spent_epsilon__lte=lifetime_budget - delta
-        # 999.0 > remaining budget (10.0) → conditional update fires 0 rows → no change
-        self._assert_no_spend()
+        self.policy.refresh_from_db()
+        self.assertAlmostEqual(self.policy.spent_epsilon, 999.0, places=3)
 
     def test_minus_one_sentinel_skipped(self):
         """-1.0 sentinel (DP measurement failed) is silently skipped."""

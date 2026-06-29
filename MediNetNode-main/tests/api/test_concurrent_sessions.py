@@ -11,7 +11,7 @@ from users.models import Role
 import uuid
 
 User = get_user_model()
-MAX_CONCURRENT = 2  # must match the constant in views.py
+MAX_CONCURRENT = 3  # must match MAX_CONCURRENT_TRAINING_SESSIONS in views.py
 
 
 def _make_researcher(username):
@@ -55,7 +55,7 @@ class TestConcurrentSessionLimit:
         request.api_user = self.researcher
         request.api_key = 'test-key'
 
-        with patch('api.views.validate_training_config', return_value=(None, {})), \
+        with patch('api.views.validate_training_config', return_value=None), \
              patch('api.views.validate_training_permissions', return_value=None):
             resp = start_client(request)
 

@@ -108,6 +108,32 @@ class TestBudgetResetEndpoints:
         self.budget.refresh_from_db()
         assert self.budget.spent_epsilon == pytest.approx(1.5)  # unchanged
 
+    def test_approve_failure_to_reset_does_not_leave_request_approved(self):
+        """H4: if applying the budget reset fails, the request must NOT be left
+        in 'approved' state with the reset un-applied. The reset is applied
+        before the approval is finalized."""
+        from unittest.mock import patch
+        reset_req = BudgetResetRequest.objects.create(
+            dataset_id=self.dataset.id,
+            researcher_id=self.researcher.id,
+            reason='Motivo.',
+        )
+        from api.budget_views import approve_budget_reset
+        req = self._api_request(
+            'post', f'/api/v2/budget-reset/{reset_req.id}/approve/', self.admin, {'notes': 'ok'},
+        )
+        with patch(
+            'dataset.models.ResearcherEpsilonBudget.reset_period',
+            side_effect=RuntimeError('db down'),
+        ):
+            resp = approve_budget_reset(req, reset_req.id)
+
+        assert resp.status_code == 500
+        reset_req.refresh_from_db()
+        assert reset_req.status == 'pending'  # not approved
+        self.budget.refresh_from_db()
+        assert self.budget.spent_epsilon == pytest.approx(1.5)  # unchanged
+
     def test_researcher_cannot_approve(self):
         reset_req = BudgetResetRequest.objects.create(
             dataset_id=self.dataset.id,

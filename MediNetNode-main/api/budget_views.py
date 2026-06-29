@@ -91,6 +91,16 @@ def approve_budget_reset(request, request_id):
 
     reset_req = get_object_or_404(BudgetResetRequest, pk=request_id)
 
+    # BudgetResetRequest (default db) and ResearcherEpsilonBudget (datasets_db)
+    # live in different databases, so a single cross-DB transaction is not
+    # possible. Instead we ORDER the operations so the harmful partial state
+    # ("approved but reset never applied") can never occur: validate, apply the
+    # reset, and only then finalize the approval. The reset is effectively
+    # idempotent (it zeroes spent_epsilon), so a crash between reset and approve
+    # leaves the request re-approvable with no inconsistency.
+    if reset_req.status != 'pending':
+        return JsonResponse({'error': 'Esta solicitud ya ha sido revisada.'}, status=409)
+
     try:
         body = json.loads(request.body) if request.body else {}
     except (json.JSONDecodeError, ValueError):
@@ -98,29 +108,44 @@ def approve_budget_reset(request, request_id):
 
     notes = (body.get('notes') or '').strip()
 
-    try:
-        reset_req.approve(admin=user, notes=notes)
-    except ValueError as exc:
-        return JsonResponse({'error': str(exc)}, status=409)
-
-    # Apply researcher budget reset
+    # 1. Apply the researcher budget reset first.
     try:
         budget = ResearcherEpsilonBudget.objects.get(
             dataset_id=reset_req.dataset_id,
             researcher_id=reset_req.researcher_id,
         )
-        budget.reset_period()
-        logger.info(
-            "Budget reset by admin %s: researcher_id=%s dataset_id=%s",
-            user.username, reset_req.researcher_id, reset_req.dataset_id,
-        )
     except ResearcherEpsilonBudget.DoesNotExist:
+        budget = None
         logger.warning(
-            "Reset approved but no ResearcherEpsilonBudget found: "
-            "researcher_id=%s dataset_id=%s",
+            "Reset request has no ResearcherEpsilonBudget yet: "
+            "researcher_id=%s dataset_id=%s — approving without a reset to apply.",
             reset_req.researcher_id, reset_req.dataset_id,
         )
 
+    if budget is not None:
+        try:
+            budget.reset_period()
+        except Exception as exc:  # do NOT approve if the reset could not be applied
+            logger.error(
+                "Failed to apply budget reset (researcher_id=%s dataset_id=%s): %s — "
+                "leaving request pending.",
+                reset_req.researcher_id, reset_req.dataset_id, exc,
+            )
+            return JsonResponse(
+                {'error': 'No se pudo aplicar el reset del presupuesto. Solicitud sin cambios.'},
+                status=500,
+            )
+
+    # 2. Finalize the approval only after the reset succeeded.
+    try:
+        reset_req.approve(admin=user, notes=notes)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=409)
+
+    logger.info(
+        "Budget reset by admin %s: researcher_id=%s dataset_id=%s",
+        user.username, reset_req.researcher_id, reset_req.dataset_id,
+    )
     return JsonResponse({'id': reset_req.id, 'status': 'approved'})
 
 

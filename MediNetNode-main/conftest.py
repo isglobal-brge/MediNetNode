@@ -81,6 +81,23 @@ def django_db_setup(django_db_setup, django_db_blocker):
         )
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_cache():
+    """Clear the cache around every test.
+
+    The security middleware's rate limiter stores per-IP/per-user counters in
+    the Django cache. Under the test LocMemCache (which lives for the whole
+    process) those counters leak across tests, so a test class that makes many
+    requests eventually gets 429s in unrelated tests. Clearing the cache before
+    and after each test restores isolation. Rate-limit tests still work because
+    they accumulate their requests within a single test.
+    """
+    from django.core.cache import cache
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def admin_role(db):
     """Fixture to get ADMIN role (already created in session)."""

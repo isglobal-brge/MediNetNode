@@ -242,9 +242,14 @@ class TestPredictionAudit:
             role=researcher_role
         )
 
-        # Create multiple audit entries
+        # Create multiple audit entries with distinct timestamps. timestamp is
+        # auto_now_add, so the tight loop would otherwise assign identical
+        # timestamps and the '-timestamp' ordering would be non-deterministic.
+        from django.utils import timezone
+        from datetime import timedelta
+        base = timezone.now()
         for i in range(3):
-            PredictionAudit.objects.create(
+            audit = PredictionAudit.objects.create(
                 user=researcher_user,
                 ip_address="192.168.1.105",
                 model=self.test_model,
@@ -256,6 +261,9 @@ class TestPredictionAudit:
                 rate_limit_remaining=50,
                 input_hash=PredictionAudit.compute_input_hash(f"test{i}"),
                 success=True
+            )
+            PredictionAudit.objects.filter(pk=audit.pk).update(
+                timestamp=base + timedelta(seconds=i)
             )
 
         # Get all audits

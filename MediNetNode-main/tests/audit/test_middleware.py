@@ -14,8 +14,11 @@ class AuditMiddlewareTests(TestCase):
         self.factory = RequestFactory()
         self.middleware = AuditMiddleware(Mock())
         
-        # Create test user
-        role = Role.objects.get(name='RESEARCHER')
+        # Create test user. Use ADMIN: a RESEARCHER is redirected by the
+        # researcher web-access restriction *before* the audit middleware runs,
+        # so an authenticated researcher request to /admin/ would never be
+        # audited (the request never reaches AuditMiddleware).
+        role = Role.objects.get(name='ADMIN')
         self.user = CustomUser.objects.create_user(
             username='middleware_test', password='StrongPass123!', role=role
         )

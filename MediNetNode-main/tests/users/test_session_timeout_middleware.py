@@ -20,8 +20,9 @@ class SessionTimeoutMiddlewareTests(TestCase):
         session['last_activity_ts'] = int(timezone.now().timestamp()) - 5
         session.save()
         # Use the auth login URL instead of admin login
-        response = self.client.get('/auth/login/')
-        # After middleware, user should be logged out; session should be cleared  
-        # The auth login view returns JSON, so we check for appropriate response
-        self.assertIn(response.status_code, [200, 405])  # 405 for GET on POST-only view
+        self.client.get('/auth/login/')
+        # The idle session must be terminated by the middleware: the user is
+        # logged out (auth key removed from the session), regardless of how the
+        # login URL itself responds (200/302/405 across configs).
+        self.assertNotIn('_auth_user_id', self.client.session)
 

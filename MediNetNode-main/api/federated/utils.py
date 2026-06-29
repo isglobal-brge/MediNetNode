@@ -1,9 +1,8 @@
+from __future__ import annotations
+
 import logging
 import math
-import torch
 from datetime import datetime
-from django.db.models import F
-from opacus.validators import ModuleValidator
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +85,7 @@ def flatten_with_prefix(config, prefix="", delimiter="__"):
 #
 #     return nested_config
 
-def check_model(net:torch.nn.Module):
+def check_model(net: "torch.nn.Module"):
     """
     Validates and fixes a PyTorch model using Opacus ModuleValidator.
 
@@ -95,7 +94,14 @@ def check_model(net:torch.nn.Module):
 
     Returns:
         torch.nn.Module: The validated and fixed PyTorch model.
+
+    Note:
+        torch/opacus are imported lazily here so the pure DB-accounting paths
+        in this module (e.g. _record_privacy_spend) can be imported and tested
+        without the heavy ML stack installed.
     """
+    from opacus.validators import ModuleValidator
+
     errors = ModuleValidator.validate(net, strict=False)
     print(f"Model validated with {len(errors)} errors")
     if len(errors) > 0:
@@ -256,19 +262,29 @@ def _record_privacy_spend(training_session) -> None:
             training_session.session_id, last_round.round_number,
         )
 
-        # Update per-researcher epsilon budget
+        # Update per-researcher epsilon budget. Delegate to the model's
+        # record_spent() so the overrun-protected conditional update lives in a
+        # single place (parity with DatasetPrivacyPolicy above).
         try:
             researcher_id = getattr(training_session, 'user_id', None)
             if researcher_id is not None:
-                ResearcherEpsilonBudget.objects.filter(
-                    dataset_id=dataset_id,
-                    researcher_id=researcher_id,
-                    spent_epsilon__lte=F('lifetime_budget'),
-                ).update(spent_epsilon=F('spent_epsilon') + actual_epsilon)
-                logger.info(
-                    "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
-                    researcher_id, dataset_id, actual_epsilon,
-                )
+                try:
+                    researcher_budget = ResearcherEpsilonBudget.objects.get(
+                        dataset_id=dataset_id,
+                        researcher_id=researcher_id,
+                    )
+                except ResearcherEpsilonBudget.DoesNotExist:
+                    logger.info(
+                        "No ResearcherEpsilonBudget for researcher=%s dataset=%s — "
+                        "researcher spend not recorded",
+                        researcher_id, dataset_id,
+                    )
+                else:
+                    researcher_budget.record_spent(actual_epsilon)
+                    logger.info(
+                        "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
+                        researcher_id, dataset_id, actual_epsilon,
+                    )
         except Exception as exc:
             logger.error(
                 "Error updating ResearcherEpsilonBudget (researcher=%s): %s",

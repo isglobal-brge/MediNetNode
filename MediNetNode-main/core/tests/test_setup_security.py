@@ -465,8 +465,10 @@ class InitialSetupSecurityTests(TestCase):
         # Verify password is hashed (not plaintext)
         self.assertNotEqual(user.password, self.valid_payload['password'])
 
-        # Verify password hash format (Django uses pbkdf2_sha256 by default)
-        self.assertTrue(user.password.startswith('pbkdf2_sha256$'))
+        # Verify password is stored in Django's hashed format (algorithm-agnostic:
+        # the active hasher differs between prod and the fast test hasher).
+        self.assertIn('$', user.password)
+        self.assertTrue(user.has_usable_password())
 
         # Verify password can be validated
         self.assertTrue(user.check_password(self.valid_payload['password']))

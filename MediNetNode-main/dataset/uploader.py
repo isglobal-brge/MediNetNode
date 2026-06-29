@@ -1148,11 +1148,20 @@ class SecureDatasetUploader:
             final_filename = f"{safe_filename}_{timestamp}"
         
         final_path = os.path.join(date_dir, final_filename)
-        
-        # Atomic move operation
+
+        # Guarantee a unique destination: rapid uploads (or names that sanitize
+        # to the same base) can collide within the same-second timestamp.
+        if os.path.exists(final_path):
+            import uuid
+            final_filename = f"{final_filename}_{uuid.uuid4().hex[:8]}"
+            final_path = os.path.join(date_dir, final_filename)
+
+        # Atomic move operation (os.replace overwrites atomically on all
+        # platforms; os.rename raises FileExistsError on Windows if the target
+        # exists).
         temp_path = final_path + '.tmp'
         shutil.copy2(file_path, temp_path)
-        os.rename(temp_path, final_path)
+        os.replace(temp_path, final_path)
         
         # Set secure permissions (read-only for group/others)
         os.chmod(final_path, 0o644)

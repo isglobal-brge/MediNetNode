@@ -330,7 +330,7 @@ def download_user_info(request):
             "url": base_url,
             "api_key": user_data['api_key'],
             "created_at": user_data['api_key_created'],
-            "expires_at": api_key.expires_at.isoformat() if api_key else None,
+            "expires_at": api_key.expires_at.isoformat() if (api_key and api_key.expires_at) else None,
             "endpoints": {
                 "base_url": base_url,
                 "ping": "/api/v2/ping",

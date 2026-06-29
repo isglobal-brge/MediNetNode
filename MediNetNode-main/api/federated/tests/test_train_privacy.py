@@ -251,12 +251,12 @@ class TestEpsilonScaling:
         """More training steps → more privacy budget consumed → higher ε."""
         model1 = _make_model()
         loader1 = _make_loader(n=128)
-        *_, eps_1epoch = train(model1, loader1, _minimal_config(epochs=1),
+        *_, eps_1epoch, _noise = train(model1, loader1, _minimal_config(epochs=1),
                                partition_id=0, verbose=False)
 
         model2 = _make_model()
         loader2 = _make_loader(n=128)
-        *_, eps_3epochs = train(model2, loader2, _minimal_config(epochs=3),
+        *_, eps_3epochs, _noise = train(model2, loader2, _minimal_config(epochs=3),
                                 partition_id=0, verbose=False)
 
         assert eps_3epochs > eps_1epoch, (
@@ -268,12 +268,12 @@ class TestEpsilonScaling:
         """Higher noise_multiplier → stronger DP → lower ε."""
         model1 = _make_model()
         loader1 = _make_loader(n=128)
-        *_, eps_sigma1 = train(model1, loader1, _minimal_config(noise_multiplier=1.0),
+        *_, eps_sigma1, _noise = train(model1, loader1, _minimal_config(noise_multiplier=1.0),
                                partition_id=0, verbose=False)
 
         model2 = _make_model()
         loader2 = _make_loader(n=128)
-        *_, eps_sigma3 = train(model2, loader2, _minimal_config(noise_multiplier=3.0),
+        *_, eps_sigma3, _noise = train(model2, loader2, _minimal_config(noise_multiplier=3.0),
                                partition_id=0, verbose=False)
 
         assert eps_sigma3 < eps_sigma1, (
@@ -311,7 +311,7 @@ class TestGracefulDegradation:
             instance.get_epsilon.side_effect = RuntimeError("accountant error")
 
             result = train(model, loader, _minimal_config(), partition_id=0, verbose=False)
-            epsilon = result[-1]
+            epsilon = result[5]
             assert epsilon == float("inf"), f"Expected inf, got {epsilon}"
 
     def test_missing_dp_config_uses_safe_defaults(self):
@@ -346,7 +346,7 @@ class TestGracefulDegradation:
         # Should either use default or raise a clear error — must not hang
         try:
             result = train(model, loader, config, partition_id=0, verbose=False)
-            assert len(result) == 6
+            assert len(result) == 7
         except (TypeError, ValueError):
             pass  # A clear exception is acceptable
 
@@ -433,13 +433,17 @@ class TestDLFlowerClientEpsilonPropagation:
         assert math.isfinite(client.epsilon)
 
     def test_fit_error_returns_empty_metrics(self):
-        """On training error, fit() returns empty metrics dict (Flower contract)."""
+        """On training error, fit() returns empty metrics dict (Flower contract).
+
+        num_examples is 1 (not 0) on error by design: returning 0 from every
+        client would make Flower's FedAvg divide by a zero weight sum and crash.
+        """
         client = self._make_client()
         params = self._fake_parameters(client.net)
 
         with patch("api.federated.dl_client.train", side_effect=RuntimeError("boom")):
             returned_params, num_examples, metrics = client.fit(params, {})
-            assert num_examples == 0
+            assert num_examples == 1
             assert metrics == {}
 
     def test_client_epsilon_initialized_to_none(self):
@@ -459,7 +463,7 @@ class TestAdversarialHubInputs:
         model = _make_model()
         loader = _make_loader()
         config = _minimal_config(noise_multiplier=1000.0)
-        *_, epsilon = train(model, loader, config, partition_id=0, verbose=False)
+        *_, epsilon, _noise = train(model, loader, config, partition_id=0, verbose=False)
         assert math.isfinite(epsilon) and epsilon > 0
         assert epsilon < 1.0  # Very strong privacy with sigma=1000
 
@@ -560,7 +564,7 @@ class TestAdversarialHubInputs:
 
             result = train(model, loader, config, partition_id=0, verbose=False)
 
-        assert len(result) == 6, "Should not crash with invalid optimizer type"
+        assert len(result) == 7, "Should not crash with invalid optimizer type"
 
     def test_epoch_cap_enforced(self):
         """Hub requesting more than _MAX_EPOCHS epochs must be capped at _MAX_EPOCHS."""
@@ -660,7 +664,7 @@ class TestHubConfigIsolation:
         }
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5, 1.0)
             client.fit(params, malicious_flower_config)
 
             called_config = mock_train.call_args[0][2]
@@ -683,7 +687,7 @@ class TestHubConfigIsolation:
         flower_round_config = {"server_round": 3, "client_id": "abc123"}
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5, 1.0)
             client.fit(params, flower_round_config)
 
             called_config = mock_train.call_args[0][2]
@@ -699,7 +703,7 @@ class TestHubConfigIsolation:
         params = self._fake_parameters(client.net)
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, float("inf"))
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, float("inf"), 1.0)
             _, _, metrics = client.fit(params, {})
 
         eps = metrics.get("privacy_epsilon")
@@ -718,7 +722,7 @@ class TestHubConfigIsolation:
         params = self._fake_parameters(client.net)
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.42)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.42, 1.0)
             _, _, metrics = client.fit(params, {})
 
         assert metrics["privacy_delta"] == _DP_DELTA, (
@@ -733,7 +737,7 @@ class TestHubConfigIsolation:
 
         with patch("api.federated.dl_client.update_training_progress") as mock_update, \
              patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.42)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.42, 1.0)
             client.fit(params, {})
 
             round_metrics_arg = mock_update.call_args[0][3]
@@ -769,7 +773,7 @@ class TestHubConfigIsolation:
         hub_config = {"train": {"epochs": 999}}
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5, 1.0)
             client.fit(params, hub_config)
 
             called_config = mock_train.call_args[0][2]
@@ -790,7 +794,7 @@ class TestHubConfigIsolation:
         arbitrary_config = {"arbitrary_key": "should_be_dropped", "server_round": 5}
 
         with patch("api.federated.dl_client.train") as mock_train:
-            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5)
+            mock_train.return_value = (0.5, 0.8, 0.7, 0.7, 0.7, 0.5, 1.0)
             client.fit(params, arbitrary_config)
 
             called_config = mock_train.call_args[0][2]
@@ -817,8 +821,8 @@ class TestHubConfigIsolation:
             result = train(model, loader, config, partition_id=0, verbose=False)
 
         # Must return a 6-tuple; DP minimums still enforced
-        assert len(result) == 6
-        epsilon = result[-1]
+        assert len(result) == 7
+        epsilon = result[5]
         assert isinstance(epsilon, float)
 
 

@@ -8,7 +8,8 @@ from django.db import connections
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from dataset.models import Dataset, DatasetAccess
+from unittest.mock import patch
+from dataset.models import Dataset, DatasetAccess, DatasetPrivacyPolicy
 from users.models import Role, APIKey
 from api.views import validate_training_permissions, get_user_datasets
 from django.http import JsonResponse
@@ -78,7 +79,7 @@ class DatasetToggleActiveTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum',
+            checksum_sha256='test_checksum',
             is_active=True
         )
 
@@ -171,7 +172,7 @@ class DatasetToggleActiveTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum2',
+            checksum_sha256='test_checksum2',
             is_active=False
         )
 
@@ -246,10 +247,12 @@ class DatasetAPIActiveValidationTest(TestCase):
 
         # Create API key for researcher
         
-        self.api_key = APIKey.objects.create(
+        self.api_key = APIKey(
             user=self.researcher_user,
-            key='test_api_key_123'
+            name='Test API Key',
         )
+        self.api_key.set_key('test_api_key_123')
+        self.api_key.save()
 
         # Create test datasets
         self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
@@ -265,7 +268,7 @@ class DatasetAPIActiveValidationTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum_active',
+            checksum_sha256='test_checksum_active',
             is_active=True
         )
 
@@ -282,7 +285,7 @@ class DatasetAPIActiveValidationTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum_paused',
+            checksum_sha256='test_checksum_paused',
             is_active=False
         )
 
@@ -369,8 +372,16 @@ class DatasetAPIActiveValidationTest(TestCase):
             }
         }
 
+        # The Node fail-closes without a privacy policy, so configure one and a
+        # deterministic epsilon estimate for the budget gate.
+        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+            dataset=self.active_dataset, sensitivity='medium',
+            max_epsilon_per_job=1.0, lifetime_budget=5.0,
+        )
+
         # Call the validation function directly
-        result = validate_training_permissions(self.researcher_user, model_json)
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = validate_training_permissions(self.researcher_user, model_json)
 
         # Should return None (no error) for active dataset
         self.assertIsNone(result)
