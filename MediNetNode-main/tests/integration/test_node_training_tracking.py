@@ -7,10 +7,6 @@ progress calculation, and completion/failure/cancellation flows.
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
 def training_session(db, integration_researcher_user):
     """Create a minimal TrainingSession in STARTING state."""
@@ -27,10 +23,6 @@ def training_session(db, integration_researcher_user):
         status="STARTING",
     )
 
-
-# ---------------------------------------------------------------------------
-# TrainingSession — initial state
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db
 class TestTrainingSessionInitialState:
@@ -55,10 +47,6 @@ class TestTrainingSessionInitialState:
     def test_current_round_defaults_to_zero(self, training_session) -> None:
         assert training_session.current_round == 0
 
-
-# ---------------------------------------------------------------------------
-# TrainingSession — status transitions
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db
 class TestTrainingSessionStatusTransitions:
@@ -108,10 +96,6 @@ class TestTrainingSessionStatusTransitions:
         assert training_session.status == "COMPLETED"
 
 
-# ---------------------------------------------------------------------------
-# TrainingSession — progress tracking
-# ---------------------------------------------------------------------------
-
 @pytest.mark.django_db
 class TestTrainingSessionProgressTracking:
     """Validate update_progress calculations."""
@@ -132,10 +116,6 @@ class TestTrainingSessionProgressTracking:
         fresh = type(training_session).objects.get(pk=training_session.pk)
         assert fresh.current_round == 5
 
-
-# ---------------------------------------------------------------------------
-# TrainingRound — creation and completion
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db
 class TestTrainingRoundLifecycle:

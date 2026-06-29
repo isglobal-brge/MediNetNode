@@ -32,7 +32,6 @@ class SHA256ChecksumModelTests(TestCase):
             is_superuser=True
         )
 
-        # Create a test file
         self.test_file = tempfile.NamedTemporaryFile(
             mode='w',
             suffix='.csv',
@@ -44,7 +43,6 @@ class SHA256ChecksumModelTests(TestCase):
         self.test_file_path = self.test_file.name
         self.test_file.close()
 
-        # Calculate expected SHA-256 checksum
         with open(self.test_file_path, 'rb') as f:
             self.expected_sha256 = hashlib.sha256(f.read()).hexdigest()
 
@@ -87,7 +85,6 @@ class SHA256ChecksumModelTests(TestCase):
             checksum_sha256=self.expected_sha256
         )
 
-        # Reload from database
         saved_dataset = Dataset.objects.using('datasets_db').get(id=dataset.id)
         self.assertEqual(saved_dataset.checksum_sha256, self.expected_sha256)
         self.assertEqual(len(saved_dataset.checksum_sha256), 64)
@@ -105,13 +102,10 @@ class SHA256ChecksumModelTests(TestCase):
             patient_count=2
         )
 
-        # Checksum should be None before save
         self.assertIsNone(dataset.checksum_sha256)
 
-        # Save should trigger automatic checksum calculation
         dataset.save(using='datasets_db')
 
-        # Checksum should now be set
         self.assertIsNotNone(dataset.checksum_sha256)
         self.assertEqual(dataset.checksum_sha256, self.expected_sha256)
 
@@ -147,14 +141,11 @@ class SHA256ChecksumModelTests(TestCase):
 
         original_checksum = dataset.checksum_sha256
 
-        # Modify the file
         with open(self.test_file_path, 'a') as f:
             f.write("3,asthma,30\n")
 
-        # Recalculate checksum
         new_checksum = dataset.calculate_checksum()
 
-        # Checksums should be different
         self.assertNotEqual(original_checksum, new_checksum)
         self.assertEqual(len(new_checksum), 64)
 
@@ -177,7 +168,6 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
 
     def test_different_files_produce_different_checksums(self):
         """Test that different file contents produce different SHA-256 hashes."""
-        # Create two different files
         file1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
         file1.write("data1,value1\n")
         file1_path = file1.name
@@ -212,10 +202,8 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
             checksum1 = dataset1.calculate_checksum()
             checksum2 = dataset2.calculate_checksum()
 
-            # Different files must have different checksums
             self.assertNotEqual(checksum1, checksum2)
 
-            # Both should be valid SHA-256 (64 hex chars)
             self.assertEqual(len(checksum1), 64)
             self.assertEqual(len(checksum2), 64)
 
@@ -227,7 +215,6 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
         """Test that identical file contents produce identical SHA-256 hashes."""
         content = "patient_id,diagnosis\n1,diabetes\n2,hypertension\n"
 
-        # Create two files with identical content
         file1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
         file1.write(content)
         file1_path = file1.name
@@ -262,7 +249,6 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
             checksum1 = dataset1.calculate_checksum()
             checksum2 = dataset2.calculate_checksum()
 
-            # Identical files must have identical checksums
             self.assertEqual(checksum1, checksum2)
 
         finally:
@@ -275,7 +261,6 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
 
         SECURITY: This prevents attackers from substituting MD5 hashes for SHA-256.
         """
-        # Create test file
         test_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
         test_file.write("data\n")
         test_file_path = test_file.name
@@ -288,7 +273,6 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
 
             self.assertEqual(len(md5_hash), 32)
 
-            # Try to create dataset with MD5 hash in SHA-256 field
             dataset = Dataset(
                 name='MD5 Substitution Test',
                 description='Test MD5 length mismatch',
@@ -300,14 +284,11 @@ class SHA256ChecksumCollisionResistanceTests(TestCase):
                 checksum_sha256=md5_hash  # Try to use MD5 (32 chars) as SHA-256
             )
 
-            # Save to database
             dataset.save(using='datasets_db')
 
-            # Calculate correct SHA-256
             correct_sha256 = dataset.calculate_checksum()
             self.assertEqual(len(correct_sha256), 64)
 
-            # MD5 and SHA-256 should be completely different
             self.assertNotEqual(md5_hash, correct_sha256)
             self.assertEqual(len(dataset.checksum_sha256), 32)  # Stored MD5 length
             self.assertEqual(len(correct_sha256), 64)  # Correct SHA-256 length

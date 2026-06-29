@@ -107,7 +107,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         # Validate and sanitize config BEFORE using any values
         config = self._validate_and_sanitize_config(config)
 
-        # Extract configuration
         training_config = config.get('training', {})
         privacy_config = config.get('privacy', {})
 
@@ -199,7 +198,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         print(f"[FEDDPRF] fit() started")
         print(f"{'─'*60}")
 
-        # 1. Receive trees from server (if provided)
         if parameters and len(parameters) > 0 and parameters[0].size > 0:
             print(f"[FEDDPRF] Deserializing trees from server...")
             received_trees = self._deserialize_trees(parameters[0])
@@ -208,12 +206,10 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
             print(f"[RECV] Received {len(received_trees)} trees from server")
             print(f"   Replaced local forest with global forest")
 
-        # 2. Train N new DP trees
         print(f"[FEDDPRF] Training {self.n_trees_per_client} new DP trees...")
         new_trees = []
 
         for i in range(self.n_trees_per_client):
-            # Create and train tree
             tree = SecureDPTree(
                 max_depth=self.max_depth,
                 min_samples_split=self.min_samples_split,
@@ -228,16 +224,13 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
             if (i + 1) % 5 == 0 or (i + 1) == self.n_trees_per_client:
                 print(f"   Trained {i + 1}/{self.n_trees_per_client} trees")
 
-        # Add new trees to forest
         self.trees.extend(new_trees)
         print(f"[OK] Training complete: {len(new_trees)} new trees trained")
         print(f"   Total trees in forest: {len(self.trees)}")
 
-        # 3. Serialize trees for transmission
         print(f"[FEDDPRF] Serializing {len(new_trees)} new trees...")
         parameters_out = self._serialize_trees(new_trees)
 
-        # 4. Compute metrics on VALIDATION data (if available)
         print(f"[FEDDPRF] Computing metrics...")
         if self.X_val is not None and self.y_val is not None:
             print(f"[FEDDPRF] Using VALIDATION data ({len(self.X_val)} samples)")
@@ -255,7 +248,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
                 'f1': 0.0
             }
 
-        # Add algorithm-specific info
         metrics.update({
             'n_trees_local': len(self.trees),
             'n_trees_sent': len(new_trees),
@@ -286,15 +278,12 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         Returns:
             Tuple of (loss, accuracy)
         """
-        # Receive trees if provided
         if parameters and len(parameters) > 0 and parameters[0].size > 0:
             received_trees = self._deserialize_trees(parameters[0])
             self.trees = received_trees
 
-        # Predict on validation data
         y_pred = self.predict(X_val)
 
-        # Compute metrics
         metrics = self._compute_metrics(y_val, y_pred)
 
         return metrics['loss'], metrics['accuracy']
@@ -336,7 +325,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         if not self.trees:
             raise ValueError("No trees in forest. Train or receive trees first.")
 
-        # Collect predictions from all trees
         all_predictions = np.array([tree.predict(X) for tree in self.trees])
 
         # Majority voting (axis=0 votes across trees for each sample)
@@ -347,8 +335,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         )
 
         return predictions
-
-    # ==================== Security & Validation Methods ====================
 
     def _validate_and_sanitize_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -463,8 +449,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
 
         return sanitized_config
 
-    # ==================== Helper Methods ====================
-
     def _serialize_trees(self, trees: List[SecureDPTree]) -> List[np.ndarray]:
         """
         Serialize trees for transmission.
@@ -480,14 +464,11 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         if not trees:
             return [np.array([])]
 
-        # Extract tree states
         tree_states = [tree.get_state() for tree in trees]
 
-        # Pickle and base64 encode
         pickled = pickle.dumps(tree_states)
         encoded = base64.b64encode(pickled)
 
-        # Convert to numpy array of bytes
         serialized_array = np.frombuffer(encoded, dtype=np.uint8)
 
         return [serialized_array]
@@ -505,12 +486,10 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         if serialized_array.size == 0:
             return []
 
-        # Convert back to bytes and decode
         encoded_bytes = serialized_array.tobytes()
         pickled = base64.b64decode(encoded_bytes)
         tree_states = pickle.loads(pickled)
 
-        # Reconstruct trees
         trees = []
         for state in tree_states:
             tree = SecureDPTree()
@@ -541,7 +520,6 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
                 'f1': 0.0
             }
 
-        # Compute comprehensive metrics
         accuracy = accuracy_score(y_true, y_pred)
 
         # Handle binary and multiclass

@@ -75,14 +75,12 @@ class TestSecureDPTree:
         """Test tree structure is built randomly (0-DP)."""
         X, y, bounds = sample_data
 
-        # Build multiple trees with same data
         trees = []
         for i in range(5):
             tree = SecureDPTree(max_depth=10, feature_bounds=bounds, epsilon=1.0)
             tree.fit(X, y)
             trees.append(tree)
 
-        # Check tree structures
         def count_splits(node):
             if node['type'] == 'leaf':
                 return 0
@@ -157,10 +155,8 @@ class TestSecureDPTree:
         )
         tree1.fit(X, y)
 
-        # Get predictions before serialization
         pred1 = tree1.predict(X)
 
-        # Serialize and deserialize
         state = tree1.get_state()
         tree2 = SecureDPTree()
         tree2.set_state(state)
@@ -187,7 +183,6 @@ class TestPermuteAndFlip:
         counts = np.array([100, 1, 1])
         epsilon = 10.0  # High epsilon → less noise
 
-        # Run multiple times
         results = [permute_and_flip(counts, epsilon) for _ in range(100)]
 
         # Should select class 0 (majority) most of the time
@@ -199,7 +194,6 @@ class TestPermuteAndFlip:
         counts = np.array([10, 9, 8])  # Similar counts
         epsilon = 0.1  # Low epsilon → more noise
 
-        # Run multiple times
         results = [permute_and_flip(counts, epsilon) for _ in range(100)]
 
         # Should have diversity in selections (not always class 0)
@@ -221,7 +215,6 @@ class TestDifferentialPrivacy:
             'max': X.max(axis=0).tolist()
         }
 
-        # Dataset 1: Original
         tree1 = SecureDPTree(max_depth=5, feature_bounds=feature_bounds, epsilon=1.0)
         tree1.fit(X, y)
 
@@ -233,7 +226,6 @@ class TestDifferentialPrivacy:
         tree2 = SecureDPTree(max_depth=5, feature_bounds=feature_bounds, epsilon=1.0)
         tree2.fit(X_neighbor, y_neighbor)
 
-        # Predictions should be similar but not identical
         pred1 = tree1.predict(X)
         pred2 = tree2.predict(X)
 
@@ -259,17 +251,14 @@ class TestDifferentialPrivacy:
             'max': [15, 15, 15]
         }
 
-        # Build trees with same random state
         import secrets
         seed = 12345
 
-        # Tree 1
         tree1 = SecureDPTree(max_depth=5, feature_bounds=feature_bounds, epsilon=1.0)
         tree1.random_state = secrets.SystemRandom()
         tree1.random_state.seed = lambda: seed  # Mock seed
         tree1.fit(X1, y1)
 
-        # Tree 2
         tree2 = SecureDPTree(max_depth=5, feature_bounds=feature_bounds, epsilon=1.0)
         tree2.random_state = secrets.SystemRandom()
         tree2.random_state.seed = lambda: seed  # Mock seed
@@ -296,7 +285,6 @@ class TestSecureRNG:
 
         values = [rng.random() for _ in range(100)]
 
-        # Check diversity
         unique_values = len(set(values))
         assert unique_values > 50  # Should be diverse
 

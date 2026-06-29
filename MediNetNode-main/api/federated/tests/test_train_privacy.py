@@ -42,10 +42,6 @@ from ..train_functions import (
 from ..dl_client import DLFlowerClient
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _make_model(in_features: int = 4) -> nn.Module:
     return nn.Linear(in_features, 1)
 
@@ -77,10 +73,6 @@ def _minimal_config(epochs: int = 1, noise_multiplier: float = 1.0,
         },
     }
 
-
-# ---------------------------------------------------------------------------
-# 1. Return signature
-# ---------------------------------------------------------------------------
 
 class TestTrainReturnSignature:
 
@@ -133,10 +125,6 @@ class TestTrainReturnSignature:
         assert isinstance(actual_noise, float)
         assert actual_noise >= 1.0, f"Actual noise must be >= Node minimum, got {actual_noise}"
 
-
-# ---------------------------------------------------------------------------
-# 2. Node-enforced security minimums
-# ---------------------------------------------------------------------------
 
 class TestNodeSecurityEnforcement:
 
@@ -241,10 +229,6 @@ class TestNodeSecurityEnforcement:
             mock_rb.assert_called_with(2**31)
 
 
-# ---------------------------------------------------------------------------
-# 3. Epsilon scales correctly with training parameters
-# ---------------------------------------------------------------------------
-
 class TestEpsilonScaling:
 
     def test_more_epochs_increases_epsilon(self):
@@ -293,10 +277,6 @@ class TestEpsilonScaling:
         """_DP_DELTA must be 1e-5 (standard value for medical data)."""
         assert _DP_DELTA == 1e-5
 
-
-# ---------------------------------------------------------------------------
-# 4. Graceful degradation
-# ---------------------------------------------------------------------------
 
 class TestGracefulDegradation:
 
@@ -350,10 +330,6 @@ class TestGracefulDegradation:
         except (TypeError, ValueError):
             pass  # A clear exception is acceptable
 
-
-# ---------------------------------------------------------------------------
-# 5. DLFlowerClient integration
-# ---------------------------------------------------------------------------
 
 class TestDLFlowerClientEpsilonPropagation:
 
@@ -451,10 +427,6 @@ class TestDLFlowerClientEpsilonPropagation:
         client = self._make_client()
         assert client.epsilon is None
 
-
-# ---------------------------------------------------------------------------
-# 6. Edge cases — adversarial Hub inputs
-# ---------------------------------------------------------------------------
 
 class TestAdversarialHubInputs:
 
@@ -615,10 +587,6 @@ class TestAdversarialHubInputs:
         assert _safe_dp_float(2.5, 1.0) == 2.5
         assert _safe_dp_float(0.0, 1.0) == 0.0
 
-
-# ---------------------------------------------------------------------------
-# 7. New security tests — Hub config isolation and epsilon sentinel
-# ---------------------------------------------------------------------------
 
 class TestHubConfigIsolation:
 
@@ -825,10 +793,6 @@ class TestHubConfigIsolation:
         epsilon = result[5]
         assert isinstance(epsilon, float)
 
-
-# ---------------------------------------------------------------------------
-# 8. Additional correctness and safety tests (found by 3rd committee review)
-# ---------------------------------------------------------------------------
 
 class TestAdditionalSafetyTests:
 

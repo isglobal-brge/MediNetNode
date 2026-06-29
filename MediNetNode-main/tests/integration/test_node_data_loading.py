@@ -10,10 +10,6 @@ import torch
 import torch.utils.data
 
 
-# ---------------------------------------------------------------------------
-# DL DataLoader tests
-# ---------------------------------------------------------------------------
-
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestDLDataLoading:
     """Tests for create_train_val_loaders()."""
@@ -105,10 +101,6 @@ class TestDLDataLoading:
             torch.float32, torch.float64, torch.int32, torch.int64, torch.long
         ), f"Expected numeric tensor for targets, got {targets.dtype}"
 
-
-# ---------------------------------------------------------------------------
-# ML NumPy array tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestMLDataLoading:

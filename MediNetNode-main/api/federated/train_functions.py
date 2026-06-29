@@ -201,7 +201,6 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
     try:
         loss_function = config.get("model", {}).get("training", {}).get("loss_function", "bce_with_logits")
 
-        # Mappejar noms de loss functions
         loss_mapping = {
             "bce_with_logits": "BCEWithLogitsLoss",
             "bce":             "BCEWithLogitsLoss",
@@ -350,7 +349,6 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
         noise_generator=torch.Generator().manual_seed(_noise_seed))
     net.train()
 
-    # Variables per calcular mètriques finals
     all_predictions = []
     all_targets = []
     total_loss = 0.0
@@ -420,8 +418,7 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
         if verbose:
             print(f"Epoch {epoch + 1}: train loss {round(epoch_loss, 3)}, accuracy {round(epoch_acc, 3)}")
     
-    # Calcular precision, recall i F1 de la darrera època
-    # Only meaningful for classification (binary / multiclass).
+    # Final precision/recall/F1 are only meaningful for classification (binary / multiclass).
     try:
         all_predictions = np.array(all_predictions)
         all_targets = np.array(all_targets)

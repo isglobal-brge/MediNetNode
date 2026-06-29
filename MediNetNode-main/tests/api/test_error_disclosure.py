@@ -47,7 +47,6 @@ class TestErrorInformationDisclosure:
         """Test that 500 errors return generic message in production."""
         client = Client()
 
-        # Trigger an error by sending invalid JSON
         response = client.post(
             '/api/v2/start-client',
             data='invalid-json',
@@ -56,11 +55,9 @@ class TestErrorInformationDisclosure:
             REMOTE_ADDR='127.0.0.1'
         )
 
-        # Should return generic error without details
         assert response.status_code in [400, 500]
         response_data = response.json()
 
-        # Check that error message is generic
         assert 'error' in response_data
         error_message = response_data['error'].lower()
 
@@ -96,7 +93,6 @@ class TestErrorInformationDisclosure:
         # Response may be HTML or JSON depending on endpoint
         response_text = response.content.decode('utf-8').lower()
 
-        # Should NOT reveal internal paths or sensitive information
         sensitive_terms = [
             'traceback',
             '/usr/',
@@ -124,7 +120,6 @@ class TestErrorInformationDisclosure:
         assert response.status_code == 403
         response_data = response.json()
 
-        # Should have error message
         assert 'error' in response_data
 
         # Should NOT contain file paths or internal details
@@ -150,7 +145,6 @@ class TestErrorInformationDisclosure:
         assert response.status_code == 400
         response_data = response.json()
 
-        # Should have error message
         assert 'error' in response_data
 
         # Message should be user-friendly, not technical
@@ -216,7 +210,6 @@ class TestErrorInformationDisclosure:
                     REMOTE_ADDR='127.0.0.1'
                 )
 
-            # Check response doesn't contain stack trace indicators
             response_text = response.content.decode('utf-8').lower()
             stack_trace_indicators = [
                 'traceback',
@@ -304,7 +297,6 @@ class TestErrorInformationDisclosure:
 
         response_text = response.content.decode('utf-8')
 
-        # Should not contain file system paths
         path_indicators = [
             '/usr/',
             '/home/',

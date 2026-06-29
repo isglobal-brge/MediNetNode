@@ -29,7 +29,6 @@ class TestDeployedModel:
             role=admin_role
         )
 
-        # Create fake ONNX file
         fake_onnx = SimpleUploadedFile(
             "test_model.onnx",
             b"fake onnx content for testing",
@@ -89,18 +88,15 @@ class TestDeployedModel:
             uploaded_by=admin_user
         )
 
-        # Test approval
         assert model.status == "pending"
         model.approve(admin_user)
         assert model.status == "approved"
         assert model.approved_by == admin_user
         assert model.approved_at is not None
 
-        # Test deprecation
         model.deprecate()
         assert model.status == "deprecated"
 
-        # Test rejection
         model.status = "pending"
         model.save()
         model.reject(admin_user, reason="Test rejection")
@@ -159,7 +155,6 @@ class TestDeployedModelManager:
             role=admin_role
         )
 
-        # Create models in different domains
         for domain in ['cardiology', 'neurology', 'oncology']:
             fake_onnx = SimpleUploadedFile(
                 f"{domain}_model.onnx",

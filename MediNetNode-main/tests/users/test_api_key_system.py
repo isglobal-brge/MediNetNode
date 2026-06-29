@@ -13,13 +13,10 @@ class APIKeyModelTests(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        # Create RESEARCHER role
         self.researcher_role = Role.objects.get(name='RESEARCHER')
-        
-        # Create ADMIN role for negative testing
+        # ADMIN role used for negative testing
         self.admin_role = Role.objects.get(name='ADMIN')
-        
-        # Create users
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_test',
             email='researcher@test.com',
@@ -136,8 +133,7 @@ class APIKeyModelTests(TestCase):
         # Update usage
         test_ip = '192.168.1.100'
         api_key.update_last_used(test_ip)
-        
-        # Reload from database
+
         api_key.refresh_from_db()
         self.assertIsNotNone(api_key.last_used_at)
         self.assertEqual(api_key.last_used_ip, test_ip)
@@ -224,7 +220,6 @@ class APIRequestModelTests(TestCase):
     
     def test_api_request_indexing(self):
         """Test that database indexes work for efficient queries."""
-        # Create multiple requests for testing
         for i in range(5):
             APIRequest.objects.create(
                 api_key=self.api_key,
@@ -324,8 +319,7 @@ class APIKeySecurityTests(TestCase):
             name='Cascade Test Key',
             ip_whitelist=['192.168.1.100']
         )
-        
-        # Create request log
+
         APIRequest.objects.create(
             api_key=api_key,
             user=self.researcher_user,
@@ -335,7 +329,7 @@ class APIKeySecurityTests(TestCase):
             status_code=200,
             is_successful=True
         )
-        
+
         key_id = api_key.id
         user_id = self.researcher_user.id
         

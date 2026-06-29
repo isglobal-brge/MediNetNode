@@ -58,36 +58,30 @@ class Command(BaseCommand):
         expires_days = options['expires_days']
 
         try:
-            # Get user
             user = User.objects.get(username=username)
-            
-            # Validate user has RESEARCHER role
+
             if not user.role or user.role.name != 'RESEARCHER':
                 raise CommandError(
                     f'User {username} does not have RESEARCHER role. '
                     f'Current role: {user.role.name if user.role else "None"}'
                 )
 
-            # Set expiration if specified
             expires_at = None
             if expires_days:
                 expires_at = timezone.now() + timedelta(days=expires_days)
 
-            # Generate raw API key first
             raw_key = APIKey.generate_api_key()
 
-            # Create API key object and hash it
             api_key = APIKey(
                 user=user,
                 name=key_name,
                 ip_whitelist=ip_list,
                 expires_at=expires_at
             )
-            # Set the key (this will hash it internally)
             api_key.set_key(raw_key)
             api_key.save()
 
-            # Output results - show raw key ONLY THIS ONE TIME
+            # Show raw key ONLY THIS ONE TIME — it is stored hashed and cannot be retrieved later
             self.stdout.write(
                 self.style.SUCCESS(
                     f'\nSuccessfully created API key for {username}'

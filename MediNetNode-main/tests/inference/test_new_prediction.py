@@ -156,7 +156,6 @@ class TestNewPredictionView:
 
     def test_new_prediction_view_excludes_own_from_public(self, client, member_user, approved_model):
         """Test that user's own models are excluded from public section."""
-        # Make the model public
         approved_model.is_public = True
         approved_model.save()
 

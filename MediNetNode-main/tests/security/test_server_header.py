@@ -62,7 +62,6 @@ class TestServerHeaderRemoval:
 
         response = client.get('/users/')
 
-        # Server header should not be present
         assert 'Server' not in response, "Server header should be removed to prevent version disclosure"
 
     def test_server_header_removed_from_api_endpoints(self, api_key):
@@ -75,7 +74,6 @@ class TestServerHeaderRemoval:
             REMOTE_ADDR='127.0.0.1'
         )
 
-        # Server header should not be present
         assert 'Server' not in response, "Server header should be removed from API responses"
 
     def test_server_header_removed_from_error_pages(self):

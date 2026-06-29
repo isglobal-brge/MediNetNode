@@ -59,13 +59,11 @@ class SQLInjectionProtectionTests(TransactionTestCase):
         if os.path.exists(self.test_file_path):
             os.unlink(self.test_file_path)
 
-        # Clean up uploaded datasets
         Dataset.objects.using('datasets_db').all().delete()
         DatasetMetadata.objects.using('datasets_db').all().delete()
 
     def test_blocks_sql_injection_in_dataset_name(self):
         """Test that SQL injection in dataset name is neutralized."""
-        # Attempt SQL injection via dataset name
         malicious_name = "test'; DROP TABLE dataset_dataset; --"
 
         dataset, info = self.uploader.upload_dataset(
@@ -76,15 +74,13 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Dataset should be created safely
         assert dataset is not None
         assert dataset.name == malicious_name  # Name stored as-is (safe with parameterized queries)
 
-        # Verify table still exists
         with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
             count = cursor.fetchone()[0]
-            assert count > 0  # Table exists and has records
+            assert count > 0
 
     def test_blocks_sql_injection_in_description(self):
         """Test that SQL injection in description is neutralized."""
@@ -98,7 +94,6 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Dataset should be created safely
         assert dataset is not None
         assert dataset.description == malicious_description
 
@@ -129,17 +124,14 @@ class SQLInjectionProtectionTests(TransactionTestCase):
                 data_type="tabular"
             )
 
-            # Dataset should be created safely
             assert dataset is not None
 
-            # Verify table still exists
             with connections['datasets_db'].cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
                 count = cursor.fetchone()[0]
                 assert count > 0
 
         finally:
-            # Cleanup
             if os.path.exists(malicious_file):
                 os.unlink(malicious_file)
             if os.path.exists(malicious_dir):
@@ -158,12 +150,10 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Dataset should be created safely
         assert dataset is not None
         assert dataset.name == name_with_quotes
         assert dataset.description == desc_with_quotes
 
-        # Reload from database to verify persistence
         reloaded = Dataset.objects.using('datasets_db').get(id=dataset.id)
         assert reloaded.name == name_with_quotes
         assert reloaded.description == desc_with_quotes
@@ -180,10 +170,8 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Dataset should be created safely
         assert dataset is not None
 
-        # Verify table still exists
         datasets_count = Dataset.objects.using('datasets_db').count()
         assert datasets_count >= 1
 
@@ -197,7 +185,6 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Verify metadata table still exists
         with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_datasetmetadata")
             count = cursor.fetchone()[0]
@@ -215,10 +202,8 @@ class SQLInjectionProtectionTests(TransactionTestCase):
             data_type="tabular"
         )
 
-        # Dataset should be created safely
         assert dataset is not None
 
-        # Verify only expected number of datasets exist
         datasets_count = Dataset.objects.using('datasets_db').count()
         assert datasets_count >= 1
 
@@ -241,11 +226,9 @@ class SQLInjectionProtectionTests(TransactionTestCase):
                 data_type="tabular"
             )
 
-            # Each dataset should be created safely
             assert dataset is not None
             assert dataset.name == name
 
-            # Clean up
             dataset.delete()
 
     def test_database_integrity_after_injection_attempts(self):
@@ -267,14 +250,12 @@ class SQLInjectionProtectionTests(TransactionTestCase):
                     medical_domain="general",
                     data_type="tabular"
                 )
-                # Clean up
                 if dataset:
                     dataset.delete()
             except Exception as e:
                 # Some attempts might fail for other reasons
                 pass
 
-        # Verify table structure is intact
         with connections['datasets_db'].cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM dataset_dataset")
             final_count = cursor.fetchone()[0]

@@ -58,18 +58,15 @@ class TestPredictionAudit:
             role=researcher_role
         )
 
-        # Create API key for researcher
         api_key = APIKey.objects.create(
             user=researcher_user,
             name="Test API Key",
             ip_whitelist=["0.0.0.0/0"]
         )
 
-        # Compute input hash
         input_data = "test input data"
         input_hash = PredictionAudit.compute_input_hash(input_data)
 
-        # Create audit entry
         audit = PredictionAudit.objects.create(
             user=researcher_user,
             api_key=api_key,
@@ -98,12 +95,10 @@ class TestPredictionAudit:
 
     def test_compute_input_hash(self):
         """Test input hash computation."""
-        # Test with string
         hash1 = PredictionAudit.compute_input_hash("test data")
         assert len(hash1) == 64  # SHA256 produces 64 hex chars
         assert hash1 == PredictionAudit.compute_input_hash("test data")  # Consistent
 
-        # Test with bytes
         hash2 = PredictionAudit.compute_input_hash(b"test data")
         assert hash1 == hash2  # Same result for string and bytes
 
@@ -138,11 +133,9 @@ class TestPredictionAudit:
         assert audit.suspicious_score == 0.0
         assert audit.patterns_detected == []
 
-        # Mark as suspicious with patterns
         patterns = ['rapid_fire', 'exhaustive_search']
         audit.mark_suspicious(patterns)
 
-        # Reload from database
         audit.refresh_from_db()
 
         assert audit.patterns_detected == patterns
@@ -266,7 +259,6 @@ class TestPredictionAudit:
                 timestamp=base + timedelta(seconds=i)
             )
 
-        # Get all audits
         audits = PredictionAudit.objects.filter(user=researcher_user)
 
         # Should be ordered by timestamp descending (newest first)
@@ -283,7 +275,6 @@ class TestPredictionAudit:
             role=researcher_role
         )
 
-        # Create temporary model
         fake_onnx = SimpleUploadedFile(
             "temp_model.onnx",
             b"temp onnx",
@@ -303,7 +294,6 @@ class TestPredictionAudit:
             is_public=True
         )
 
-        # Create audit entry
         audit = PredictionAudit.objects.create(
             user=researcher_user,
             ip_address="192.168.1.106",
@@ -318,13 +308,10 @@ class TestPredictionAudit:
             success=True
         )
 
-        # Verify model reference exists
         assert audit.model == temp_model
 
-        # Delete the model
         temp_model.delete()
 
-        # Reload audit entry
         audit.refresh_from_db()
 
         # Model reference should be null, but snapshots persist

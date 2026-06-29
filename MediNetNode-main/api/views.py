@@ -21,7 +21,7 @@ from medinet.error_handlers import SafeErrorResponse
 
 logger = logging.getLogger(__name__)
 
-CLIENT_VERSION = "0.1" # Version of the client API, used for versioning and compatibility checks
+CLIENT_VERSION = "0.1"
 
 MAX_CONCURRENT_TRAINING_SESSIONS = 3
 
@@ -99,14 +99,12 @@ def validate_training_config(data, request_body_size):
     """
     from jsonschema import validate, ValidationError
 
-    # Size limit check
     if request_body_size > MAX_JSON_SIZE:
         logger.warning(f"Training config exceeds size limit: {request_body_size} bytes")
         return JsonResponse({
             'error': 'Configuration too large'
         }, status=400)
 
-    # Schema validation
     try:
         validate(instance=data, schema=TRAINING_CONFIG_SCHEMA)
     except ValidationError as e:
@@ -145,7 +143,6 @@ def validate_training_config(data, request_body_size):
 def api_view_required(view_func):
     """Decorator to ensure API authentication middleware has run."""
     def wrapper(request, *args, **kwargs):
-        # Check if API authentication middleware has run
         if not hasattr(request, 'api_key') or not hasattr(request, 'api_user'):
             return JsonResponse(
                 {'error': 'API authentication required'},
@@ -196,8 +193,7 @@ def get_data_info(request):
     try:
         user = request.api_user
         logger.info(f"get_data_info request from user {user.username}")
-        
-        # Get datasets accessible to this user
+
         accessible_datasets = get_user_datasets(user)
         
         if not accessible_datasets:
@@ -206,7 +202,6 @@ def get_data_info(request):
                 'error': 'No datasets available for this user'
             }, status=403)
         
-        # Format data to match client_api.py structure (include privacy budget per researcher)
         data_dict = format_datasets_for_client(accessible_datasets, researcher_user=user)
         logger.info(f"Returning {len(accessible_datasets)} datasets to user {user.username}")
         return JsonResponse(data_dict)
@@ -227,7 +222,6 @@ def start_client(request):
     """
     try:
         user = request.api_user
-        # Parse JSON request body
         try:
             data = json.loads(request.body.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -254,12 +248,10 @@ def start_client(request):
                 status=429,
             )
 
-        # Validate training configuration
         validation_error = validate_training_config(data, len(request.body))
         if validation_error is not None:
             return validation_error
-        
-        # Extract and validate required parameters
+
         model_json = data.get("model_json")
         server_address = data.get("server_address", "localhost:8080")
         client_id = data.get("client_id")
@@ -279,20 +271,18 @@ def start_client(request):
                 'error': 'CA certificate (ca_cert) required for secure connection'
             }, status=400)
 
-        # Comprehensive security validation
         validation_result = validate_training_permissions(user, model_json)
         if validation_result is not None:
             return validation_result
-        
+
         # Log training initiation for audit
         logger.info(f"Training initiated by user {user.username}, client_id: {client_id}")
-        
+
         # Create training session BEFORE starting client (ensures it exists)
         import psutil
-        
+
         try:
-            # Extract dataset info from model_json 
-            # revisar hauria d'agafar el dataset no de model json 
+            # revisar hauria d'agafar el dataset no de model json
             dataset_config = model_json.get('model', {}).get('dataset', {})
             selected_datasets = dataset_config.get('selected_datasets', [])
             dataset_id = None
@@ -302,11 +292,9 @@ def start_client(request):
                 first_dataset = selected_datasets[0]
                 dataset_id = first_dataset.get('dataset_id')
                 dataset_name = first_dataset.get('dataset_name', 'unknown')
-            
-            # Get current process for tracking
+
             current_process = psutil.Process()
-            
-            # Create training session
+
             training_session = TrainingSession(
                 client_id=client_id or f"client_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 user=user,
@@ -327,18 +315,15 @@ def start_client(request):
         
         # Save training request JSON to documentation folder for ML testing
         try:
-            # Create training_requests subdirectory if it doesn't exist
             doc_base = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'documentacion')
             training_requests_dir = os.path.join(doc_base, 'training_requests')
             os.makedirs(training_requests_dir, exist_ok=True)
 
-            # Create filename with timestamp and session_id
             timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             session_short = str(training_session.session_id)[:8]
             filename = f'training_request_{timestamp_str}_{session_short}.json'
             doc_file = os.path.join(training_requests_dir, filename)
 
-            # Prepare comprehensive debug data for ML testing
             debug_data = {
                 "client_id": client_id,
                 "server_address": server_address,
@@ -351,7 +336,6 @@ def start_client(request):
                 "model_config": model_json
             }
 
-            # Save to documentation folder
             with open(doc_file, 'w', encoding='utf-8') as f:
                 json.dump(debug_data, f, indent=2, ensure_ascii=False)
 
@@ -485,34 +469,29 @@ def validate_training_permissions(user, model_json):
     Returns:
         JsonResponse: Error response if validation fails, None if validation passes
     """
-    # 1. Validate general training permission
     if not user.has_permission('dataset.train'):
         logger.warning(f"User {user.username} lacks general training permission")
         return JsonResponse({
             'error': 'User does not have training permissions'
         }, status=403)
-    
-    # 2. Extract dataset ID from model configuration
+
     dataset_id = extract_dataset_id_from_model(model_json)
-    
+
     if dataset_id is None:
         logger.warning(f"No dataset ID found in model configuration for user {user.username}")
         return JsonResponse({
             'error': 'No valid dataset ID found in model configuration'
         }, status=400)
     
-    # 3. Validate access to the specific dataset
     try:
         from dataset.models import DatasetAccess
 
-        # Check if user has access to this specific dataset
         try:
             access = DatasetAccess.objects.using('datasets_db').get(
                 user_id=user.id,
                 dataset_id=dataset_id
             )
 
-            # Check if user has training permission for this dataset
             if not access.can_train:
                 logger.warning(
                     f"User {user.username} lacks training permission for dataset {dataset_id}"
@@ -521,7 +500,6 @@ def validate_training_permissions(user, model_json):
                     'error': f'Training permission denied for dataset {dataset_id}'
                 }, status=403)
 
-            # Check if the dataset is ACTIVE (is_active=True)
             if not access.dataset.is_active:
                 logger.warning(
                     f"Dataset {dataset_id} is paused/inactive - training not allowed for user {user.username}"
@@ -654,7 +632,6 @@ def get_user_datasets(user):
         list: List of Dataset objects accessible to the user (only active datasets)
     """
     try:
-        # Get dataset access records for this user
         # Using user_id since we have cross-database relationships
         dataset_accesses = DatasetAccess.objects.using('datasets_db').filter(
             user_id=user.id,
@@ -663,11 +640,9 @@ def get_user_datasets(user):
         if not dataset_accesses.exists():
             return []
 
-        # Get the actual datasets - use the dataset relationship
-        # Only include datasets that are ACTIVE (is_active=True)
         datasets = []
         for access in dataset_accesses:
-            if access.can_view_metadata and access.dataset.is_active:  # Check permission and active status
+            if access.can_view_metadata and access.dataset.is_active:
                 datasets.append(access.dataset)
 
         return list(datasets)
@@ -718,7 +693,6 @@ def format_datasets_for_client(datasets, researcher_user=None):
         data_dict['num_columns'].append(dataset.columns_count or 0)
         data_dict['created_at'].append(dataset.uploaded_at.isoformat() if dataset.uploaded_at else '')
 
-        # Metadata
         metadata_info = {}
         try:
             if hasattr(dataset, 'metadata') and dataset.metadata:
@@ -735,7 +709,6 @@ def format_datasets_for_client(datasets, researcher_user=None):
             logger.error(f"Error retrieving metadata for dataset {dataset.id}: {str(e)}")
         data_dict['metadata'].append(metadata_info)
 
-        # ── Privacy budget ──────────────────────────────────────────────
         # Dataset-level policy (set by Node admin)
         privacy_info = None
         try:
@@ -795,7 +768,6 @@ def cancel_training(request, session_id):
     user = request.api_user
     logger.info(f"Cancel training request from user {user.username} for session {session_id}")
 
-    # Get training session
     session = TrainingSession.objects.filter(session_id=session_id).first()
 
     if not session:
@@ -803,21 +775,18 @@ def cancel_training(request, session_id):
             'error': 'Training session not found'
         }, status=404)
 
-    # Verify user owns this session
     if session.user_id != user.id:
         logger.warning(f"User {user.username} attempted to cancel session {session_id} owned by user {session.user_id}")
         return JsonResponse({
             'error': 'Not authorized to cancel this training session'
         }, status=403)
 
-    # Check if session is cancellable
     if session.status in ['COMPLETED', 'FAILED', 'CANCELLED']:
         return JsonResponse({
             'error': f'Training session already {session.status.lower()}',
             'status': session.status
         }, status=400)
 
-    # Kill the process if it exists
     process_killed = False
     if session.process_id:
         if psutil.pid_exists(session.process_id):
@@ -829,7 +798,6 @@ def cancel_training(request, session_id):
         else:
             logger.warning(f"Process {session.process_id} no longer exists for session {session_id}")
 
-    # Update session status
     session.status = 'CANCELLED'
     session.error_message = f"Training cancelled by user {user.username}"
     session.save(update_fields=['status', 'error_message'])
@@ -843,10 +811,6 @@ def cancel_training(request, session_id):
         'process_killed': process_killed
     }, status=200)
 
-
-# ---------------------------------------------------------------------------
-# Budget visibility endpoints
-# ---------------------------------------------------------------------------
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -1085,7 +1049,6 @@ def min_noise_multiplier(request):
                 status=400,
             )
 
-        # Resolve dataset and privacy policy
         try:
             dataset = Dataset.objects.select_related("privacy_policy").get(
                 name=dataset_name

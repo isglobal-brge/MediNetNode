@@ -23,10 +23,6 @@ from dataset.models import Dataset, DatasetAccess, DatasetPrivacyPolicy
 from trainings.models import TrainingSession, TrainingRound
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
 def _make_dataset(name="api_test_ds", patient_count=1000, **kwargs) -> Dataset:
     """Create a Dataset bypassing file-hashing in Dataset.save()."""
     defaults = dict(
@@ -112,10 +108,6 @@ def _model_json(dataset_id, noise_multiplier=1.5, epochs=3, batch_size=32):
         'train': {'batch_size': batch_size, 'epochs': epochs},
     }
 
-
-# ---------------------------------------------------------------------------
-# Section 1: estimate_job_epsilon
-# ---------------------------------------------------------------------------
 
 class TestEstimateJobEpsilon(TestCase):
     """Pure-function tests for estimate_job_epsilon with mocked opacus."""
@@ -421,10 +413,6 @@ class TestEstimateJobEpsilonAdversarial(TestCase):
         self.assertFalse(math.isnan(result))
 
 
-# ---------------------------------------------------------------------------
-# Section 2: validate_training_permissions — step 5 integration
-# ---------------------------------------------------------------------------
-
 class TestValidatePermissionsPrivacyStep(TestCase):
     """Integration tests for privacy budget check (step 5) in validate_training_permissions."""
 
@@ -458,10 +446,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         from api.views import validate_training_permissions
         return validate_training_permissions(self.user, model_json)
 
-    # ------------------------------------------------------------------
-    # No policy configured → fail-closed (CHANGED: was fail-open)
-    # ------------------------------------------------------------------
-
     def test_no_policy_blocks_training(self):
         """No DatasetPrivacyPolicy → 403 (fail-closed). Datasets require a policy."""
         mj = _model_json(self.dataset.id)
@@ -471,10 +455,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         import json
         body = json.loads(result.content)
         self.assertIn('privacy policy', body['error'].lower())
-
-    # ------------------------------------------------------------------
-    # Policy allows job
-    # ------------------------------------------------------------------
 
     def test_budget_available_allows_training(self):
         """Valid estimate within the researcher quota → None (training allowed).
@@ -491,10 +471,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
             result = self._call(mj)
         self.assertIsNone(result)
 
-    # ------------------------------------------------------------------
-    # Policy rejects job — per-job cap
-    # ------------------------------------------------------------------
-
     def test_per_job_cap_exceeded_returns_403(self):
         """Estimated ε > max_epsilon_per_job → 403 with descriptive error."""
         policy = _make_policy(
@@ -510,10 +486,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         import json
         body = json.loads(result.content)
         self.assertIn('error', body)
-
-    # ------------------------------------------------------------------
-    # Policy rejects job — lifetime budget exhausted
-    # ------------------------------------------------------------------
 
     def test_researcher_budget_exhausted_returns_403(self):
         """RESEARCHER quota exhausted → 403. The per-researcher budget is the
@@ -609,10 +581,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
             allowed = self._call(mj)
         self.assertIsNone(allowed)
 
-    # ------------------------------------------------------------------
-    # Inf epsilon from estimation → can_accept_job rejects
-    # ------------------------------------------------------------------
-
     def test_inf_epsilon_rejected_by_policy(self):
         """estimate_job_epsilon returning inf is rejected by can_accept_job."""
         _make_policy(self.dataset, sensitivity='low')
@@ -649,10 +617,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 403)
 
-    # ------------------------------------------------------------------
-    # DP exception → fail open
-    # ------------------------------------------------------------------
-
     def test_system_exception_returns_503(self):
         """Unexpected exception in budget check → 503 (fail-closed, not fail-open)."""
         _make_policy(self.dataset, sensitivity='medium')
@@ -672,10 +636,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
             result = self._call(mj)
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 503)
-
-    # ------------------------------------------------------------------
-    # Zero patient_count → dataset_size=0 → inf epsilon → rejected
-    # ------------------------------------------------------------------
 
     def test_zero_patient_count_gives_inf_epsilon_rejected(self):
         """dataset.patient_count=0 → size=0 → estimate_job_epsilon returns inf → rejected."""
@@ -699,10 +659,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         result = self._call(mj)
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 403)
-
-    # ------------------------------------------------------------------
-    # Corrupted policy values → can_accept_job rejects
-    # ------------------------------------------------------------------
 
     def test_corrupted_researcher_limit_returns_403(self):
         """Corrupt per-job limit on the enforcement budget → fail-closed 403.
@@ -730,10 +686,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         import json
         body = json.loads(result.content)
         self.assertIn('error', body)
-
-    # ------------------------------------------------------------------
-    # pre-step 5 failures still work
-    # ------------------------------------------------------------------
 
     def test_no_training_permission_rejected_before_dp(self):
         """User lacking dataset.train → 403 at step 1, before DP check."""
@@ -778,10 +730,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.status_code, 403)
 
-    # ------------------------------------------------------------------
-    # 403 response body content
-    # ------------------------------------------------------------------
-
     def test_403_response_includes_descriptive_error(self):
         """Budget rejection response body contains 'error' key with useful text."""
         policy = _make_policy(
@@ -797,10 +745,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
         self.assertIn('error', body)
         self.assertGreater(len(body['error']), 10)
 
-
-# ---------------------------------------------------------------------------
-# Section 3: _record_privacy_spend — nominal paths
-# ---------------------------------------------------------------------------
 
 class TestRecordPrivacySpendNominal(TestCase):
     """Normal accounting flows for _record_privacy_spend."""
@@ -831,10 +775,6 @@ class TestRecordPrivacySpendNominal(TestCase):
         from api.federated.utils import _record_privacy_spend
         _record_privacy_spend(session)
 
-    # ------------------------------------------------------------------
-    # Normal recording
-    # ------------------------------------------------------------------
-
     def test_records_epsilon_from_last_round(self):
         """policy.spent_epsilon increases by the value in round metrics."""
         session = _make_session(self.user, self.dataset.id)
@@ -850,7 +790,7 @@ class TestRecordPrivacySpendNominal(TestCase):
         session = _make_session(self.user, self.dataset.id)
         _make_round(session, round_number=1, privacy_epsilon=0.3)
         _make_round(session, round_number=2, privacy_epsilon=0.5)
-        _make_round(session, round_number=3, privacy_epsilon=0.8)  # last
+        _make_round(session, round_number=3, privacy_epsilon=0.8)
 
         self._call(session)
 
@@ -879,10 +819,6 @@ class TestRecordPrivacySpendNominal(TestCase):
             self._call(session)
         except Exception as e:
             self.fail(f"_record_privacy_spend raised unexpectedly: {e}")
-
-    # ------------------------------------------------------------------
-    # No-op cases (silently skipped)
-    # ------------------------------------------------------------------
 
     def test_no_dataset_id_skips_silently(self):
         """Session with dataset_id=None → no-op, policy unchanged."""
@@ -942,10 +878,6 @@ class TestRecordPrivacySpendNominal(TestCase):
             except Exception as e:
                 self.fail(f"_record_privacy_spend raised on exception: {e}")
 
-
-# ---------------------------------------------------------------------------
-# Section 4: _record_privacy_spend — adversarial metric values
-# ---------------------------------------------------------------------------
 
 class TestRecordPrivacySpendAdversarial(TestCase):
     """Adversarial privacy_epsilon values in round metrics must be silently skipped."""
@@ -1068,10 +1000,6 @@ class TestRecordPrivacySpendAdversarial(TestCase):
         self._assert_no_spend()
 
 
-# ---------------------------------------------------------------------------
-# Section 5: complete_training_session triggers _record_privacy_spend
-# ---------------------------------------------------------------------------
-
 class TestCompleteSessionTrigger(TestCase):
     """complete_training_session must call _record_privacy_spend on completion."""
 
@@ -1186,10 +1114,6 @@ class TestCompleteSessionTrigger(TestCase):
             mock_record.assert_called_once_with(session)
 
 
-# ---------------------------------------------------------------------------
-# Section 6: fail_training_session also records privacy spend (Fix 1)
-# ---------------------------------------------------------------------------
-
 class TestFailSessionRecordsSpend(TestCase):
     """fail_training_session must record any epsilon consumed before the crash."""
 
@@ -1278,10 +1202,6 @@ class TestFailSessionRecordsSpend(TestCase):
         # mark_failed may or may not have run depending on exception propagation,
         # but the test at minimum verifies _record_privacy_spend was called.
 
-
-# ---------------------------------------------------------------------------
-# Section 7: batch size is Node-fixed, Hub cannot manipulate it (Fix 2)
-# ---------------------------------------------------------------------------
 
 class TestBatchSizeFixed(TestCase):
     """estimate_job_epsilon must use Node-fixed _TRAINING_BATCH_SIZE, not Hub value."""

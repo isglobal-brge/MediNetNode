@@ -19,10 +19,6 @@ import pytest
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _make_dataset_record(tmp_path, user_id, split_ratio=None):
     """Create a Dataset DB record with an optional experiment split already set."""
     from dataset.models import Dataset
@@ -55,10 +51,6 @@ def _make_dataset_record(tmp_path, user_id, split_ratio=None):
 
     return Dataset.objects.using("datasets_db").create(**kwargs)
 
-
-# ---------------------------------------------------------------------------
-# Uploader: split creation
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestUploaderSplitCreation:
@@ -123,10 +115,6 @@ class TestUploaderSplitCreation:
         assert exp_path is None
         assert exp_rows is None
 
-
-# ---------------------------------------------------------------------------
-# View: split_ratio validation
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestUploadViewSplitRatioValidation:
@@ -235,10 +223,6 @@ class TestUploadViewSplitRatioValidation:
         assert not body["success"]
 
 
-# ---------------------------------------------------------------------------
-# Budget skip: validate_training_permissions with use_experiment=True
-# ---------------------------------------------------------------------------
-
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestBudgetSkipForExperimentalJobs:
     """validate_training_permissions should return None (pass) when use_experiment=True."""
@@ -300,10 +284,6 @@ class TestBudgetSkipForExperimentalJobs:
         finally:
             dataset.delete()
 
-
-# ---------------------------------------------------------------------------
-# Data loader routing
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestDataLoaderExperimentRouting:

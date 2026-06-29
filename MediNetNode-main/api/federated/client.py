@@ -72,20 +72,17 @@ def client_fn(context: Context):
     elif TRAINING_SESSION:
         print(f"[LIST] Using existing training session: {TRAINING_SESSION.session_id} (Round {TRAINING_SESSION.current_round})")
     
-    # Extract only the model part from the full JSON structure
     print(f"MODEL_JSON KEYS: {MODEL_JSON.keys()}")
     print(f"MODEL_JSON TYPE: {MODEL_JSON['model']['metadata']['model_type']}")
     model_config = MODEL_JSON.get('model', MODEL_JSON)
     model_type = model_config['metadata']['model_type']
     partition_id = int(context.node_config.get("partition-id", 0))
 
-    # ==================== ML CLIENT INITIALIZATION ====================
     if model_type == 'ml':
         print(f"\n{'='*70}")
         print(f"INITIALIZING ML CLIENT (Machine Learning)")
         print(f"{'='*70}")
 
-        # Extract ML algorithm configuration
         training_config = model_config.get('training', {})
         ml_method = training_config.get('ml_method', 'fedsvm').lower()
 
@@ -101,7 +98,6 @@ def client_fn(context: Context):
             use_experiment=USE_EXPERIMENT,
         )
 
-        # Get algorithm class from registry
         print(f"\n[SEARCH] Loading algorithm '{ml_method}' from registry...")
         try:
             AlgorithmClass = get_algorithm(ml_method)
@@ -110,14 +106,12 @@ def client_fn(context: Context):
             print(f"[ERROR] {e}")
             raise
 
-        # Initialize algorithm instance with validation data
         print(f"\n[CONFIG] Initializing {ml_method} algorithm...")
         algorithm_instance = AlgorithmClass(X_train, y_train, MODEL_JSON, X_val, y_val)
         print(f"[OK] Algorithm initialized successfully")
         print(f"   Training samples: {len(X_train)}")
         print(f"   Validation samples: {len(X_val)}")
 
-        # Create ML Flower client
         print(f"\n[FLOWER] Creating MLFlowerClient...")
         flower_client = MLFlowerClient(
             algorithm_instance=algorithm_instance,
@@ -133,7 +127,6 @@ def client_fn(context: Context):
         print(f"[OK] MLFlowerClient created successfully")
         print(f"{'='*70}\n")
 
-    # ==================== DL CLIENT INITIALIZATION ====================
     else:
         print(f"\n{'='*70}")
         print(f"INITIALIZING DL CLIENT (Deep Learning)")
@@ -141,7 +134,6 @@ def client_fn(context: Context):
 
         net = DynamicModel(model_config).to(DEVICE)
 
-        # [SEARCH] DEBUG: Check model after creation
         print(f"DEBUG: Model created with {sum(p.numel() for p in net.parameters()) if net.parameters() else 0} parameters")
         print(f"DEBUG: Model state_dict keys: {list(net.state_dict().keys()) if hasattr(net, 'state_dict') else 'No state_dict'}")
         print(f"DEBUG: Net type: {type(net)}")
@@ -152,18 +144,15 @@ def client_fn(context: Context):
             MODEL_VALIDATED = True
         print("##################### MODEL VALIDATED #####################")
 
-        # Log data loading attempt
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Loading data for table: {TABLE_NAME}\n")
 
         trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=_TRAINING_BATCH_SIZE, use_experiment=USE_EXPERIMENT)
 
-        # Log data loading results
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Trainloader length: {len(trainloader) if trainloader else 'None'}\n")
             f.write(f"Valloader length: {len(valloader) if valloader else 'None'}\n")
 
-        # Create DL Flower client
         flower_client = DLFlowerClient(
             net=net,
             trainloader=trainloader,
@@ -181,7 +170,6 @@ def client_fn(context: Context):
         print(f"[OK] DLFlowerClient created successfully")
         print(f"{'='*70}\n")
 
-    # Set the client_id if available (common for both ML and DL)
     if ASSIGNED_CLIENT_ID:
         flower_client.set_client_id(ASSIGNED_CLIENT_ID)
         print(f"FlowerClient ID set to: {ASSIGNED_CLIENT_ID}")
@@ -203,12 +191,10 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     """
     global MODEL_JSON, MODEL_VALIDATED, TABLE_NAME, USE_EXPERIMENT, CLIENT_IP, ASSIGNED_CLIENT_ID, CURRENT_USER, TRAINING_SESSION
 
-    # Set the assigned client_id and user
     ASSIGNED_CLIENT_ID = client_id
     CURRENT_USER = user
     print(f"CLIENT_ID assigned globally: {ASSIGNED_CLIENT_ID}")
-    
-    #Get client IP automatically
+
     import socket
     try:
         # Connect to server to get local IP that will be used
@@ -219,11 +205,10 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         CLIENT_IP = "localhost"
     
     print(f"Client IP detected: {CLIENT_IP}")
-    
-    # Pass the complete model configuration, not just layers
+
     MODEL_JSON = model_json  # Full config instead of just layers
     MODEL_VALIDATED = False
-    
+
     # Access dataset from the correct path based on debug_received_from_server.json structure
     TABLE_NAME = int(model_json['model']['dataset']['selected_datasets'][0]['dataset_id'])
     USE_EXPERIMENT = bool(model_json.get('use_experiment', False))
@@ -247,8 +232,7 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     else:
         print("[WARNING] Warning: No session_id provided for training tracking")
         TRAINING_SESSION = None
-    
-    # Force write to file for debugging
+
     with open('client_debug.log', 'w', encoding='utf-8') as f:
         f.write(f"MODEL_JSON: {model_json}\n")
         f.write(f"TABLE_NAME: {TABLE_NAME}\n")
@@ -258,7 +242,6 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         f.write(f"USER: {user.username if user else 'None'}\n")
     
     try:
-        # Convert CA certificate to bytes for Flower SSL connection
         root_certificates = ca_cert.encode() if ca_cert else None
 
         if root_certificates:
@@ -276,7 +259,6 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         # If we reach here, training completed successfully
         complete_training_session(TRAINING_SESSION)
     except Exception as e:
-        # Training failed
         import traceback
         fail_training_session(TRAINING_SESSION, str(e), traceback.format_exc())
         raise

@@ -43,84 +43,71 @@ def researcher_info(request):
 @admin_required
 def admin_dashboard(request):
     """Dashboard principal de administración con estadísticas."""
-    
-    # Estadísticas básicas
+
     total_users = User.objects.count()
     active_users = User.objects.filter(is_active=True).count()
-    
-    # Usuarios por rol
+
     users_by_role = User.objects.values('role__name', 'role_id').annotate(
         count=Count('id')
     ).order_by('role__name')
-    
-    # Actividad reciente (últimas 24 horas)
+
     yesterday = timezone.now() - timedelta(days=1)
     recent_logins = User.objects.filter(
         last_login__gte=yesterday
     ).count()
-    
-    # Logs recientes
+
     recent_logs = AuditLog.objects.select_related('user').order_by('-timestamp')[:10]
-    
-    # Usuarios con sesión activa
+
     active_sessions = User.objects.filter(is_active_session=True).count()
-    
-    # Cuentas bloqueadas
+
     locked_accounts = User.objects.filter(
         account_locked_until__gt=timezone.now()
     ).count()
-    
+
     # User activity data for the last 30 days - REAL DATA ONLY
     activity_data = []
     today = timezone.now().date()
-    
-    # Get real activity data - no fake data generation
+
     for i in range(29, -1, -1):
         date = today - timedelta(days=i)
-        
-        # Count ONLY real logins from audit logs
+
         daily_activity = 0
         try:
-            # Get actual login activity from audit logs
             daily_activity = AuditLog.objects.filter(
                 timestamp__date=date,
                 action__in=['LOGIN_SUCCESS']  # Only successful logins
             ).values('user_id').distinct().count()
-            
+
             # If no audit activity, check last_login field (fallback only)
             if daily_activity == 0:
                 daily_activity = User.objects.filter(
                     last_login__date=date
                 ).count()
-                
+
         except Exception:
             # No fake data - if there's an exception, show 0
             daily_activity = 0
-        
-        # Count real registrations only
+
         daily_registrations = User.objects.filter(
             date_joined__date=date
         ).count()
-        
+
         activity_data.append({
             'date': date.strftime('%b %d'),
-            'logins': daily_activity,  # Real data only - 0 if no activity
+            'logins': daily_activity,
             'registrations': daily_registrations
         })
-    
+
     # Dataset metrics (import here to avoid circular imports)
     try:
         from dataset.models import Dataset
-        
-        # Total datasets
+
         total_datasets = Dataset.objects.using('datasets_db').filter(is_active=True).count()
-        
-        # Total size
+
         total_size_bytes = Dataset.objects.using('datasets_db').filter(is_active=True).aggregate(
             total_size=Sum('file_size')
         )['total_size'] or 0
-        
-        # Format file size
+
         def format_file_size(size_bytes):
             if size_bytes == 0:
                 return "0 B"
@@ -132,7 +119,7 @@ def admin_dashboard(request):
             return f"{s} {size_names[i]}"
         
         total_size_formatted = format_file_size(total_size_bytes)
-        
+
     except ImportError:
         # Dataset app not available
         total_datasets = 0
@@ -161,10 +148,8 @@ def user_list(request):
     
     form = UserSearchForm(request.GET)
     users = User.objects.select_related('role', 'created_by').all()
-    
-    # Apply filters
+
     if form.is_valid():
-        # Search query
         q = form.cleaned_data.get('q')
         if q:
             users = users.filter(
@@ -173,25 +158,21 @@ def user_list(request):
                 Q(first_name__icontains=q) |
                 Q(last_name__icontains=q)
             )
-        
-        # Role filter
+
         role = form.cleaned_data.get('role')
         if role:
             users = users.filter(role=role)
-        
-        # Active filter
+
         is_active = form.cleaned_data.get('is_active')
         if is_active == 'True':
             users = users.filter(is_active=True)
         elif is_active == 'False':
             users = users.filter(is_active=False)
-        
-        # Ordering
+
         ordering = form.cleaned_data.get('ordering')
         if ordering:
             users = users.order_by(ordering)
-    
-    # Pagination
+
     paginator = Paginator(users, 25)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -301,7 +282,6 @@ def download_user_info(request):
     except Exception:
         api_key = None
 
-    # Get system configuration for center info
     system_config = SystemConfiguration.get_instance()
     if system_config:
         api_access_config = system_config.get_api_access_config()
@@ -314,7 +294,6 @@ def download_user_info(request):
         center_name = "unknown"
         center_display = "MediNet Center"
 
-    # Create downloadable content
     download_content = {
         "user_credentials": {
             "username": user_data['username'],
@@ -345,11 +324,10 @@ def download_user_info(request):
             "example_curl": f"curl -H 'X-API-Key: {user_data['api_key']}' -H 'X-Client-IP: YOUR_IP' {base_url}/api/v2/ping"
         }
     }
-    
-    # Generate JSON response for download
+
     response = JsonResponse(download_content, json_dumps_params={'indent': 2})
     response['Content-Disposition'] = f'attachment; filename="user_{user_data["username"]}_credentials.json"'
-    
+
     # Clear session data after download (one-time use)
     del request.session['new_user_data']
     
@@ -361,14 +339,11 @@ def user_detail(request, user_id):
     """View user details."""
     
     user = get_object_or_404(User, id=user_id)
-    
-    # Logs de actividad del usuario (últimos 10)
+
     user_logs = AuditLog.objects.filter(user=user).order_by('-timestamp')[:10]
-    
-    # Historial de contraseñas
+
     password_history = PasswordHistory.objects.filter(user=user).order_by('-created_at')[:5]
-    
-    # API Keys information
+
     api_keys = user.api_keys.all() if hasattr(user, 'api_keys') else []
     
     context = {
@@ -402,13 +377,11 @@ def update_user(request, user_id):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Capture changes
                     old_role = user.role.name if user.role else None
                     old_active = user.is_active
-                    
+
                     updated_user = form.save()
-                    
-                    # Log changes
+
                     changes = {}
                     if old_role != (updated_user.role.name if updated_user.role else None):
                         changes['role_changed'] = {
@@ -463,7 +436,7 @@ def delete_user(request, user_id):
     try:
         with transaction.atomic():
             username = user.username
-            
+
             # Log deletion before deleting
             AuditLog.objects.create(
                 user=request.user,
@@ -560,22 +533,19 @@ def user_activity_logs(request, user_id):
     
     user = get_object_or_404(User, id=user_id)
     logs = AuditLog.objects.filter(user=user).order_by('-timestamp')
-    
-    # Filters
+
     action_filter = request.GET.get('action')
     if action_filter:
         logs = logs.filter(action=action_filter)
-    
+
     success_filter = request.GET.get('success')
     if success_filter:
         logs = logs.filter(success=success_filter == 'true')
-    
-    # Pagination
+
     paginator = Paginator(logs, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Available actions for filter
+
     available_actions = AuditLog.objects.filter(user=user).values_list(
         'action', flat=True
     ).distinct()
@@ -598,12 +568,11 @@ def system_audit_logs(request):
     """View all system audit logs - accessible to admins and auditors."""
     
     logs = AuditLog.objects.select_related('user').order_by('-timestamp')
-    
-    # Filters
+
     action_filter = request.GET.get('action')
     if action_filter:
         logs = logs.filter(action=action_filter)
-    
+
     user_filter = request.GET.get('user')
     if user_filter:
         # Try to filter by user ID first, then fall back to username
@@ -611,12 +580,11 @@ def system_audit_logs(request):
             logs = logs.filter(user_id=user_filter)
         else:
             logs = logs.filter(user__username__icontains=user_filter)
-    
+
     success_filter = request.GET.get('success')
     if success_filter:
         logs = logs.filter(success=success_filter == 'true')
-    
-    # Date range filter
+
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     if date_from:
@@ -631,13 +599,11 @@ def system_audit_logs(request):
             logs = logs.filter(timestamp__date__lte=to_date)
         except ValueError:
             pass
-    
-    # Pagination
+
     paginator = Paginator(logs, 100)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Available actions and users for filter
+
     available_actions = AuditLog.objects.values_list('action', flat=True).distinct().order_by('action')
     available_users = User.objects.filter(
         audit_logs__isnull=False

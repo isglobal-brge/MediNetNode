@@ -29,10 +29,6 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# SecurityHeadersMiddleware
-# ---------------------------------------------------------------------------
-
 class SecurityHeadersMiddleware:
     """
     Adds security headers to every response and generates a per-request CSP nonce.
@@ -83,10 +79,6 @@ class SecurityHeadersMiddleware:
 
         return response
 
-
-# ---------------------------------------------------------------------------
-# SessionTimeoutMiddleware
-# ---------------------------------------------------------------------------
 
 class SessionTimeoutMiddleware:
     """Auto-logout after idle timeout; updates last activity for authenticated users."""
@@ -198,10 +190,6 @@ class SessionTimeoutMiddleware:
         except Exception:
             pass
 
-
-# ---------------------------------------------------------------------------
-# APIAuthenticationMiddleware
-# ---------------------------------------------------------------------------
 
 class APIAuthenticationMiddleware:
     """Stateless API authentication using API keys and IP validation."""
@@ -330,10 +318,6 @@ class APIAuthenticationMiddleware:
         except Exception as e:
             logger.error(f"Failed to log API request: {e}")
 
-
-# ---------------------------------------------------------------------------
-# RateLimitMiddleware
-# ---------------------------------------------------------------------------
 
 _IP_RATE_LIMIT_MAX = 20
 _IP_RATE_LIMIT_WINDOW = 60  # seconds

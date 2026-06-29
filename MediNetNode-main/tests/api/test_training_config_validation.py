@@ -59,7 +59,6 @@ def test_dataset(db, researcher_user):
         uploaded_by_id=researcher_user.id
     )
 
-    # Grant access
     DatasetAccess.objects.using('datasets_db').create(
         dataset=dataset,
         user_id=researcher_user.id,

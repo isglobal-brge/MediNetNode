@@ -33,13 +33,11 @@ class SwaggerDocumentationTests(TestCase):
         # Parse YAML response (drf-yasg returns YAML by default)
         import yaml
         data = yaml.safe_load(response.content.decode('utf-8'))
-        
-        # Verify basic schema structure
+
         self.assertIn('swagger', data)
         self.assertIn('info', data)
         self.assertIn('paths', data)
-        
-        # Verify API info
+
         self.assertEqual(data['info']['title'], 'MediNet RESEARCHER API')
         self.assertEqual(data['info']['version'], 'v2')
         

@@ -80,10 +80,8 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
                 "is accessible and contains the required FedSVM implementation."
             )
 
-        # Extract FedSVM-specific configuration
         training_config = config.get('training', {})
 
-        # Try to get dataset characteristics from metadata
         model_config = config.get('model', config)
         metadata = model_config.get('metadata', {})
         target_info = metadata.get('target_info', {})
@@ -127,7 +125,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         self.client_eps = training_config.get('client_eps', 1e-4)
         self.device = training_config.get('device', 'cpu')
 
-        # Log if using automatic configuration
         if dataset_chars and not training_config.get('kernel_config'):
             print(f"[INFO] Auto-configured FedSVM from dataset characteristics:")
             print(f"   Dataset: {n_samples} samples, {n_features} features")
@@ -137,14 +134,12 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
             if is_imbalanced:
                 print(f"   [WARNING] Class imbalance detected: Consider class weighting")
 
-        # Show ML recommendations if available
         ml_recommendations = target_info.get('ml_recommendations', [])
         if ml_recommendations:
             print(f"\n[TIP] Dataset recommendations:")
             for rec in ml_recommendations:
                 print(f"   - {rec}")
 
-        # Validate kernel configuration
         valid_kernels = ['linear', 'rbf', 'poly']
         kernel_type = self.kernel_config.get('kernel', 'rbf')
 
@@ -160,7 +155,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         print(f"   Device: {self.device}")
         print(f"   Training samples: {len(X_train)}")
 
-        # Initialize FedSVM client
         # Note: client_no will be set by MLFlowerClient
         self.client = FedSVMClientOptMD(
             client_no=0,
@@ -200,7 +194,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         print(f"[FEDSVM] Parameters length: {len(parameters) if parameters else 0}")
         print(f"{'─'*60}")
 
-        # 1. Deserialize and receive support vectors from server
         print(f"[FEDSVM] Step 1: Checking for parameters from server...")
         if parameters and len(parameters) >= 2 and parameters[0].size > 0:
             print(f"[FEDSVM] Deserializing support vectors...")
@@ -208,7 +201,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
             num_received_svs = sum(len(svs) for svs in svs_clients)
             print(f"[RECV] Received {num_received_svs} support vectors from server")
 
-            # Update local SVM with received support vectors
             print(f"[FEDSVM] Updating local SVM with received SVs...")
             self.client.receive_svs(svs_clients, labels_clients)
             print(f"[FEDSVM] Local SVM updated successfully")
@@ -222,12 +214,10 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
 
         print(f"[FEDSVM] Generated {num_svs_to_send} perturbed support vectors")
 
-        # 3. Serialize support vectors for transmission
         print(f"[FEDSVM] Step 3: Serializing support vectors for transmission...")
         parameters_out = self._serialize_svs(svs_delta, labels)
         print(f"[FEDSVM] Serialization complete, returning {len(parameters_out)} arrays")
 
-        # 4. Compute metrics on VALIDATION data (if available)
         print(f"[FEDSVM] Step 4: Computing metrics...")
         if self.X_val is not None and self.y_val is not None:
             # Use validation data for metrics (correct approach)
@@ -237,7 +227,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
             print(f"[FEDSVM] Validation metrics - Acc: {metrics['accuracy']:.4f} | "
                   f"Loss: {metrics['loss']:.4f} | F1: {metrics['f1']:.4f}")
         else:
-            # Fallback: no validation data, return basic info
             print(f"[FEDSVM] No validation data available, returning basic info")
             metrics = {
                 'loss': 0.0,
@@ -247,7 +236,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
                 'f1': 0.0
             }
 
-        # Add algorithm-specific info to metrics
         metrics.update({
             'n_support_vectors': len(self.client.svs) if self.client.svs is not None else 0,
             'n_svs_sent': num_svs_to_send,
@@ -275,15 +263,12 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         Returns:
             Tuple of (loss, accuracy)
         """
-        # Receive support vectors if provided
         if parameters and len(parameters) >= 2 and parameters[0].size > 0:
             svs_clients, labels_clients = self._deserialize_svs(parameters)
             self.client.receive_svs(svs_clients, labels_clients)
 
-        # Predict on validation data
         y_pred = self.client.predict(X_val, rff=None)
 
-        # Compute comprehensive metrics
         metrics = self._compute_metrics(y_val, y_pred)
 
         # Return loss and accuracy (Flower interface requirement)
@@ -331,8 +316,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         """
         return self.client.predict(X, rff=None)
 
-    # ==================== Helper Methods ====================
-
     def _serialize_svs(self, svs_deltas: List[Tuple[str, torch.Tensor]],
                        labels: np.ndarray) -> List[np.ndarray]:
         """
@@ -351,12 +334,10 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         if not svs_deltas:
             return [np.array([]), np.array([]), np.array([])]
 
-        # Extract tensors, SHAs and convert to numpy
         svs_list = []
         shas_list = []
 
         for sha_key, sv_tensor in svs_deltas:
-            # Convert tensor to numpy
             if torch.is_tensor(sv_tensor):
                 sv_numpy = sv_tensor.cpu().numpy()
             else:
@@ -366,7 +347,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
             # Convert SHA string to numeric hash for serialization
             shas_list.append(hash(sha_key) % (2**31))
 
-        # Stack into arrays
         svs_array = np.stack(svs_list, axis=0).astype(np.float32) if svs_list else np.array([])
         labels_array = np.array(labels, dtype=np.float32) if len(labels) > 0 else np.array([])
         shas_array = np.array(shas_list, dtype=np.float32) if shas_list else np.array([])
@@ -391,7 +371,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         svs_array = parameters[0]
         labels_array = parameters[1]
 
-        # Handle empty arrays
         if svs_array.size == 0 or labels_array.size == 0:
             return [], []
 
@@ -419,7 +398,6 @@ class FedSVMAlgorithm(FederatedMLAlgorithm):
         Returns:
             Dictionary with accuracy, precision, recall, f1, loss
         """
-        # Use FedSVM's evaluation function
         metrics = evaluate_fedsvm(y_true, y_pred)
 
         # Add loss (SVM doesn't have traditional loss, use 1 - accuracy as proxy)

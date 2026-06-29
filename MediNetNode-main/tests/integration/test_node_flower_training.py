@@ -22,10 +22,6 @@ import pytest
 if "magic" not in sys.modules:
     sys.modules["magic"] = MagicMock()
 
-# ---------------------------------------------------------------------------
-# Flower server helpers
-# ---------------------------------------------------------------------------
-
 # Inline script run in a subprocess to start the Flower server.
 # Running it out-of-process avoids all signal/threading conflicts with pytest.
 _SERVER_SCRIPT = """
@@ -117,19 +113,13 @@ def _run_client_in_thread(fn, *args, timeout: float = 120.0):
         raise error_box[0]
 
 
-# ---------------------------------------------------------------------------
 # Port constants — use high, distinct ports to avoid conflicts
-# ---------------------------------------------------------------------------
 _PORT_DL = 19101
 _PORT_DL2 = 19102
 _PORT_SVM = 19201
 _PORT_SVM2 = 19202
 _PORT_DPRF = 19301
 
-
-# ---------------------------------------------------------------------------
-# DL end-to-end tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.slow
 @pytest.mark.django_db(transaction=True, databases=["default", "datasets_db"])
@@ -255,10 +245,6 @@ class TestDLFlowerIntegration:
         assert rounds.count() >= 1, "Expected at least one TrainingRound after training"
 
 
-# ---------------------------------------------------------------------------
-# SVM end-to-end tests
-# ---------------------------------------------------------------------------
-
 @pytest.mark.slow
 @pytest.mark.django_db(transaction=True, databases=["default", "datasets_db"])
 class TestSVMFlowerIntegration:
@@ -376,10 +362,6 @@ class TestSVMFlowerIntegration:
         session.refresh_from_db()
         assert session.status in ("COMPLETED", "ACTIVE", "STARTING")
 
-
-# ---------------------------------------------------------------------------
-# DP Random Forest end-to-end tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.slow
 @pytest.mark.django_db(transaction=True, databases=["default", "datasets_db"])

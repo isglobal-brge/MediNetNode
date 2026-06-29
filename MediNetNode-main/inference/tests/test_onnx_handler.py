@@ -34,10 +34,8 @@ pytestmark = pytest.mark.skipif(
 def simple_onnx_model():
     """Create a simple valid ONNX model for testing."""
     # Create a simple linear model: output = input * 2 + 1
-    # Define input
     input_tensor = helper.make_tensor_value_info('input', TensorProto.FLOAT, [None, 3])
 
-    # Define output
     output_tensor = helper.make_tensor_value_info('output', TensorProto.FLOAT, [None, 3])
 
     # Create weights (2.0)
@@ -66,7 +64,6 @@ def simple_onnx_model():
         transB=0
     )
 
-    # Create graph
     graph = helper.make_graph(
         nodes=[gemm_node],
         name='simple_model',
@@ -75,19 +72,16 @@ def simple_onnx_model():
         initializer=[weight_tensor, bias_tensor]
     )
 
-    # Create model
     model = helper.make_model(graph, producer_name='test')
     model.opset_import[0].version = 11  # Use opset 11 for compatibility with onnxruntime
     model.ir_version = 8  # IR version 8 is compatible with opset 11
 
-    # Save to temporary file
     with tempfile.NamedTemporaryFile(suffix='.onnx', delete=False) as f:
         temp_path = f.name
         onnx.save(model, temp_path)
 
     yield temp_path
 
-    # Cleanup
     if os.path.exists(temp_path):
         os.unlink(temp_path)
 
@@ -95,8 +89,6 @@ def simple_onnx_model():
 @pytest.fixture
 def sklearn_onnx_model():
     """Create a sklearn-based ONNX model (tree classifier)."""
-    # Create a simple tree classifier
-    # Input
     input_tensor = helper.make_tensor_value_info('input', TensorProto.FLOAT, [None, 2])
 
     # Output (class probabilities)
@@ -105,7 +97,6 @@ def sklearn_onnx_model():
     # Output (class label)
     label_tensor = helper.make_tensor_value_info('label', TensorProto.INT64, [None])
 
-    # TreeEnsembleClassifier node
     tree_node = helper.make_node(
         'TreeEnsembleClassifier',
         inputs=['input'],
@@ -129,7 +120,6 @@ def sklearn_onnx_model():
         post_transform='NONE'
     )
 
-    # Create graph
     graph = helper.make_graph(
         nodes=[tree_node],
         name='sklearn_tree',
@@ -137,7 +127,6 @@ def sklearn_onnx_model():
         outputs=[label_tensor, output_tensor]
     )
 
-    # Create model
     model = helper.make_model(graph, producer_name='test')
     model.opset_import[0].version = 11  # Use opset 11 for compatibility with onnxruntime
     model.ir_version = 8  # IR version 8 is compatible with opset 11
@@ -146,14 +135,12 @@ def sklearn_onnx_model():
     ml_opset.domain = 'ai.onnx.ml'
     ml_opset.version = 2
 
-    # Save to temporary file
     with tempfile.NamedTemporaryFile(suffix='.onnx', delete=False) as f:
         temp_path = f.name
         onnx.save(model, temp_path)
 
     yield temp_path
 
-    # Cleanup
     if os.path.exists(temp_path):
         os.unlink(temp_path)
 
@@ -235,14 +222,12 @@ class TestONNXValidator:
         assert result['valid'] is True
         metadata = result['metadata']
 
-        # Check input schema
         assert 'input_schema' in metadata
         input_schema = metadata['input_schema']
         assert 'input' in input_schema['feature_names']
         assert 'input' in input_schema['dtypes']
         assert input_schema['dtypes']['input'] == 'float32'
 
-        # Check output schema
         assert 'output_schema' in metadata
         output_schema = metadata['output_schema']
         assert 'output' in output_schema['output_names']
@@ -271,7 +256,6 @@ class TestONNXInferenceEngine:
             'input': np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
         }
 
-        # Run prediction
         output = engine.predict(input_data)
 
         assert 'output' in output
@@ -310,7 +294,6 @@ class TestONNXInferenceEngine:
             'input': np.random.rand(10, 3).astype(np.float32)
         }
 
-        # Run batch prediction with batch_size=3
         output = engine.predict_batch(input_data, batch_size=3)
 
         assert 'output' in output

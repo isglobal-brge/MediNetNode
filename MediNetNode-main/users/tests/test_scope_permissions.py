@@ -47,17 +47,14 @@ class TestScopeBasedPermissions:
             role=member_role
         )
 
-        # Basic permission check (no domain)
         assert member_user.has_permission('inference.execute') is True
 
-        # Domain check with scope ALL
         assert member_user.has_permission('inference.execute', domain='cardiology') is True
         assert member_user.has_permission('inference.execute', domain='neurology') is True
         assert member_user.has_permission('inference.execute', domain='oncology') is True
 
     def test_scope_list_permission(self):
         """Test scope with specific domain list."""
-        # Create a role with limited domain scope
         limited_role = Role.objects.create(
             name='LIMITED_RESEARCHER',
             permissions={
@@ -71,14 +68,11 @@ class TestScopeBasedPermissions:
             role=limited_role
         )
 
-        # Has permission without domain check
         assert limited_user.has_permission('inference.execute') is True
 
-        # Has permission for allowed domains
         assert limited_user.has_permission('inference.execute', domain='cardiology') is True
         assert limited_user.has_permission('inference.execute', domain='neurology') is True
 
-        # No permission for disallowed domain
         assert limited_user.has_permission('inference.execute', domain='oncology') is False
         assert limited_user.has_permission('inference.execute', domain='radiology') is False
 
@@ -91,7 +85,6 @@ class TestScopeBasedPermissions:
             role=member_role
         )
 
-        # Scope ALL
         scope = member_user.get_permission_scope('inference.execute')
         assert scope == 'ALL'
 
@@ -137,11 +130,9 @@ class TestScopeBasedPermissions:
             role=researcher_role
         )
 
-        # RESEARCHER can execute inference
         assert researcher_user.has_permission('inference.execute') is True
         assert researcher_user.has_permission('inference.execute', domain='cardiology') is True
 
-        # RESEARCHER cannot upload models
         assert researcher_user.has_permission('inference.upload') is False
         assert researcher_user.has_permission('inference.approve') is False
 
@@ -154,14 +145,11 @@ class TestScopeBasedPermissions:
             role=member_role
         )
 
-        # MEMBER can execute inference
         assert member_user.has_permission('inference.execute') is True
         assert member_user.has_permission('inference.execute', domain='cardiology') is True
 
-        # MEMBER can upload models
         assert member_user.has_permission('inference.upload') is True
 
-        # MEMBER cannot approve models
         assert member_user.has_permission('inference.approve') is False
         assert member_user.has_permission('inference.admin') is False
 
@@ -174,13 +162,11 @@ class TestScopeBasedPermissions:
             role=admin_role
         )
 
-        # ADMIN has all inference permissions
         assert admin_user.has_permission('inference.execute') is True
         assert admin_user.has_permission('inference.upload') is True
         assert admin_user.has_permission('inference.approve') is True
         assert admin_user.has_permission('inference.admin') is True
 
-        # Scope is ALL
         scope = admin_user.get_permission_scope('inference.execute')
         assert scope == 'ALL'
 
@@ -193,10 +179,8 @@ class TestScopeBasedPermissions:
             role=auditor_role
         )
 
-        # AUDITOR can only view inference logs
         assert auditor_user.has_permission('inference.view') is True
 
-        # AUDITOR cannot execute, upload, or approve
         assert auditor_user.has_permission('inference.execute') is False
         assert auditor_user.has_permission('inference.upload') is False
         assert auditor_user.has_permission('inference.approve') is False

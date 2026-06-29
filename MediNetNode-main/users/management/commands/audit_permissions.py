@@ -24,21 +24,16 @@ class Command(BaseCommand):
         auto_fix = options.get('fix', False)
         
         self.stdout.write("=== PERMISSION SYSTEM AUDIT ===")
-        
-        # 1. Check role permissions
+
         issues_found = []
         issues_found.extend(self._audit_role_permissions())
-        
-        # 2. Check user role assignments  
+
         issues_found.extend(self._audit_user_roles())
-        
-        # 3. Check API key permissions
+
         issues_found.extend(self._audit_api_permissions())
-        
-        # 4. Check critical permission patterns
+
         issues_found.extend(self._audit_critical_permissions())
-        
-        # Summary
+
         if issues_found:
             self.stdout.write(
                 self.style.ERROR(f"\n[SECURITY AUDIT] Found {len(issues_found)} issues:")
@@ -53,8 +48,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS("\n[SECURITY AUDIT] No permission issues found!")
             )
-            
-        # 5. Show current permission matrix
+
         self._show_permission_matrix()
 
     def _audit_role_permissions(self):
@@ -99,8 +93,7 @@ class Command(BaseCommand):
         if users_without_roles.exists():
             usernames = list(users_without_roles.values_list('username', flat=True))
             issues.append(f"Active users without roles: {usernames}")
-        
-        # Check for users with inactive roles
+
         inactive_role_users = User.objects.filter(is_active=True).exclude(role__isnull=True)
         role_counts = {}
         for user in inactive_role_users:
@@ -118,23 +111,20 @@ class Command(BaseCommand):
         issues = []
         
         self.stdout.write("\n--- API Key Permissions Audit ---")
-        
-        # Check RESEARCHER users with API keys
+
         researcher_users = User.objects.filter(role__name='RESEARCHER', is_active=True)
         api_key_users = set(APIKey.objects.filter(is_active=True).values_list('user_id', flat=True))
-        
+
         researchers_without_api = researcher_users.exclude(id__in=api_key_users)
         if researchers_without_api.exists():
             usernames = list(researchers_without_api.values_list('username', flat=True))
             self.stdout.write(f"RESEARCHER users without API keys: {usernames}")
-        
-        # Check for API keys with non-RESEARCHER users
+
         non_researcher_api_keys = APIKey.objects.filter(is_active=True).exclude(user__role__name='RESEARCHER')
         if non_researcher_api_keys.exists():
             users = list(non_researcher_api_keys.values_list('user__username', flat=True))
             issues.append(f"Non-RESEARCHER users with API keys: {users}")
-        
-        # Check API key security
+
         expired_keys = APIKey.objects.filter(is_active=True)
         expired_count = sum(1 for key in expired_keys if key.is_expired())
         if expired_count > 0:
@@ -199,8 +189,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"  {status} {perm}")
             else:
                 self.stdout.write("  (no permissions)")
-        
-        # Show permission coverage
+
         all_perms = set()
         for role in roles:
             if role.permissions:

@@ -41,7 +41,6 @@ class TestMLClientRecordsEpsilon:
         with patch('api.federated.ml_client.update_training_progress') as mock_update:
             params, n, metrics = client.fit([np.array([1.0])], {})
 
-        # round_metrics must include privacy_epsilon
         call_kwargs = mock_update.call_args
         if call_kwargs.kwargs:
             round_metrics = call_kwargs.kwargs.get('round_metrics')

@@ -76,7 +76,6 @@ class PathTraversalProtectionTests(TestCase):
         with self.assertRaises(ValueError) as context:
             _save_temp_file(malicious_file)
 
-        # Should be blocked due to / separator
         self.assertIn("path traversal", str(context.exception).lower())
         self.assertIn("separator", str(context.exception).lower())
 
@@ -132,16 +131,13 @@ class PathTraversalProtectionTests(TestCase):
         try:
             temp_path = _save_temp_file(legitimate_file)
 
-            # Verify file was created
             self.assertTrue(os.path.exists(temp_path))
             self.assertTrue(temp_path.endswith("legitimate_dataset.csv"))
 
-            # Verify content
             with open(temp_path, 'rb') as f:
                 content = f.read()
             self.assertEqual(content, b"patient_id,diagnosis,age\n1,diabetes,45\n")
 
-            # Cleanup
             os.unlink(temp_path)
             temp_dir = os.path.dirname(temp_path)
             if os.path.exists(temp_dir) and not os.listdir(temp_dir):
@@ -152,14 +148,12 @@ class PathTraversalProtectionTests(TestCase):
 
     def test_sanitizes_filename_with_path_components(self):
         """Test that filename with path components is blocked (contains / separator)."""
-        # File with path in name - should be blocked due to / separator
         file_with_path = MaliciousUploadedFile(
             name="some/nested/path/dataset.csv",
             content=b"data",
             content_type="text/csv"
         )
 
-        # Should be blocked due to / separator
         with self.assertRaises(ValueError) as context:
             _save_temp_file(file_with_path)
 
@@ -178,14 +172,12 @@ class PathTraversalProtectionTests(TestCase):
         This test demonstrates the unit-level protection in _save_temp_file().
         The HTTP-level protection is inherent to Django's multipart handling.
         """
-        # Direct test of the protection function (as called by the view)
         malicious_file = MaliciousUploadedFile(
             name="../../../etc/passwd",
             content=b"malicious content",
             content_type="text/csv"
         )
 
-        # Should be blocked by _save_temp_file
         with self.assertRaises(ValueError) as context:
             _save_temp_file(malicious_file)
 
@@ -202,25 +194,20 @@ class PathTraversalProtectionTests(TestCase):
         temp_path = _save_temp_file(legitimate_file)
 
         try:
-            # Get absolute paths
             abs_temp_path = os.path.abspath(temp_path)
             temp_dir = os.path.dirname(abs_temp_path)
 
-            # Verify it's in a temp directory
             self.assertTrue(abs_temp_path.startswith(temp_dir))
             self.assertIn("upload_", temp_dir)
 
-            # Verify it's in system temp directory
             system_temp = tempfile.gettempdir()
             self.assertTrue(abs_temp_path.startswith(system_temp))
 
-            # Cleanup
             os.unlink(temp_path)
             if os.path.exists(temp_dir) and not os.listdir(temp_dir):
                 os.rmdir(temp_dir)
 
         except Exception as e:
-            # Cleanup on error
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
             raise
@@ -245,12 +232,10 @@ class PathTraversalSecurityDocumentationTests(TestCase):
             os.path.dirname(__file__), '..', '..', 'VULNERABILITIES_REMAINING.md'
         )
 
-        # Check if file exists and contains path traversal documentation
         if os.path.exists(security_report_path):
             with open(security_report_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # Should document the vulnerability (or its fix)
             self.assertTrue(
                 'path traversal' in content.lower() or
                 'Path Traversal' in content

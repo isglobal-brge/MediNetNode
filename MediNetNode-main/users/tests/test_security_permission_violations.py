@@ -30,10 +30,6 @@ class TestMemberSecurityViolations:
             role=member_role
         )
 
-    # ============================================================================
-    # ADMIN-ONLY PERMISSION VIOLATION ATTEMPTS
-    # ============================================================================
-
     def test_member_cannot_access_system_admin(self):
         """MEMBER should NOT have system.admin permission."""
         assert self.member.has_permission('system.admin') is False
@@ -70,10 +66,6 @@ class TestMemberSecurityViolations:
         """MEMBER should NOT be able to view audit logs."""
         assert self.member.has_permission('audit.view') is False
 
-    # ============================================================================
-    # INFERENCE PERMISSION VIOLATIONS
-    # ============================================================================
-
     def test_member_cannot_approve_models(self):
         """MEMBER should NOT be able to approve models."""
         assert self.member.has_permission('inference.approve') is False
@@ -85,10 +77,6 @@ class TestMemberSecurityViolations:
     def test_member_cannot_view_inference_logs_as_auditor(self):
         """MEMBER should NOT have inference.view (only AUDITOR)."""
         assert self.member.has_permission('inference.view') is False
-
-    # ============================================================================
-    # VALID MEMBER PERMISSIONS (Verify what they SHOULD have)
-    # ============================================================================
 
     def test_member_can_access_api(self):
         """MEMBER SHOULD be able to access API."""
@@ -118,10 +106,6 @@ class TestMemberSecurityViolations:
         """MEMBER SHOULD be able to upload models (for approval)."""
         assert self.member.has_permission('inference.upload') is True
 
-    # ============================================================================
-    # SCOPE BOUNDARY TESTS
-    # ============================================================================
-
     def test_member_inference_scope_is_all(self):
         """MEMBER should have ALL scope for inference.execute."""
         scope = self.member.get_permission_scope('inference.execute')
@@ -133,10 +117,6 @@ class TestMemberSecurityViolations:
         assert scope == 'ALL'
         scope = self.member.get_permission_scope('dataset.train')
         assert scope == 'ALL'
-
-    # ============================================================================
-    # PRIVILEGE ESCALATION ATTEMPTS
-    # ============================================================================
 
     def test_member_cannot_escalate_to_admin_permissions(self):
         """MEMBER should not be able to access any admin-only permissions."""
@@ -190,10 +170,6 @@ class TestResearcherSecurityViolations:
             role=researcher_role
         )
 
-    # ============================================================================
-    # ADMIN-ONLY PERMISSION VIOLATION ATTEMPTS
-    # ============================================================================
-
     def test_researcher_cannot_access_system_admin(self):
         """RESEARCHER should NOT have system.admin permission."""
         assert self.researcher.has_permission('system.admin') is False
@@ -238,10 +214,6 @@ class TestResearcherSecurityViolations:
         """RESEARCHER should NOT be able to view audit logs."""
         assert self.researcher.has_permission('audit.view') is False
 
-    # ============================================================================
-    # INFERENCE PERMISSION VIOLATIONS
-    # ============================================================================
-
     def test_researcher_cannot_upload_models(self):
         """RESEARCHER should NOT be able to upload models."""
         assert self.researcher.has_permission('inference.upload') is False
@@ -257,10 +229,6 @@ class TestResearcherSecurityViolations:
     def test_researcher_cannot_view_inference_logs(self):
         """RESEARCHER should NOT have inference.view (only AUDITOR)."""
         assert self.researcher.has_permission('inference.view') is False
-
-    # ============================================================================
-    # VALID RESEARCHER PERMISSIONS (Verify what they SHOULD have)
-    # ============================================================================
 
     def test_researcher_can_access_api(self):
         """RESEARCHER SHOULD be able to access API."""
@@ -278,10 +246,6 @@ class TestResearcherSecurityViolations:
         """RESEARCHER SHOULD be able to execute inference."""
         assert self.researcher.has_permission('inference.execute') is True
 
-    # ============================================================================
-    # SCOPE BOUNDARY TESTS
-    # ============================================================================
-
     def test_researcher_inference_scope_is_all(self):
         """RESEARCHER should have ALL scope for inference.execute."""
         scope = self.researcher.get_permission_scope('inference.execute')
@@ -293,10 +257,6 @@ class TestResearcherSecurityViolations:
         assert scope == 'ALL'
         scope = self.researcher.get_permission_scope('dataset.train')
         assert scope == 'ALL'
-
-    # ============================================================================
-    # PRIVILEGE ESCALATION ATTEMPTS
-    # ============================================================================
 
     def test_researcher_cannot_escalate_to_admin_permissions(self):
         """RESEARCHER should not be able to access any admin-only permissions."""
@@ -377,10 +337,6 @@ class TestCrossRoleSecurityBoundaries:
             role=Role.objects.get(name='AUDITOR')
         )
 
-    # ============================================================================
-    # ADMIN EXCLUSIVE PERMISSIONS
-    # ============================================================================
-
     def test_only_admin_can_approve_models(self):
         """Only ADMIN should be able to approve models."""
         assert self.admin.has_permission('inference.approve') is True
@@ -404,10 +360,6 @@ class TestCrossRoleSecurityBoundaries:
             assert self.member.has_permission(perm) is False, f"MEMBER should NOT have {perm}"
             assert self.researcher.has_permission(perm) is False, f"RESEARCHER should NOT have {perm}"
 
-    # ============================================================================
-    # MEMBER EXCLUSIVE PERMISSIONS (vs RESEARCHER)
-    # ============================================================================
-
     def test_only_member_can_create_datasets(self):
         """Only ADMIN and MEMBER should be able to create datasets."""
         assert self.admin.has_permission('dataset.create') is True
@@ -429,10 +381,6 @@ class TestCrossRoleSecurityBoundaries:
         assert self.researcher.has_permission('training.view') is False
         assert self.auditor.has_permission('training.view') is True  # AUDITOR can also view
 
-    # ============================================================================
-    # AUDITOR EXCLUSIVE PERMISSIONS
-    # ============================================================================
-
     def test_only_admin_and_auditor_can_view_audit_logs(self):
         """Only ADMIN and AUDITOR should be able to view audit logs."""
         assert self.admin.has_permission('audit.view') is True
@@ -446,10 +394,6 @@ class TestCrossRoleSecurityBoundaries:
         assert self.member.has_permission('inference.view') is False
         assert self.researcher.has_permission('inference.view') is False
         assert self.auditor.has_permission('inference.view') is True
-
-    # ============================================================================
-    # SHARED PERMISSIONS (All can execute inference and train)
-    # ============================================================================
 
     def test_all_roles_can_execute_inference_except_auditor(self):
         """ADMIN, MEMBER, RESEARCHER should be able to execute inference."""
@@ -472,10 +416,6 @@ class TestCrossRoleSecurityBoundaries:
         assert self.researcher.has_permission('dataset.view') is True
         assert self.auditor.has_permission('dataset.view') is True
 
-    # ============================================================================
-    # PERMISSION COUNT VERIFICATION
-    # ============================================================================
-
     def test_permission_count_hierarchy(self):
         """ADMIN should have most permissions, RESEARCHER least."""
         admin_count = len(self.admin.role.permissions)
@@ -483,15 +423,12 @@ class TestCrossRoleSecurityBoundaries:
         researcher_count = len(self.researcher.role.permissions)
         auditor_count = len(self.auditor.role.permissions)
 
-        # ADMIN should have the most
         assert admin_count > member_count
         assert admin_count > researcher_count
         assert admin_count > auditor_count
 
-        # MEMBER should have more than RESEARCHER
         assert member_count > researcher_count
 
-        # Exact counts
         assert admin_count == 18
         assert member_count == 7
         assert researcher_count == 4
@@ -544,9 +481,7 @@ class TestDomainScopeSecurityViolations:
         assert inference_scope == ['cardiology']
         assert dataset_scope == ['cardiology', 'general']
 
-        # Can view general datasets
         assert self.limited_user.has_permission('dataset.view', domain='general') is True
-        # Cannot execute inference on general models
         assert self.limited_user.has_permission('inference.execute', domain='general') is False
 
     def test_scope_violations_attempt_escalation(self):
@@ -554,12 +489,9 @@ class TestDomainScopeSecurityViolations:
         restricted_domains = ['neurology', 'oncology', 'radiology', 'pathology']
 
         for domain in restricted_domains:
-            # Direct domain check
             assert self.limited_user.has_permission('inference.execute', domain=domain) is False, \
                 f"SECURITY VIOLATION: Limited user accessed {domain}!"
 
-            # Try with uppercase
             assert self.limited_user.has_permission('inference.execute', domain=domain.upper()) is False
 
-            # Try with mixed case
             assert self.limited_user.has_permission('inference.execute', domain=domain.title()) is False

@@ -43,8 +43,7 @@ class DatasetUploadForm(forms.ModelForm):
         
         if not name:
             raise forms.ValidationError("Dataset name is required.")
-        
-        # Check for existing dataset with same name
+
         if Dataset.objects.using('datasets_db').filter(name=name, is_active=True).exists():
             raise forms.ValidationError("A dataset with this name already exists.")
         
@@ -61,8 +60,7 @@ class DatasetUploadForm(forms.ModelForm):
         # Only check for empty files
         if file.size == 0:
             raise forms.ValidationError("File cannot be empty.")
-        
-        # Check file extension
+
         allowed_extensions = ['.csv', '.json', '.parquet', '.h5', '.npy']
         file_extension = None
         
@@ -194,7 +192,6 @@ class DatasetEditForm(forms.ModelForm):
         """Initialize form and populate target_column choices from dataset file."""
         super().__init__(*args, **kwargs)
 
-        # Get column choices from the dataset file
         if self.instance and self.instance.pk:
             try:
                 from .uploader import SecureDatasetUploader
@@ -202,7 +199,6 @@ class DatasetEditForm(forms.ModelForm):
                 # Create uploader instance (user doesn't matter for column extraction)
                 uploader = SecureDatasetUploader(user=None)
 
-                # Get columns from file
                 file_path = self.instance.file_path
                 columns = uploader.get_csv_columns(file_path)
 

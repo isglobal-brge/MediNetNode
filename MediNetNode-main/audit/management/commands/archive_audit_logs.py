@@ -96,21 +96,16 @@ class Command(BaseCommand):
         self.batch_size = options['batch_size']
         self.keep_incidents = options['keep_incidents']
         self.force = options['force']
-        
-        # Create export directory if needed
+
         if self.export and not self.dry_run:
             self.export_path.mkdir(exist_ok=True)
-        
-        # Determine retention policies
+
         if options['days']:
-            # Single retention period for all categories
             retention_policies = {cat: options['days'] for cat in self.DEFAULT_RETENTION_POLICIES.keys()}
             retention_policies['SECURITY'] = -1  # Never delete security events
         else:
-            # Use default category-specific retention
             retention_policies = self.DEFAULT_RETENTION_POLICIES.copy()
-        
-        # Filter by category if specified
+
         categories_to_process = [options['category']] if options['category'] else list(retention_policies.keys())
         
         self.stdout.write(self.style.SUCCESS('=== Audit Log Archiving Process ==='))
@@ -130,10 +125,9 @@ class Command(BaseCommand):
             archived, exported = self._process_category(category, retention_days)
             total_archived += archived
             total_exported += exported
-        
+
         # Legacy AuditLog processing removed - all auditing now uses AuditEvent
-        
-        # Summary
+
         self.stdout.write(self.style.SUCCESS(f"\n=== Summary ==="))
         if self.dry_run:
             self.stdout.write(f"Would archive: {total_archived} audit events")
@@ -147,22 +141,20 @@ class Command(BaseCommand):
     def _process_category(self, category: str, retention_days: int) -> tuple[int, int]:
         """Process archiving for a specific category."""
         cutoff_date = timezone.now() - timedelta(days=retention_days)
-        
-        # Find events to archive
+
         events_query = AuditEvent.objects.filter(
             category=category,
             timestamp__lt=cutoff_date
         )
-        
+
         event_count = events_query.count()
-        
+
         if event_count == 0:
             self.stdout.write(f"  No events to archive for {category}")
             return 0, 0
-        
+
         self.stdout.write(f"  Found {event_count} events older than {retention_days} days")
-        
-        # Confirmation prompt
+
         if not self.force and not self.dry_run:
             confirm = input(f"  Archive {event_count} {category} events? [y/N]: ")
             if confirm.lower() not in ['y', 'yes']:
@@ -202,8 +194,7 @@ class Command(BaseCommand):
         if not self.dry_run:
             with file_open(filepath, 'wt', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
-                
-                # Write header
+
                 headers = [
                     'id', 'timestamp', 'user_id', 'username', 'action', 'resource',
                     'category', 'severity', 'risk_score', 'ip_address', 'success',
@@ -213,11 +204,9 @@ class Command(BaseCommand):
                     'records_accessed', 'columns_accessed', 'query_hash'
                 ]
                 writer.writerow(headers)
-                
-                # Write data in batches
+
                 for batch in self._batch_queryset(events_query.select_related('user', 'reviewed_by'), self.batch_size):
                     for event in batch:
-                        # Get data access log if exists
                         data_access = getattr(event, 'data_access_log', None)
                         
                         row = [
@@ -251,7 +240,6 @@ class Command(BaseCommand):
                         exported_count += 1
         
         else:
-            # Dry run - just count
             exported_count = events_query.count()
         
         if self.verbosity >= 1:
@@ -262,27 +250,24 @@ class Command(BaseCommand):
     def _archive_events(self, events_query, category: str) -> int:
         """Archive (delete) events after optional export."""
         archived_count = 0
-        
-        # Handle security incidents if needed
+
         if not self.keep_incidents:
-            # Find security incidents related to these events
             incident_ids = SecurityIncident.objects.filter(
                 related_events__in=events_query
             ).values_list('id', flat=True)
-            
+
             if incident_ids:
                 self.stdout.write(f"  Archiving {len(incident_ids)} related security incidents")
                 SecurityIncident.objects.filter(id__in=incident_ids).delete()
-        
+
         # Delete in batches to avoid memory issues
         with transaction.atomic():
             for batch in self._batch_queryset(events_query, self.batch_size):
                 batch_ids = [event.id for event in batch]
-                
+
                 # Delete DataAccessLog entries first (foreign key constraint)
                 DataAccessLog.objects.filter(audit_event_id__in=batch_ids).delete()
-                
-                # Delete the events
+
                 deleted_count = AuditEvent.objects.filter(id__in=batch_ids).delete()[0]
                 archived_count += deleted_count
                 

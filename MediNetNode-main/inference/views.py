@@ -40,12 +40,10 @@ def member_dashboard(request):
         uploaded_at__gte=timezone.now() - timedelta(days=7)
     ).count()
 
-    # 2. My Models
     my_models = DeployedModel.objects.filter(uploaded_by=user)
     my_models_count = my_models.count()
     my_models_active = my_models.filter(status='approved').count()
 
-    # 3. Predictions This Month
     month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     predictions_this_month = PredictionAudit.objects.filter(
         user=user,
@@ -56,15 +54,12 @@ def member_dashboard(request):
         timestamp__gte=timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     ).count()
 
-    # 4. Pending Models
     pending_models_count = my_models.filter(status='pending').count()
 
-    # 5. Total Storage
     datasets_size = my_datasets.aggregate(total=Sum('file_size'))['total'] or 0
     models_size = my_models.aggregate(total=Sum('file_size'))['total'] or 0
     total_storage_bytes = datasets_size + models_size
 
-    # Format storage
     if total_storage_bytes >= 1024**3:  # GB
         storage_formatted = f"{total_storage_bytes / (1024**3):.1f} GB"
     elif total_storage_bytes >= 1024**2:  # MB
@@ -78,16 +73,12 @@ def member_dashboard(request):
     storage_quota = 5 * 1024**3  # 5 GB in bytes
     storage_percentage = int((total_storage_bytes / storage_quota) * 100) if storage_quota > 0 else 0
 
-    # ===== RECENT MODELS TABLE =====
     recent_models = my_models.order_by('-created_at')[:5]
 
-    # ===== RECENT ACTIVITY FEED =====
-    # Combine recent predictions and model events
     recent_predictions = PredictionAudit.objects.filter(user=user).order_by('-timestamp')[:5]
     recent_model_uploads = my_models.order_by('-created_at')[:5]
     recent_datasets_uploads = my_datasets.order_by('-uploaded_at')[:3]
 
-    # Build activity feed (simplified for now)
     activities = []
 
     for pred in recent_predictions:
@@ -120,11 +111,9 @@ def member_dashboard(request):
             'color': 'purple'
         })
 
-    # Sort by timestamp and take top 10
     activities.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activities = activities[:10]
 
-    # ===== RECOMMENDED ACTIONS =====
     recommendations = []
 
     # 1. Pending models alert
@@ -204,24 +193,19 @@ def my_models(request):
     """
     user = request.user
 
-    # Get filter parameters from query string
     status_filter = request.GET.get('status', 'all')
     domain_filter = request.GET.get('domain', 'all')
     search_query = request.GET.get('q', '').strip()
     sort_by = request.GET.get('sort', 'recent')
 
-    # Base queryset: user's models only
     models = DeployedModel.objects.filter(uploaded_by=user)
 
-    # Apply status filter
     if status_filter and status_filter != 'all':
         models = models.filter(status=status_filter)
 
-    # Apply domain filter
     if domain_filter and domain_filter != 'all':
         models = models.filter(domain=domain_filter)
 
-    # Apply search filter
     if search_query:
         models = models.filter(
             Q(name__icontains=search_query) |
@@ -229,7 +213,6 @@ def my_models(request):
             Q(version__icontains=search_query)
         )
 
-    # Apply sorting
     if sort_by == 'name':
         models = models.order_by('name')
     elif sort_by == 'status':
@@ -249,10 +232,8 @@ def my_models(request):
     else:  # Default: recent
         models = models.order_by('-created_at')
 
-    # Get total count before pagination
     total_count = models.count()
 
-    # Stats by status
     all_user_models = DeployedModel.objects.filter(uploaded_by=user)
     stats = {
         'total': all_user_models.count(),
@@ -262,12 +243,10 @@ def my_models(request):
         'deprecated': all_user_models.filter(status='deprecated').count(),
     }
 
-    # Get unique domains for filter dropdown
     domains = DeployedModel.objects.filter(uploaded_by=user).values_list(
         'domain', flat=True
     ).distinct().order_by('domain')
 
-    # Pagination (10 models per page)
     paginator = Paginator(models, 10)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
@@ -278,16 +257,13 @@ def my_models(request):
             {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
             {'name': 'My Models', 'url': None}
         ],
-        # Models data
         'models': page_obj,
         'total_count': total_count,
         'stats': stats,
-        # Filter states
         'status_filter': status_filter,
         'domain_filter': domain_filter,
         'search_query': search_query,
         'sort_by': sort_by,
-        # Filter options
         'domains': domains,
         'status_choices': [
             ('all', 'All Status'),
@@ -324,13 +300,10 @@ def upload_model(request):
 
         if form.is_valid():
             try:
-                # Save model instance without committing
                 model = form.save(commit=False)
 
-                # Set uploaded_by to current user
                 model.uploaded_by = request.user
 
-                # Set status based on user role
                 # ADMIN uploads are auto-approved, MEMBER uploads require approval
                 if request.user.role and request.user.role.name == 'ADMIN':
                     model.status = 'approved'
@@ -342,7 +315,6 @@ def upload_model(request):
                 # Save the model (checksum and file_size calculated in model.save())
                 model.save()
 
-                # Success message
                 if model.status == 'approved':
                     messages.success(
                         request,
@@ -354,7 +326,6 @@ def upload_model(request):
                         f'Model "{model.name}" uploaded successfully. It will be available after admin approval.'
                     )
 
-                # Redirect to My Models page
                 return redirect('inference:my_models')
 
             except Exception as e:
@@ -363,13 +334,11 @@ def upload_model(request):
                     f'Error saving model: {str(e)}'
                 )
         else:
-            # Form has validation errors
             messages.error(
                 request,
                 'Please correct the errors below.'
             )
     else:
-        # GET request - display empty form
         form = ModelUploadForm()
 
     context = {
@@ -399,22 +368,18 @@ def public_models(request):
     """
     user = request.user
 
-    # Get filter parameters
     domain_filter = request.GET.get('domain', 'all')
     search_query = request.GET.get('q', '').strip()
     sort_by = request.GET.get('sort', 'recent')
 
-    # Base queryset: public and approved models only
     models = DeployedModel.objects.filter(
         is_public=True,
         status='approved'
     )
 
-    # Apply domain filter
     if domain_filter and domain_filter != 'all':
         models = models.filter(domain=domain_filter)
 
-    # Apply search filter
     if search_query:
         models = models.filter(
             Q(name__icontains=search_query) |
@@ -422,7 +387,6 @@ def public_models(request):
             Q(domain__icontains=search_query)
         )
 
-    # Apply sorting
     if sort_by == 'name':
         models = models.order_by('name')
     elif sort_by == 'domain':
@@ -432,23 +396,18 @@ def public_models(request):
     else:  # Default: recent
         models = models.order_by('-created_at')
 
-    # Get total count before pagination
     total_count = models.count()
 
-    # Stats by domain (for all public approved models)
     all_public_models = DeployedModel.objects.filter(is_public=True, status='approved')
     domain_stats = all_public_models.values('domain').annotate(
         count=Count('id')
     ).order_by('domain')
 
-    # Convert to dict for easy template access
     stats_by_domain = {item['domain']: item['count'] for item in domain_stats}
     total_public = all_public_models.count()
 
-    # Get unique domains for filter dropdown
     domains = all_public_models.values_list('domain', flat=True).distinct().order_by('domain')
 
-    # Domain display names mapping
     domain_names = dict(DeployedModel.DOMAIN_CHOICES)
 
     # Pagination (12 per page for 3x4 or 4x3 grid)
@@ -456,7 +415,6 @@ def public_models(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
 
-    # Check which models the user owns (for UI differentiation)
     user_model_ids = set(
         DeployedModel.objects.filter(uploaded_by=user).values_list('id', flat=True)
     )
@@ -467,17 +425,14 @@ def public_models(request):
             {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
             {'name': 'Public Models', 'url': None}
         ],
-        # Models data
         'models': page_obj,
         'total_count': total_count,
         'total_public': total_public,
         'stats_by_domain': stats_by_domain,
         'user_model_ids': user_model_ids,
-        # Filter states
         'domain_filter': domain_filter,
         'search_query': search_query,
         'sort_by': sort_by,
-        # Filter options
         'domains': domains,
         'domain_names': domain_names,
         'sort_choices': [
@@ -507,31 +462,27 @@ def new_prediction(request):
     """
     user = request.user
 
-    # Get filter/search parameters
     domain_filter = request.GET.get('domain', 'all')
     search_query = request.GET.get('q', '').strip()
     preselected_model_id = request.GET.get('model', '')
 
-    # Get user's approved models
     my_models = DeployedModel.objects.filter(
         uploaded_by=user,
         status='approved'
     )
 
-    # Get public approved models (excluding user's own)
+    # Public approved models, excluding user's own
     public_models = DeployedModel.objects.filter(
         is_public=True,
         status='approved'
     ).exclude(uploaded_by=user)
 
-    # Apply domain filter
     if domain_filter and domain_filter != 'all':
         my_models = my_models.filter(domain=domain_filter)
         public_models = public_models.filter(domain=domain_filter)
 
     # Apply search filter (supports glob patterns: * for any chars, ? for single char)
     if search_query:
-        # Check if query contains wildcard patterns
         if '*' in search_query or '?' in search_query:
             import re
             # Convert glob pattern to regex
@@ -542,25 +493,20 @@ def new_prediction(request):
             pattern = pattern.replace(r'\?', '.')   # ? -> match single char
             pattern = f'^{pattern}$'  # Anchor to match full name
 
-            # Use regex filter
             search_q = Q(name__iregex=pattern) | Q(description__iregex=pattern)
         else:
-            # Standard contains search
             search_q = Q(name__icontains=search_query) | Q(description__icontains=search_query)
 
         my_models = my_models.filter(search_q)
         public_models = public_models.filter(search_q)
 
-    # Order by name
     my_models = my_models.order_by('name')
     public_models = public_models.order_by('name')
 
-    # Get preselected model if provided
     preselected_model = None
     if preselected_model_id:
         try:
             model_id = int(preselected_model_id)
-            # Check if user can access this model
             preselected_model = DeployedModel.objects.filter(
                 Q(uploaded_by=user, status='approved') |
                 Q(is_public=True, status='approved')
@@ -568,7 +514,6 @@ def new_prediction(request):
         except (ValueError, TypeError):
             pass
 
-    # Get unique domains for filter
     all_accessible_models = DeployedModel.objects.filter(
         Q(uploaded_by=user, status='approved') |
         Q(is_public=True, status='approved')
@@ -587,11 +532,9 @@ def new_prediction(request):
             {'num': 2, 'name': 'Load Data', 'icon': 'bi-file-earmark-arrow-up'},
             {'num': 3, 'name': 'Results', 'icon': 'bi-graph-up'},
         ],
-        # Models
         'my_models': my_models,
         'public_models': public_models,
         'preselected_model': preselected_model,
-        # Filters
         'domain_filter': domain_filter,
         'search_query': search_query,
         'domains': domains,
@@ -615,11 +558,9 @@ def prediction_load_data(request):
     """
     user = request.user
 
-    # Determine mode and get model(s)
     mode = request.POST.get('mode') or request.GET.get('mode', 'single')
 
     if mode == 'multi':
-        # Multi-model mode
         model_ids = request.POST.getlist('model_ids') or request.GET.get('model_ids', '').split(',')
         model_ids = [mid for mid in model_ids if mid]  # Remove empty strings
 
@@ -643,7 +584,6 @@ def prediction_load_data(request):
             messages.error(request, 'One or more selected models are not accessible.')
             return redirect('inference:new_prediction')
 
-        # Build context for multi-model mode
         context = {
             'page_title': 'Load Data - Multi-Model',
             'breadcrumbs': [
@@ -667,7 +607,6 @@ def prediction_load_data(request):
         return render(request, 'inference/prediction_load_data.html', context)
 
     else:
-        # Single model mode (original behavior)
         model_id = request.POST.get('model_id') or request.GET.get('model_id')
 
         if not model_id:
@@ -690,7 +629,6 @@ def prediction_load_data(request):
             messages.error(request, 'Model not found or not accessible.')
             return redirect('inference:new_prediction')
 
-        # Build context for the template
         context = {
             'page_title': 'Load Data',
             'breadcrumbs': [
@@ -745,7 +683,6 @@ def run_prediction(request):
     model_id = request.POST.get('model_id')
     data_file = request.FILES.get('data_file')
 
-    # Validate inputs
     if not model_id or not data_file:
         messages.error(request, 'Model and data file are required.')
         return redirect('inference:new_prediction')
@@ -766,26 +703,22 @@ def run_prediction(request):
         messages.error(request, 'Model not found or not accessible.')
         return redirect('inference:new_prediction')
 
-    # Track execution time
     start_time = time.time()
     errors = []
     results = None
     input_data = None
 
     try:
-        # Parse the uploaded file
         file_content = data_file.read().decode('utf-8')
         file_ext = data_file.name.split('.')[-1].lower()
 
         if file_ext == 'csv':
-            # Parse CSV
             reader = csv.DictReader(file_content.splitlines())
             rows = list(reader)
             if not rows:
                 raise ValueError("CSV file is empty")
             columns = list(rows[0].keys())
         elif file_ext == 'json':
-            # Parse JSON
             parsed = json.loads(file_content)
             rows = parsed if isinstance(parsed, list) else [parsed]
             if not rows:
@@ -800,14 +733,12 @@ def run_prediction(request):
                 f"Batch size ({len(rows)}) exceeds maximum allowed ({model.max_batch_size})"
             )
 
-        # Get expected features from model schema
         expected_features = []
         if 'features' in model.input_schema:
             expected_features = [f['name'].strip('"') for f in model.input_schema['features']]
         elif 'feature_names' in model.input_schema:
             expected_features = [f.strip('"') for f in model.input_schema['feature_names']]
 
-        # Prepare input array for ONNX
         # Clean column names (remove quotes if present)
         clean_columns = [c.strip('"') for c in columns]
 
@@ -830,19 +761,15 @@ def run_prediction(request):
                     except (ValueError, TypeError):
                         input_array[i, j] = 0.0
 
-        # Load and run ONNX model
         import onnxruntime as ort
 
         model_path = model.model_file.path
         session = ort.InferenceSession(model_path)
 
-        # Get input name
         input_name = session.get_inputs()[0].name
 
-        # Run inference
         outputs = session.run(None, {input_name: input_array})
 
-        # Parse outputs
         output_names = [o.name for o in session.get_outputs()]
         results = {
             'rows': len(rows),
@@ -851,7 +778,6 @@ def run_prediction(request):
             'output_type': model.output_schema.get('type', 'unknown'),
         }
 
-        # Process each row's prediction
         for i in range(len(rows)):
             pred_result = {'row_index': i + 1}
 
@@ -861,7 +787,6 @@ def run_prediction(request):
                     pred_result['model_label'] = int(outputs[idx][i])
                     pred_result['label'] = int(outputs[idx][i])
                 elif 'probability' in out_name.lower():
-                    # Probabilities (could be dict/map)
                     probs = outputs[idx]
                     if isinstance(probs, list) and len(probs) > i:
                         prob_dict = probs[i]
@@ -883,13 +808,11 @@ def run_prediction(request):
 
             results['predictions'].append(pred_result)
 
-        # Calculate execution time
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         # Compute input hash for audit
         input_hash = hashlib.sha256(file_content.encode()).hexdigest()
 
-        # Create PredictionAudit record
         audit = PredictionAudit.objects.create(
             user=user,
             ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
@@ -905,12 +828,10 @@ def run_prediction(request):
             dp_noise_applied=model.enable_differential_privacy,
         )
 
-        # Update model stats
         model.total_predictions += 1
         model.last_prediction_at = timezone.now()
         model.save(update_fields=['total_predictions', 'last_prediction_at'])
 
-        # Add metadata to results
         results['execution_time_ms'] = execution_time_ms
         results['audit_id'] = str(audit.id)
 
@@ -1006,12 +927,10 @@ def run_multi_prediction(request):
     model_ids_str = request.POST.get('model_ids', '')
     data_file = request.FILES.get('data_file')
 
-    # Validate inputs
     if not model_ids_str or not data_file:
         messages.error(request, 'Models and data file are required.')
         return redirect('inference:new_prediction')
 
-    # Parse model IDs
     try:
         model_ids = [int(mid.strip()) for mid in model_ids_str.split(',') if mid.strip()]
     except (ValueError, TypeError):
@@ -1063,13 +982,10 @@ def run_multi_prediction(request):
         # Compute input hash for audit (once)
         input_hash = hashlib.sha256(file_content.encode()).hexdigest()
 
-        # Clean column names
         clean_columns = [c.strip('"') for c in columns]
 
-        # Import onnxruntime once
         import onnxruntime as ort
 
-        # Run inference on each model
         for model in models:
             model_start_time = time.time()
             model_result = {
@@ -1087,7 +1003,6 @@ def run_multi_prediction(request):
                         f"Batch size ({len(rows)}) exceeds model's maximum ({model.max_batch_size})"
                     )
 
-                # Get expected features from model schema
                 expected_features = []
                 if 'features' in model.input_schema:
                     expected_features = [f['name'].strip('"') for f in model.input_schema['features']]
@@ -1112,16 +1027,13 @@ def run_multi_prediction(request):
                             except (ValueError, TypeError):
                                 input_array[i, j] = 0.0
 
-                # Load and run ONNX model
                 model_path = model.model_file.path
                 session = ort.InferenceSession(model_path)
                 input_name = session.get_inputs()[0].name
                 outputs = session.run(None, {input_name: input_array})
 
-                # Parse outputs
                 output_names = [o.name for o in session.get_outputs()]
 
-                # Process each row's prediction
                 for i in range(len(rows)):
                     pred_result = {'row_index': i + 1}
 
@@ -1151,7 +1063,6 @@ def run_multi_prediction(request):
                 model_result['success'] = True
                 model_result['output_type'] = model.output_schema.get('type', 'unknown')
 
-                # Extract class labels
                 class_labels = {}
                 if model.output_schema:
                     classes = model.output_schema.get('classes', {})
@@ -1164,10 +1075,8 @@ def run_multi_prediction(request):
             except Exception as e:
                 model_result['errors'].append(str(e))
 
-            # Calculate execution time for this model
             model_result['execution_time_ms'] = int((time.time() - model_start_time) * 1000)
 
-            # Create PredictionAudit record
             PredictionAudit.objects.create(
                 user=user,
                 ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
@@ -1184,7 +1093,6 @@ def run_multi_prediction(request):
                 dp_noise_applied=model.enable_differential_privacy if model_result['success'] else False,
             )
 
-            # Update model stats if successful
             if model_result['success']:
                 model.total_predictions += 1
                 model.last_prediction_at = timezone.now()
@@ -1195,10 +1103,8 @@ def run_multi_prediction(request):
     except Exception as e:
         global_errors.append(str(e))
 
-    # Calculate total execution time
     total_execution_time_ms = int((time.time() - total_start_time) * 1000)
 
-    # Count successes
     successful_count = sum(1 for r in all_results if r['success'])
     failed_count = len(all_results) - successful_count
 
@@ -1243,7 +1149,6 @@ def my_history(request):
     """
     user = request.user
 
-    # Get filter parameters
     model_filter = request.GET.get('model', 'all')
     domain_filter = request.GET.get('domain', 'all')
     status_filter = request.GET.get('status', 'all')
@@ -1252,31 +1157,25 @@ def my_history(request):
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
 
-    # Base queryset: user's predictions only
     predictions = PredictionAudit.objects.filter(user=user)
 
-    # Apply model filter
     if model_filter and model_filter != 'all':
         predictions = predictions.filter(model_id=model_filter)
 
-    # Apply domain filter
     if domain_filter and domain_filter != 'all':
         predictions = predictions.filter(model_domain=domain_filter)
 
-    # Apply status filter
     if status_filter == 'success':
         predictions = predictions.filter(success=True)
     elif status_filter == 'failed':
         predictions = predictions.filter(success=False)
 
-    # Apply search filter (model name)
     if search_query:
         predictions = predictions.filter(
             Q(model_name__icontains=search_query) |
             Q(model_version__icontains=search_query)
         )
 
-    # Apply date filters
     if date_from:
         try:
             from datetime import datetime
@@ -1293,7 +1192,6 @@ def my_history(request):
         except ValueError:
             pass
 
-    # Apply sorting
     if sort_by == 'model':
         predictions = predictions.order_by('model_name', '-timestamp')
     elif sort_by == 'records':
@@ -1305,10 +1203,8 @@ def my_history(request):
     else:  # Default: recent
         predictions = predictions.order_by('-timestamp')
 
-    # Get total count before pagination
     total_count = predictions.count()
 
-    # Calculate stats for all user predictions
     all_user_predictions = PredictionAudit.objects.filter(user=user)
     stats = all_user_predictions.aggregate(
         total=Count('id'),
@@ -1318,29 +1214,24 @@ def my_history(request):
         avg_execution_time=Avg('execution_time_ms'),
     )
 
-    # Calculate success rate
     if stats['total'] and stats['total'] > 0:
         stats['success_rate'] = (stats['successful'] / stats['total']) * 100
     else:
         stats['success_rate'] = 0
 
-    # Format avg execution time
     if stats['avg_execution_time']:
         stats['avg_execution_time'] = round(stats['avg_execution_time'], 1)
     else:
         stats['avg_execution_time'] = 0
 
-    # Get unique models for filter dropdown (from user's history)
     user_models = all_user_predictions.values(
         'model_id', 'model_name', 'model_version'
     ).distinct().order_by('model_name')
 
-    # Get unique domains for filter dropdown
     domains = all_user_predictions.values_list(
         'model_domain', flat=True
     ).distinct().order_by('model_domain')
 
-    # Pagination (20 per page)
     paginator = Paginator(predictions, 20)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
@@ -1351,11 +1242,9 @@ def my_history(request):
             {'name': 'Dashboard', 'url': 'inference:member_dashboard'},
             {'name': 'My History', 'url': None}
         ],
-        # Predictions data
         'predictions': page_obj,
         'total_count': total_count,
         'stats': stats,
-        # Filter states
         'model_filter': model_filter,
         'domain_filter': domain_filter,
         'status_filter': status_filter,
@@ -1363,7 +1252,6 @@ def my_history(request):
         'sort_by': sort_by,
         'date_from': date_from,
         'date_to': date_to,
-        # Filter options
         'user_models': user_models,
         'domains': domains,
         'status_choices': [
@@ -1404,13 +1292,11 @@ def model_detail(request, model_id):
     if not (is_owner or is_admin or is_public_approved):
         raise Http404("Model not found")
 
-    # Get prediction stats for this model
     prediction_stats = PredictionAudit.objects.filter(model=model).aggregate(
         total_predictions=Count('id'),
         total_records=Sum('records_count'),
     )
 
-    # Recent predictions (last 10)
     recent_predictions = PredictionAudit.objects.filter(
         model=model
     ).order_by('-timestamp')[:10]

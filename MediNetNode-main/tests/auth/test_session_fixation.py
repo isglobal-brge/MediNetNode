@@ -32,7 +32,6 @@ class TestSessionFixationProtection:
         """Test that login_page (POST) regenerates session ID after successful authentication."""
         client = Client()
 
-        # Get initial session ID by making a request
         client.get('/auth/login/')
         initial_session_key = client.session.session_key
 
@@ -54,11 +53,9 @@ class TestSessionFixationProtection:
         """Test that login_page regenerates session ID after successful authentication."""
         client = Client()
 
-        # Get initial session ID
         client.get('/auth/login/')
         initial_session_key = client.session.session_key
 
-        # Perform login via HTML form
         response = client.post('/auth/login/', {
             'username': 'testuser',
             'password': 'TestPass123!'
@@ -76,7 +73,6 @@ class TestSessionFixationProtection:
         """Test that failed login does not regenerate session ID."""
         client = Client()
 
-        # Get initial session ID
         client.get('/auth/login/')
         initial_session_key = client.session.session_key
 
@@ -103,7 +99,6 @@ class TestSessionFixationProtection:
 
         initial_session_key = client.session.session_key
 
-        # Perform login
         response = client.post('/auth/login/', {
             'username': 'testuser',
             'password': 'TestPass123!'
@@ -132,7 +127,6 @@ class TestSessionFixationProtection:
 
         assert response.status_code == 302
 
-        # Verify last_activity_ts is set
         assert 'last_activity_ts' in client.session
         assert isinstance(client.session['last_activity_ts'], int)
         assert client.session['last_activity_ts'] > 0

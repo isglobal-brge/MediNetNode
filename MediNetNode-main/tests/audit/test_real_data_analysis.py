@@ -20,12 +20,10 @@ class RealDataAnalysisAccessControlTest(TestCase):
     
     def setUp(self):
         """Set up test users with different roles."""
-        # Create roles
         self.admin_role = Role.objects.get(name='ADMIN')
         self.investigador_role = Role.objects.get(name='RESEARCHER')
         self.auditor_role = Role.objects.get(name='AUDITOR')
-        
-        # Create users with different roles
+
         self.admin_user = CustomUser.objects.create_user(
             username='admin_user',
             password='StrongPass123!',
@@ -78,13 +76,12 @@ class RealDataAnalysisAccessControlTest(TestCase):
     def test_access_logging_for_real_data_request(self):
         """Test that access to real data analysis page is logged."""
         self.client.login(username='auditor_user', password='StrongPass123!')
-        
-        # Clear existing audit events
+
         AuditEvent.objects.all().delete()
-        
+
         response = self.client.get(reverse('audit:medical_data_analysis'))
         self.assertEqual(response.status_code, 200)
-        
+
         # Check that access was logged
         audit_events = AuditEvent.objects.filter(
             action='REAL_DATA_ACCESS_REQUEST',
@@ -114,7 +111,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             role=self.auditor_role
         )
         
-        # Create a temporary CSV file for testing
         self.temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
         test_data = """age,gender,condition,treatment,outcome
 25,M,hypertension,medication_a,improved
@@ -124,8 +120,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
 28,M,depression,therapy,improved"""
         self.temp_file.write(test_data)
         self.temp_file.close()
-        
-        # Create a test dataset
+
         self.test_dataset = Dataset.objects.using('datasets_db').create(
             name='Test Medical Dataset',
             description='Test dataset for auditor analysis',
@@ -161,16 +156,14 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check that watermarking is applied
         self.assertContains(response, 'CONFIDENTIAL MEDICAL DATA')
         self.assertContains(response, 'AUTHORIZED ACCESS ONLY')
-        
-        # Check data is displayed
+
         self.assertContains(response, 'REAL MEDICAL DATA PREVIEW')
         self.assertContains(response, 'LIMITED TO 100 ROWS')
-        
-        # Check actual data content
+
         self.assertContains(response, 'hypertension')
         self.assertContains(response, 'diabetes')
         self.assertContains(response, 'medication_a')
@@ -182,7 +175,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check watermark elements
         self.assertContains(response, 'watermark-info')
         self.assertContains(response, 'watermark-bottom')
@@ -196,7 +189,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check anonymization analysis section
         self.assertContains(response, 'Anonymization Quality')
         self.assertContains(response, '/100')  # Score display
@@ -208,7 +201,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check compliance analysis section
         self.assertContains(response, 'Medical Compliance Analysis')
         self.assertContains(response, 'K-Anonymity')
@@ -221,7 +214,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check column analysis
         self.assertContains(response, 'Column Analysis')
         self.assertContains(response, 'age')
@@ -233,15 +226,14 @@ class RealDataAnalysisFunctionalityTest(TestCase):
 
     def test_real_data_access_logged_with_details(self):
         """Test that real data access is logged with full details."""
-        # Clear existing audit events
         AuditEvent.objects.all().delete()
-        
+
         response = self.client.get(
             reverse('audit:medical_data_analysis'),
             {'dataset_id': self.test_dataset.id}
         )
         self.assertEqual(response.status_code, 200)
-        
+
         # Check that detailed access was logged
         preview_events = AuditEvent.objects.filter(
             action='REAL_DATA_PREVIEW_ACCESSED',
@@ -252,7 +244,7 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         preview_event = preview_events.first()
         self.assertEqual(preview_event.resource, f'dataset:{self.test_dataset.name}')
         self.assertTrue(preview_event.success)
-        
+
         # Check detailed logging
         details = preview_event.details
         self.assertIn('dataset_id', details)
@@ -273,7 +265,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
 
     def test_file_not_found_error_handling(self):
         """Test error handling when dataset file is not found."""
-        # Create dataset with invalid file path
         invalid_dataset = Dataset.objects.using('datasets_db').create(
             name='Invalid Dataset',
             description='Dataset with invalid file path',
@@ -336,7 +327,7 @@ Jane Smith,jane@email.com,555-5678,25,hypertension"""
                 {'dataset_id': dataset.id}
             )
             self.assertEqual(response.status_code, 200)
-            
+
             # Should detect issues with anonymization
             self.assertContains(response, 'Anonymization Quality')
             # The score should be lower due to identifier columns
@@ -371,7 +362,7 @@ Jane Smith,jane@email.com,555-5678,25,hypertension"""
                 {'dataset_id': dataset.id}
             )
             self.assertEqual(response.status_code, 200)
-            
+
             # Should show compliance analysis
             self.assertContains(response, 'Medical Compliance Analysis')
             self.assertContains(response, 'Valid Medical Domain')
@@ -399,7 +390,6 @@ class SecurityAndWatermarkingTest(TestCase):
 
     def test_watermark_uniqueness(self):
         """Test that each access generates a unique watermark."""
-        # Create minimal test dataset
         temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
         temp_file.write("col1,col2\nval1,val2")
         temp_file.close()
@@ -422,22 +412,22 @@ class SecurityAndWatermarkingTest(TestCase):
                 {'dataset_id': dataset.id}
             )
             self.assertEqual(response1.status_code, 200)
-            
+
             # Second access
             response2 = self.client.get(
                 reverse('audit:medical_data_analysis'),
                 {'dataset_id': dataset.id}
             )
             self.assertEqual(response2.status_code, 200)
-            
+
             # Both should have watermarks but different hashes
             self.assertContains(response1, 'HASH:')
             self.assertContains(response2, 'HASH:')
-            
+
             # Extract hash from responses (this is a simplified check)
             content1 = response1.content.decode()
             content2 = response2.content.decode()
-            
+
             # Both should contain the auditor username
             self.assertIn(self.auditor_user.username.upper(), content1)
             self.assertIn(self.auditor_user.username.upper(), content2)
@@ -449,7 +439,7 @@ class SecurityAndWatermarkingTest(TestCase):
         """Test that security warnings are prominently displayed."""
         response = self.client.get(reverse('audit:medical_data_analysis'))
         self.assertEqual(response.status_code, 200)
-        
+
         # Check security warnings
         self.assertContains(response, 'RESTRICTED ACCESS - MEDICAL DATA')
         self.assertContains(response, 'This access is logged and monitored')
@@ -462,7 +452,7 @@ class SecurityAndWatermarkingTest(TestCase):
         self.assertEqual(response.status_code, 200)
         
         content = response.content.decode()
-        
+
         # Check print CSS rules for watermark preservation
         self.assertIn('media="print"', content)
         self.assertIn('color-adjust: exact', content)
@@ -474,7 +464,7 @@ class SecurityAndWatermarkingTest(TestCase):
         self.assertEqual(response.status_code, 200)
         
         content = response.content.decode()
-        
+
         # Check for security JavaScript
         self.assertIn('contextmenu', content)  # Right-click prevention
         self.assertIn('beforeunload', content)  # Page unload warning

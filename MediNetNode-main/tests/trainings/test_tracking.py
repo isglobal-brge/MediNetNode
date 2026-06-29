@@ -44,7 +44,6 @@ class TrainingTrackingTests(TestCase):
             username='tracker', password='x', role=role
         )
 
-    # ------------------------------------------------------------------ update
     def test_update_training_progress_activates_and_tracks_round(self):
         from api.federated.utils import update_training_progress
         session = _make_session(self.user, status='STARTING', total_rounds=4)
@@ -61,7 +60,6 @@ class TrainingTrackingTests(TestCase):
         # Must not raise when there is no session to track.
         update_training_progress(None, round_number=1, current_process=None)
 
-    # ---------------------------------------------------------------- complete
     def test_complete_training_session_with_metrics(self):
         from api.federated.utils import complete_training_session
         session = _make_session(self.user, status='ACTIVE')
@@ -84,7 +82,6 @@ class TrainingTrackingTests(TestCase):
         from api.federated.utils import complete_training_session
         complete_training_session(None)  # must not raise
 
-    # -------------------------------------------------------------------- fail
     def test_fail_training_session_marks_failed(self):
         from api.federated.utils import fail_training_session
         session = _make_session(self.user, status='ACTIVE')
@@ -98,7 +95,6 @@ class TrainingTrackingTests(TestCase):
         from api.federated.utils import fail_training_session
         fail_training_session(None, error_message="boom")  # must not raise
 
-    # --------------------------------------------------- graceful degradation
     @patch('api.federated.utils.DJANGO_AVAILABLE', False)
     def test_helpers_noop_when_django_unavailable(self):
         from api.federated.utils import complete_training_session

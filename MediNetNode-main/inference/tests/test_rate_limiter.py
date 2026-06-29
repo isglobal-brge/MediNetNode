@@ -33,11 +33,9 @@ class TestRateLimiter:
         """Test batch size limit enforcement."""
         limiter = RateLimiter()
 
-        # Within limit
         result = limiter.check_limits(user_id=1, model_id=1, batch_size=500)
         assert result['allowed'] is True
 
-        # Exceeds default limit
         result = limiter.check_limits(user_id=1, model_id=1, batch_size=1500)
         assert result['allowed'] is False
         assert 'Batch size' in result['reason']
@@ -329,14 +327,12 @@ class TestRateLimiter:
         # Increment counters
         limiter.increment_counters(user_id=1, model_id=1)
 
-        # Check that keys exist
         global_hourly_key = limiter._make_key(limiter.PREFIX_GLOBAL_HOURLY, 1)
         global_daily_key = limiter._make_key(limiter.PREFIX_GLOBAL_DAILY, 1)
 
         assert cache.get(global_hourly_key) == 1
         assert cache.get(global_daily_key) == 1
 
-        # Increment again
         limiter.increment_counters(user_id=1, model_id=1)
 
         assert cache.get(global_hourly_key) == 2

@@ -19,10 +19,9 @@ class ResearcherSecurityComprehensiveTests(TestCase):
         """Set up test users and client."""
         self.client = Client()
 
-        # Get RESEARCHER role (already created in conftest.py)
+        # RESEARCHER role already created in conftest.py
         self.researcher_role = Role.objects.get(name='RESEARCHER')
 
-        # Create RESEARCHER user
         self.researcher_user = User.objects.create_user(
             username='researcher_test',
             password='TestPass123!',
@@ -30,7 +29,6 @@ class ResearcherSecurityComprehensiveTests(TestCase):
             role=self.researcher_role
         )
 
-        # Login as researcher
         self.client.login(username='researcher_test', password='TestPass123!')
 
     def test_django_admin_blocked(self):

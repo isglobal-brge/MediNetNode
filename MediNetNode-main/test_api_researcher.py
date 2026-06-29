@@ -8,7 +8,6 @@ import json
 import time
 from datetime import datetime
 
-# Configuration
 API_BASE_URL = "http://localhost:5001"  # Django API port
 API_ENDPOINTS = {
     'ping': f"{API_BASE_URL}/api/v2/ping",
@@ -74,8 +73,7 @@ def test_get_data_info():
         if response.status_code == 200:
             data = response.json()
             print(f"Response keys: {list(data.keys())}")
-            
-            # Check if we have dataset structure
+
             if 'dataset_id' in data:
                 dataset_count = len(data['dataset_id'])
                 print(f"[OK] Found {dataset_count} datasets accessible to user")
@@ -84,7 +82,7 @@ def test_get_data_info():
                 if dataset_count > 0:
                     print("[INFO] First dataset:")
                     for key in data.keys():
-                        if data[key]:  # If list is not empty
+                        if data[key]:
                             print(f"  {key}: {data[key][0]}")
                 return True
             else:
@@ -104,7 +102,6 @@ def test_start_client():
     """Test the start_client endpoint with sample model configuration."""
     print("\n[SEARCH] Testing /start-client endpoint...")
     
-    # Sample model configuration
     model_config = {
         "framework": "pt",
         "model": {
@@ -208,16 +205,14 @@ def main():
         print("\nTo generate API key, run:")
         print("python manage.py generate_api_key testData")
         return
-    
-    # Run all tests
+
     results = {
         'ping': test_ping(),
         'invalid_key_security': test_invalid_api_key(),
         'get_data_info': test_get_data_info(),
         'start_client': test_start_client()
     }
-    
-    # Summary
+
     print("\n" + "=" * 60)
     print("[INFO] TEST RESULTS SUMMARY:")
     passed = sum(results.values())

@@ -13,7 +13,6 @@ try:
 except ImportError:
     MAGIC_AVAILABLE = False
 
-# Import pandas - simplified
 try:
     import pandas as pd
     PANDAS_AVAILABLE = True
@@ -34,7 +33,6 @@ from .models import Dataset, DatasetMetadata
 
 User = get_user_model()
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 class DatasetUploadError(Exception):

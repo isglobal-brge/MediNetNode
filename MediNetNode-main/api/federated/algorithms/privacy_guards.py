@@ -15,10 +15,6 @@ from typing import Dict, List, Any
 import warnings
 
 
-# ============================================================================
-# PRIVACY BUDGET MANAGEMENT
-# ============================================================================
-
 class PrivacyBudgetExhausted(Exception):
     """Raised when privacy budget is exhausted."""
     pass
@@ -98,10 +94,6 @@ class PrivacyBudgetTracker:
         """
         return self.operations.copy()
 
-
-# ============================================================================
-# FEATURE BOUNDS VALIDATION
-# ============================================================================
 
 class FeatureBoundsValidator:
     """
@@ -194,10 +186,6 @@ class FeatureBoundsValidator:
         }
 
 
-# ============================================================================
-# EPSILON VALIDATION
-# ============================================================================
-
 class EpsilonValidator:
     """
     Validates epsilon values according to industry standards.
@@ -255,10 +243,6 @@ class EpsilonValidator:
             )
 
 
-# ============================================================================
-# DATA INTEGRITY
-# ============================================================================
-
 def compute_data_hash(X: np.ndarray) -> str:
     """
     Compute SHA256 hash of training data for integrity verification.
@@ -274,10 +258,6 @@ def compute_data_hash(X: np.ndarray) -> str:
     """
     return hashlib.sha256(X.tobytes()).hexdigest()
 
-
-# ============================================================================
-# EXPORTS
-# ============================================================================
 
 __all__ = [
     'PrivacyBudgetTracker',

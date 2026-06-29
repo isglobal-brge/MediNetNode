@@ -25,13 +25,10 @@ class TestDifferentialPrivacy:
         """Test adding noise to probabilities."""
         dp = DifferentialPrivacy(epsilon=1.0)
 
-        # Original probabilities
         probs = np.array([0.7, 0.2, 0.1])
 
-        # Add noise
         noisy_probs = dp.add_noise_to_probabilities(probs)
 
-        # Check properties
         assert noisy_probs.shape == probs.shape
         assert np.all(noisy_probs >= 0.0)
         assert np.all(noisy_probs <= 1.0)
@@ -45,7 +42,6 @@ class TestDifferentialPrivacy:
         dp = DifferentialPrivacy(epsilon=1.0)
         probs = np.array([0.5, 0.5])
 
-        # Two calls should produce different results
         noisy1 = dp.add_noise_to_probabilities(probs)
         noisy2 = dp.add_noise_to_probabilities(probs)
 
@@ -68,7 +64,6 @@ class TestDifferentialPrivacy:
         value = 50.0
         noisy_value = dp.add_noise_to_scalar(value)
 
-        # Should be different
         assert noisy_value != value
 
         # Should be reasonable (within several standard deviations)
@@ -81,7 +76,6 @@ class TestDifferentialPrivacy:
         value = 50.0
         noisy_value = dp.add_noise_to_scalar(value, min_val=0.0, max_val=100.0)
 
-        # Must be within bounds
         assert noisy_value >= 0.0
         assert noisy_value <= 100.0
 
@@ -113,7 +107,6 @@ class TestDifferentialPrivacy:
         """Test getting recommended epsilon by domain."""
         dp = DifferentialPrivacy()
 
-        # Test specific domains
         assert dp.get_recommended_epsilon('oncology') == 1.0
         assert dp.get_recommended_epsilon('Oncology') == 1.0  # Case insensitive
         assert dp.get_recommended_epsilon('cardiology') == 2.0
@@ -196,7 +189,6 @@ class TestOutputSanitizer:
         probs = np.array([0.12345, 0.67891, 0.19764])
         sanitized = sanitizer.sanitize_probabilities(probs)
 
-        # Check rounding
         assert sanitized[0] == pytest.approx(0.12, abs=0.01)
         assert sanitized[1] == pytest.approx(0.68, abs=0.01)
         assert sanitized[2] == pytest.approx(0.20, abs=0.01)
@@ -301,18 +293,14 @@ class TestIntegration:
 
     def test_dp_then_sanitize(self):
         """Test applying DP noise then sanitizing."""
-        # Original probabilities
         probs = np.array([0.65, 0.25, 0.10])
 
-        # Apply DP noise
         dp = DifferentialPrivacy(epsilon=2.0)
         noisy_probs = dp.add_noise_to_probabilities(probs)
 
-        # Sanitize
         sanitizer = OutputSanitizer(precision=2, min_confidence=0.05)
         final_probs = sanitizer.sanitize_probabilities(noisy_probs)
 
-        # Check final properties
         assert final_probs.shape == probs.shape
         assert np.all(final_probs >= 0.0)
         assert np.all(final_probs <= 1.0)
@@ -325,20 +313,15 @@ class TestIntegration:
         """Test workflow with recommended epsilon for domain."""
         dp = DifferentialPrivacy()
 
-        # Get recommended epsilon for oncology
         epsilon = dp.get_recommended_epsilon('oncology')
         assert epsilon == 1.0
 
-        # Create new DP instance with recommended epsilon
         dp_oncology = DifferentialPrivacy(epsilon=epsilon)
 
-        # Add noise to probabilities
         probs = np.array([0.8, 0.15, 0.05])
         noisy_probs = dp_oncology.add_noise_to_probabilities(probs)
 
-        # Check impact estimate
         impact = DifferentialPrivacy.estimate_accuracy_impact(epsilon)
         assert impact['privacy_level'] == 'high'
 
-        # Verify noisy probs are valid
         assert np.isclose(np.sum(noisy_probs), 1.0, atol=1e-6)

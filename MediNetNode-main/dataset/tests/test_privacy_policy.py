@@ -24,10 +24,6 @@ from django.db import IntegrityError
 from dataset.models import Dataset, DatasetPrivacyPolicy
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
 def _make_dataset(name="test_ds", **kwargs) -> Dataset:
     defaults = dict(
         description="Test dataset",
@@ -52,10 +48,6 @@ def _make_policy(sensitivity="medium", dataset=None, **kwargs) -> DatasetPrivacy
     policy.save()
     return policy
 
-
-# ---------------------------------------------------------------------------
-# 1. SENSITIVITY_DEFAULTS auto-populate
-# ---------------------------------------------------------------------------
 
 class TestSensitivityPresets(TestCase):
     """save() must auto-populate limits from SENSITIVITY_DEFAULTS when not set."""
@@ -113,10 +105,6 @@ class TestSensitivityPresets(TestCase):
         self.assertLess(med_budget, low_budget)
 
 
-# ---------------------------------------------------------------------------
-# 2. remaining_budget property
-# ---------------------------------------------------------------------------
-
 class TestRemainingBudget(TestCase):
     """remaining_budget must never be negative and must reflect spent_epsilon."""
 
@@ -151,10 +139,6 @@ class TestRemainingBudget(TestCase):
         policy.spent_epsilon = 1.5
         self.assertAlmostEqual(policy.remaining_budget, 0.5)
 
-
-# ---------------------------------------------------------------------------
-# 3. can_accept_job — nominal paths
-# ---------------------------------------------------------------------------
 
 class TestCanAcceptJobNominal(TestCase):
     databases = {"default", "datasets_db"}
@@ -218,10 +202,6 @@ class TestCanAcceptJobNominal(TestCase):
         _, msg = policy.can_accept_job(0.5)
         self.assertIsInstance(msg, str)
 
-
-# ---------------------------------------------------------------------------
-# 4. can_accept_job — adversarial inputs
-# ---------------------------------------------------------------------------
 
 class TestCanAcceptJobAdversarial(TestCase):
     """A compromised Hub could send NaN, inf, -1.0 to bypass budget checks.
@@ -298,10 +278,6 @@ class TestCanAcceptJobAdversarial(TestCase):
         self.assertIn("máximo por job", msg)
 
 
-# ---------------------------------------------------------------------------
-# 5. record_spent — nominal
-# ---------------------------------------------------------------------------
-
 class TestRecordSpentNominal(TestCase):
     databases = {"default", "datasets_db"}
 
@@ -338,10 +314,6 @@ class TestRecordSpentNominal(TestCase):
         policy.refresh_from_db()
         self.assertAlmostEqual(policy.remaining_budget, 3.0, places=5)
 
-
-# ---------------------------------------------------------------------------
-# 6. record_spent — adversarial (sentinel / invalid values must be skipped)
-# ---------------------------------------------------------------------------
 
 class TestRecordSpentAdversarial(TestCase):
     """record_spent must silently ignore any non-positive or non-finite value.
@@ -407,10 +379,6 @@ class TestRecordSpentAdversarial(TestCase):
         self.assertAlmostEqual(policy.remaining_budget, 5.0)
 
 
-# ---------------------------------------------------------------------------
-# 7. Atomic F() update
-# ---------------------------------------------------------------------------
-
 class TestAtomicUpdate(TestCase):
     """record_spent uses F() so concurrent updates don't lose writes."""
 
@@ -445,10 +413,6 @@ class TestAtomicUpdate(TestCase):
         # instance_b now reflects the updated value (0.9)
         self.assertAlmostEqual(instance_b.spent_epsilon, 0.9, places=5)
 
-
-# ---------------------------------------------------------------------------
-# 8. Model constraints and metadata
-# ---------------------------------------------------------------------------
 
 class TestModelConstraints(TestCase):
     databases = {"default", "datasets_db"}
@@ -501,10 +465,6 @@ class TestModelConstraints(TestCase):
         # which has millisecond resolution insufficient for in-memory SQLite tests.
         self.assertEqual(DatasetPrivacyPolicy._meta.ordering, ['-created_at'])
 
-
-# ---------------------------------------------------------------------------
-# 9. Override defaults — explicit values must not be overwritten
-# ---------------------------------------------------------------------------
 
 class TestOverrideDefaults(TestCase):
     """save() must only fill in missing limits, not overwrite explicit values."""
@@ -559,10 +519,6 @@ class TestOverrideDefaults(TestCase):
         self.assertAlmostEqual(policy.max_epsilon_per_job, 0.5)
         self.assertAlmostEqual(policy.lifetime_budget, 2.0)
 
-
-# ---------------------------------------------------------------------------
-# 10. clean() validation — committee-identified CRITICAL/HIGH fixes
-# ---------------------------------------------------------------------------
 
 class TestCleanValidation(TestCase):
     """save() now calls clean(), which must reject invalid stored limits."""
@@ -652,10 +608,6 @@ class TestCleanValidation(TestCase):
             ).save()
 
 
-# ---------------------------------------------------------------------------
-# 11. remaining_budget NaN/inf guard (committee-identified HIGH fix)
-# ---------------------------------------------------------------------------
-
 class TestRemainingBudgetCorruptData(TestCase):
     """remaining_budget must fail closed (return 0.0) on corrupt DB values."""
 
@@ -682,10 +634,6 @@ class TestRemainingBudgetCorruptData(TestCase):
         object.__setattr__(policy, 'spent_epsilon', float('inf'))
         self.assertEqual(policy.remaining_budget, 0.0)
 
-
-# ---------------------------------------------------------------------------
-# 12. can_accept_job with corrupt stored limits (committee-identified CRITICAL)
-# ---------------------------------------------------------------------------
 
 class TestCanAcceptJobCorruptStoredLimits(TestCase):
     """If stored max_epsilon_per_job is NaN (DB bypass), can_accept_job must
@@ -718,10 +666,6 @@ class TestCanAcceptJobCorruptStoredLimits(TestCase):
         ok, msg = policy.can_accept_job(0.5)
         self.assertFalse(ok)
 
-
-# ---------------------------------------------------------------------------
-# 13. record_spent conditional update — budget ceiling respected
-# ---------------------------------------------------------------------------
 
 class TestRecordSpentAuditAggregate(TestCase):
     """record_spent on the policy is an AUDIT aggregate: it accumulates the

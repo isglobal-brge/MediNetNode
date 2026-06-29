@@ -102,7 +102,6 @@ class DynamicModel(nn.Module):
         """
         super(DynamicModel, self).__init__()
         
-        # Load configuration
         if isinstance(config, str):
             with open(config) as f:
                 loaded_config = json.load(f)
@@ -110,7 +109,7 @@ class DynamicModel(nn.Module):
             loaded_config = {"layers": config}
         else:
             loaded_config = config
-        
+
         # Handle different JSON structures
         if 'model' in loaded_config and 'config_json' in loaded_config['model']:
             self.config = loaded_config['model']['config_json']
@@ -140,10 +139,8 @@ class DynamicModel(nn.Module):
             self.cleaned_config = self.config.copy()
             self._add_missing_ids()
             
-        # Create layers from cleaned config
         self._create_layers()
-        
-        # Set output layers
+
         layers = self.cleaned_config.get("architecture", {}).get("layers", [])
         if layers:
             self.output_layers = self.cleaned_config.get("output_layers", [layers[-1]["id"]])
@@ -152,9 +149,8 @@ class DynamicModel(nn.Module):
             
     def _add_missing_ids(self):
         """Add missing IDs to layers that don't have them"""
-        # Get layers from unified structure
         layers = self.cleaned_config.get("architecture", {}).get("layers", [])
-            
+
         for i, layer in enumerate(layers):
             if not layer.get("id"):
                 if layer.get("type") == "input":
@@ -239,10 +235,8 @@ class DynamicModel(nn.Module):
                 
     def _filter_pytorch_params(self, layer_class, params):
         """Filter out parameters that are for display only, not valid PyTorch parameters"""
-        # Remove display-only parameters
         filtered = {k: v for k, v in params.items() if k not in ['features', 'inputs', 'type']}
-        
-        # Layer-specific parameter filtering
+
         if layer_class == 'Linear':
             valid_keys = ['in_features', 'out_features', 'bias', 'device', 'dtype']
             filtered = {k: v for k, v in filtered.items() if k in valid_keys}
@@ -301,23 +295,20 @@ class DynamicModel(nn.Module):
         if not layers and "model" in self.cleaned_config:
             layers = self.cleaned_config["model"].get("layers", [])
 
-        # Process each layer in order
         for layer_config in layers:
             layer_id = layer_config["id"]
             layer_type = layer_config["type"]
-            
+
             # Skip input layer (already handled)
             if layer_id == "input_data" or layer_type == "input":
                 continue
-                
+
             # Skip output placeholder layer
             if layer_type == "output" and layer_config.get("name") == "Output Layer":
                 continue
-            
-            # Get input tensors for this layer
+
             input_tensors = [outputs[input_id] for input_id in layer_config.get("inputs", [])]
-            
-            # Process based on layer type
+
             if layer_type in self.custom_ops:
                 outputs[layer_id] = self.custom_ops[layer_type](input_tensors)
             elif layer_id in self.layers:  # Only process if layer exists in ModuleDict
@@ -360,7 +351,6 @@ class SequentialModel(nn.Module):
     def __init__(self, config: Union[str, dict, List[dict]]):
         super(SequentialModel, self).__init__()
 
-        # Load configuration
         if isinstance(config, str):
             with open(config) as f:
                 loaded_config = json.load(f)
@@ -389,7 +379,6 @@ class SequentialModel(nn.Module):
         else:
             self.cleaned_config = self.config
 
-        # Build sequential model
         self.model = self._build_sequential()
 
     def _build_sequential(self) -> nn.Sequential:
@@ -409,15 +398,13 @@ class SequentialModel(nn.Module):
                 continue
             if layer_name == "Output Layer":
                 continue
-            
-            # Get layer parameters
+
             layer_params = layer_config.get("params", {})
 
             # Translate UI type names to PyTorch class names
             raw = layer_type if layer_type else layer_name
             layer_class = _UI_TO_PYTORCH.get(raw, raw)
 
-            # Filter parameters for PyTorch
             filtered_params = self._filter_pytorch_params(layer_class, layer_params)
 
             try:
@@ -437,10 +424,8 @@ class SequentialModel(nn.Module):
 
     def _filter_pytorch_params(self, layer_class, params):
         """Filter out parameters that are for display only, not valid PyTorch parameters"""
-        # Remove display-only parameters
         filtered = {k: v for k, v in params.items() if k not in ['features', 'inputs', 'type', 'category']}
 
-        # Layer-specific parameter filtering
         if layer_class == 'Linear':
             valid_keys = ['in_features', 'out_features', 'bias', 'device', 'dtype']
             filtered = {k: v for k, v in filtered.items() if k in valid_keys}

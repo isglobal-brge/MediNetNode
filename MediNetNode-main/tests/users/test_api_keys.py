@@ -65,14 +65,12 @@ class APIKeyModelTests(TestCase):
     
     def test_api_key_expiration(self):
         """Test API key expiration functionality."""
-        # Create expired API key
         expired_key = APIKey.objects.create(
             user=self.researcher_user,
             name="Expired Key",
             expires_at=timezone.now() - timedelta(days=1)
         )
-        
-        # Create active API key
+
         active_key = APIKey.objects.create(
             user=self.researcher_user,
             name="Active Key",
@@ -121,13 +119,11 @@ class UserCreationWithAPIKeyTests(TestCase):
     def setUp(self):
         """Set up test data."""
         self.client = Client()
-        
-        # Create roles
+
         self.admin_role = Role.objects.get(name='ADMIN')
         self.researcher_role = Role.objects.get(name='RESEARCHER')
         self.auditor_role = Role.objects.get(name='AUDITOR')
-        
-        # Create admin user
+
         self.admin_user = User.objects.create_user(
             username='admin',
             email='admin@test.com',
@@ -151,15 +147,12 @@ class UserCreationWithAPIKeyTests(TestCase):
         }
         
         response = self.client.post(reverse('create_user'), user_data)
-        
-        # Should redirect to success page
+
         self.assertEqual(response.status_code, 302)
-        
-        # Check user was created
+
         user = User.objects.get(username='newresearcher')
         self.assertEqual(user.role, self.researcher_role)
-        
-        # Check API key was generated
+
         api_keys = APIKey.objects.filter(user=user)
         self.assertEqual(api_keys.count(), 1)
         
@@ -181,15 +174,13 @@ class UserCreationWithAPIKeyTests(TestCase):
         }
         
         response = self.client.post(reverse('create_user'), user_data)
-        
-        # Should redirect to success page
+
         self.assertEqual(response.status_code, 302)
-        
-        # Check user was created
+
         user = User.objects.get(username='newauditor')
         self.assertEqual(user.role, self.auditor_role)
-        
-        # Check NO API key was generated
+
+        # No API key should be generated for non-RESEARCHER roles
         api_keys = APIKey.objects.filter(user=user)
         self.assertEqual(api_keys.count(), 0)
     
@@ -334,7 +325,6 @@ class APIRequestAuditTests(TestCase):
     
     def test_api_request_logging(self):
         """Test API request logging functionality."""
-        # Create API request log
         api_request = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
@@ -355,7 +345,6 @@ class APIRequestAuditTests(TestCase):
     
     def test_api_request_error_logging(self):
         """Test API request error logging."""
-        # Create failed API request log
         api_request = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,

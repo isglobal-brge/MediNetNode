@@ -1,7 +1,6 @@
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, mean_absolute_error, mean_squared_error, r2_score
 
-# --- Métricas personalizadas para segmentación ---
 def iou(preds, targets):
     """
     Intersection over Union (IoU) para segmentación.
@@ -13,19 +12,15 @@ def iou(preds, targets):
     Returns:
         float: IoU score
     """
-    # Convertir a arrays numpy si no lo son
     preds = np.array(preds)
     targets = np.array(targets)
-    
-    # Asegurar que sean binarios
+
     preds = (preds > 0.5).astype(np.float32)
     targets = (targets > 0.5).astype(np.float32)
-    
-    # Calcular intersección y unión
+
     intersection = np.sum(preds * targets)
     union = np.sum(preds) + np.sum(targets) - intersection
-    
-    # Evitar división por cero
+
     if union == 0:
         return 1.0 if intersection == 0 else 0.0
     
@@ -42,21 +37,16 @@ def dice_score(preds, targets):
     Returns:
         float: Dice score
     """
-    # Convertir a arrays numpy si no lo son
     preds = np.array(preds)
     targets = np.array(targets)
-    
-    # Asegurar que sean binarios
+
     preds = (preds > 0.5).astype(np.float32)
     targets = (targets > 0.5).astype(np.float32)
-    
-    # Calcular intersección
+
     intersection = np.sum(preds * targets)
-    
-    # Calcular suma total
+
     total = np.sum(preds) + np.sum(targets)
-    
-    # Evitar división por cero
+
     if total == 0:
         return 1.0 if intersection == 0 else 0.0
     
@@ -73,15 +63,12 @@ def pixel_accuracy(preds, targets):
     Returns:
         float: Pixel accuracy
     """
-    # Convertir a arrays numpy si no lo son
     preds = np.array(preds)
     targets = np.array(targets)
-    
-    # Asegurar que sean binarios
+
     preds = (preds > 0.5).astype(np.float32)
     targets = (targets > 0.5).astype(np.float32)
-    
-    # Calcular píxeles correctos
+
     correct_pixels = np.sum(preds == targets)
     total_pixels = preds.size
     
@@ -98,19 +85,15 @@ def sensitivity(preds, targets):
     Returns:
         float: Sensitivity score
     """
-    # Convertir a arrays numpy si no lo son
     preds = np.array(preds)
     targets = np.array(targets)
-    
-    # Asegurar que sean binarios
+
     preds = (preds > 0.5).astype(np.float32)
     targets = (targets > 0.5).astype(np.float32)
-    
-    # Calcular true positives y false negatives
+
     true_positives = np.sum(preds * targets)
     false_negatives = np.sum(targets) - true_positives
-    
-    # Evitar división por cero
+
     if (true_positives + false_negatives) == 0:
         return 1.0 if true_positives == 0 else 0.0
     
@@ -127,19 +110,15 @@ def specificity(preds, targets):
     Returns:
         float: Specificity score
     """
-    # Convertir a arrays numpy si no lo son
     preds = np.array(preds)
     targets = np.array(targets)
-    
-    # Asegurar que sean binarios
+
     preds = (preds > 0.5).astype(np.float32)
     targets = (targets > 0.5).astype(np.float32)
-    
-    # Calcular true negatives y false positives
+
     true_negatives = np.sum((1 - preds) * (1 - targets))
     false_positives = np.sum(preds) - np.sum(preds * targets)
-    
-    # Evitar división por cero
+
     if (true_negatives + false_positives) == 0:
         return 1.0 if true_negatives == 0 else 0.0
     

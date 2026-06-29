@@ -38,10 +38,8 @@ def flatten_with_prefix(config, prefix="", delimiter="__"):
     for key, value in config.items():
         new_key = f"{prefix}{delimiter}{key}" if prefix else key
         if isinstance(value, dict):
-            # Recursively flatten nested dictionaries
             flat_config.update(flatten_with_prefix(value, prefix=new_key, delimiter=delimiter))
         elif isinstance(value, (list, tuple)):
-            # Convert lists/tuples to strings
             flat_config[new_key] = str(value)
         else:
             flat_config[new_key] = value
@@ -120,7 +118,6 @@ def update_training_progress(training_session,round_number, current_process, met
         return
     
     try:
-        # Update resource usage
         if current_process:
             try:
                 cpu_percent = current_process.cpu_percent()
@@ -136,7 +133,6 @@ def update_training_progress(training_session,round_number, current_process, met
         training_session.current_round = round_number
         if training_session.status == 'STARTING':
             training_session.status = 'ACTIVE'
-            # Training session activated
         elif training_session.status != 'ACTIVE':
             training_session.status = 'ACTIVE'
         
@@ -146,7 +142,6 @@ def update_training_progress(training_session,round_number, current_process, met
         # Save current round state for persistence across Flower client restarts
         training_session.save(update_fields=['current_round', 'status', 'progress_percentage', 'cpu_usage', 'memory_usage'])
                 
-        # Create round record if metrics provided
         if metrics:
             round_record = TrainingRound(
                 session=training_session,
@@ -158,7 +153,6 @@ def update_training_progress(training_session,round_number, current_process, met
                 f1_score=metrics.get('f1')
             )
             
-            # Add resource usage to round
             if current_process:
                 try:
                     round_record.cpu_usage = current_process.cpu_percent()
@@ -173,7 +167,6 @@ def update_training_progress(training_session,round_number, current_process, met
             print(f"[INFO] Round {round_number} completed - Loss: {metrics.get('loss', 'N/A'):.4f}, Acc: {metrics.get('accuracy', 'N/A'):.4f}, F1: {metrics.get('f1', 'N/A'):.4f}")
         
     except Exception as e:
-        # Error updating progress
         raise e
 
 def _record_privacy_spend(training_session) -> None:
@@ -323,7 +316,6 @@ def complete_training_session(training_session, final_metrics=None):
         _record_privacy_spend(training_session)
 
     except Exception as e:
-        # Error completing session
         raise e
 
 def fail_training_session(training_session, error_message, traceback=None):

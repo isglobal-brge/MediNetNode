@@ -9,8 +9,7 @@ from pathlib import Path
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Suppress flush errors for in-memory datasets_db
+# Suppress flush errors for in-memory datasets_db.
 #
 # pytest-django calls `call_command('flush', database='datasets_db', ...)`
 # between transactional tests to reset state.  The shared-cache in-memory
@@ -18,7 +17,6 @@ import pytest
 # pytest-django sometimes causes the flush management command to fail with
 # CommandError.  The integration fixtures clean up their own data in finally
 # blocks, so skipping an unsuccessful flush for this alias is safe.
-# ---------------------------------------------------------------------------
 import django.core.management as _mgmt  # noqa: E402
 
 _orig_call_command = _mgmt.call_command

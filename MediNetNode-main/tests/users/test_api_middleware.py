@@ -23,19 +23,16 @@ class APIAuthenticationMiddlewareTests(TestCase):
         """Set up test data."""
         self.factory = RequestFactory()
         self.middleware = APIAuthenticationMiddleware(Mock())
-        
-        # Create RESEARCHER role
+
         self.researcher_role = Role.objects.get(name='RESEARCHER')
-        
-        # Create RESEARCHER user
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_test',
             email='researcher@test.com',
             password='ResearcherPass123!',
             role=self.researcher_role
         )
-        
-        # Create API key
+
         self.api_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key',
@@ -45,13 +42,12 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_non_api_requests_pass_through(self):
         """Test that non-API requests are not processed by middleware."""
         request = self.factory.get('/')
-        
-        # Mock get_response to return a simple response
+
         mock_response = Mock()
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
+
         # Should pass through without authentication
         self.assertEqual(response, mock_response)
         self.middleware.get_response.assert_called_once_with(request)
@@ -64,8 +60,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         
         self.assertIsInstance(response, JsonResponse)
         self.assertEqual(response.status_code, 401)
-        
-        # Check response content
+
         response_data = self.get_json_response_data(response)
         self.assertEqual(response_data['error'], 'Missing X-API-Key header')
     
@@ -87,7 +82,6 @@ class APIAuthenticationMiddlewareTests(TestCase):
     
     def test_expired_api_key_returns_401(self):
         """Test that expired API key returns 401."""
-        # Create expired API key
         expired_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Expired Key',
@@ -123,7 +117,6 @@ class APIAuthenticationMiddlewareTests(TestCase):
     
     def test_non_researcher_role_returns_403(self):
         """Test that non-RESEARCHER users cannot access API."""
-        # Create ADMIN user and API key
         admin_role = Role.objects.get(name='ADMIN')
         admin_user = CustomUser.objects.create_user(
             username='admin_test',
@@ -190,15 +183,13 @@ class APIAuthenticationMiddlewareTests(TestCase):
             HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
-        
-        # Mock get_response to return a simple response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Check that request attributes are set
+
         self.assertEqual(request.api_key, self.api_key)
         self.assertEqual(request.api_user, self.researcher_user)
         self.assertTrue(hasattr(request, 'start_time'))
@@ -211,15 +202,13 @@ class APIAuthenticationMiddlewareTests(TestCase):
             REMOTE_ADDR='192.168.1.100',
             HTTP_USER_AGENT='TestClient/1.0'
         )
-        
-        # Mock get_response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Check that request was logged
+
         log_entry = APIRequest.objects.get(
             api_key=self.api_key,
             endpoint='/api/v2/ping'
@@ -239,8 +228,7 @@ class APIAuthenticationMiddlewareTests(TestCase):
         )
         
         response = self.middleware(request)
-        
-        # Check that failed request was logged
+
         log_entry = APIRequest.objects.get(endpoint='/api/v2/ping')
         self.assertIsNone(log_entry.api_key)
         self.assertIsNone(log_entry.user)
@@ -258,18 +246,15 @@ class APIAuthenticationMiddlewareTests(TestCase):
             HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
-        
-        # Mock get_response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Reload API key from database
+
         self.api_key.refresh_from_db()
-        
-        # Check that last used fields were updated
+
         self.assertNotEqual(self.api_key.last_used_at, initial_last_used)
         self.assertEqual(self.api_key.last_used_ip, '192.168.1.100')
     
@@ -307,8 +292,7 @@ class RateLimitMiddlewareTests(TestCase):
         """Set up test data."""
         self.factory = RequestFactory()
         self.middleware = RateLimitMiddleware(Mock())
-        
-        # Create test user and API key
+
         self.researcher_role = Role.objects.get(name='RESEARCHER')
         
         self.researcher_user = CustomUser.objects.create_user(

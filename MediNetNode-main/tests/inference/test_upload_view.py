@@ -17,7 +17,6 @@ class ModelUploadViewTest(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Create or get roles
         self.member_role, _ = Role.objects.get_or_create(
             name='MEMBER',
             defaults={
@@ -38,7 +37,6 @@ class ModelUploadViewTest(TestCase):
             }
         )
 
-        # Create users
         self.member_user = User.objects.create_user(
             username='member_test',
             email='member@test.com',
@@ -54,7 +52,6 @@ class ModelUploadViewTest(TestCase):
 
         self.client = Client()
 
-        # Valid schemas
         self.valid_input_schema = {
             "features": [
                 {
@@ -90,7 +87,6 @@ class ModelUploadViewTest(TestCase):
         """Test that MEMBER uploads create models with pending status."""
         self.client.login(username='member_test', password='test123')
 
-        # Create mock ONNX file
         onnx_file = SimpleUploadedFile(
             "test_model.onnx",
             b'MOCK_ONNX_CONTENT',
@@ -125,7 +121,6 @@ class ModelUploadViewTest(TestCase):
         """Test that ADMIN uploads create models with approved status."""
         self.client.login(username='admin_test', password='test123')
 
-        # Create mock ONNX file
         onnx_file = SimpleUploadedFile(
             "admin_model.onnx",
             b'MOCK_ONNX_CONTENT',
@@ -197,7 +192,6 @@ class ModelUploadViewTest(TestCase):
             'is_public': False
         }
 
-        # Mock ONNX file
         onnx_file = SimpleUploadedFile(
             "test.onnx",
             b'MOCK',

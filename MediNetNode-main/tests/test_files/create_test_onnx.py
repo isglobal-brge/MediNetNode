@@ -25,13 +25,9 @@ class SimpleCardioModel(nn.Module):
         x = self.softmax(x)
         return x
 
-# Create model
 model = SimpleCardioModel(input_size=10)
-
-# Create dummy input (batch_size=1, input_size=10)
 dummy_input = torch.randn(1, 10)
 
-# Export to ONNX
 torch.onnx.export(
     model,
     dummy_input,
@@ -49,7 +45,7 @@ torch.onnx.export(
 
 print("[OK] Created: onnx/cardionet_small.onnx (10 features)")
 
-# Create medium model
+
 class MediumModel(nn.Module):
     """Medium-sized model for testing."""
     def __init__(self, input_size=100):
@@ -98,7 +94,7 @@ torch.onnx.export(
 
 print("[OK] Created: onnx/clinical_medium.onnx (100 features)")
 
-# Create genetics model (large)
+
 class GeneticsModel(nn.Module):
     """Large model for genetics data."""
     def __init__(self, input_size=5000):

@@ -18,10 +18,6 @@ if "magic" not in sys.modules:
     sys.modules["magic"] = MagicMock()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 _SERVER_ADDRESS = "192.168.1.100:8080"  # private IP — allowed via _fl_env_vars
 
 
@@ -47,10 +43,6 @@ def _post_start_client(client, auth_headers: dict, body: dict):
         **auth_headers,
     )
 
-
-# ---------------------------------------------------------------------------
-# Authentication / authorisation tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestStartClientAuth:
@@ -85,10 +77,6 @@ class TestStartClientAuth:
         )
         assert response.status_code == 401
 
-
-# ---------------------------------------------------------------------------
-# Payload / SSRF validation tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestStartClientValidation:
@@ -139,10 +127,6 @@ class TestStartClientValidation:
         data = response.json()
         assert "ca_cert" in data.get("error", "").lower() or "certificate" in data.get("error", "").lower()
 
-
-# ---------------------------------------------------------------------------
-# Happy-path tests (Process mocked)
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=["default", "datasets_db"])
 class TestStartClientSuccess:

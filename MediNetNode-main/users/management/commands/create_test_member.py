@@ -34,7 +34,6 @@ class Command(BaseCommand):
         password = options['password']
         force = options.get('force', False)
 
-        # Get or create MEMBER role
         try:
             member_role = Role.objects.get(name='MEMBER')
             self.stdout.write(f'[OK] Found MEMBER role')
@@ -44,7 +43,6 @@ class Command(BaseCommand):
             )
             return
 
-        # Check if user exists
         if CustomUser.objects.filter(username=username).exists():
             if force:
                 CustomUser.objects.filter(username=username).delete()
@@ -57,7 +55,6 @@ class Command(BaseCommand):
                 )
                 return
 
-        # Create test MEMBER user
         user = CustomUser.objects.create_user(
             username=username,
             password=password,
@@ -76,7 +73,6 @@ class Command(BaseCommand):
         self.stdout.write(f'  Active: {user.is_active}')
         self.stdout.write(f'\n  Login at: http://localhost:5001/auth/login/')
 
-        # Show permissions
         if member_role.permissions:
             self.stdout.write(f'\n  Permissions ({len(member_role.permissions)}):')
             for perm, value in member_role.permissions.items():

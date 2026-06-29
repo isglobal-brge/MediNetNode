@@ -100,20 +100,16 @@ class AuditLogger:
             details = {}
         if columns_accessed is None:
             columns_accessed = []
-            
-        # Determine category and severity
+
         category = cls._determine_category(action, resource)
         severity = cls._determine_severity(action, success, details)
-        
-        # Calculate risk score
+
         risk_score = cls._calculate_risk_score(
             category, action, success, details, user, ip_address
         )
-        
-        # Set requires_review based on threshold
+
         requires_review = risk_score >= cls.REVIEW_THRESHOLD
-        
-        # Create audit event
+
         audit_event = AuditEvent.objects.create(
             user=user,
             action=action,
@@ -130,13 +126,12 @@ class AuditLogger:
             request_duration_ms=request_duration_ms,
             requires_review=requires_review,
         )
-        
-        # Create DataAccessLog for data access events
+
         if category == 'DATA_ACCESS' and (medical_domain or patient_count or records_accessed):
             data_sensitivity_level = cls._calculate_data_sensitivity(
                 medical_domain, patient_count, columns_accessed
             )
-            
+
             DataAccessLog.objects.create(
                 audit_event=audit_event,
                 medical_domain=medical_domain,
@@ -146,8 +141,7 @@ class AuditLogger:
                 records_accessed=records_accessed,
                 query_hash=cls._generate_query_hash(resource, columns_accessed),
             )
-        
-        # Check for security incidents
+
         if risk_score >= cls.INCIDENT_THRESHOLD:
             cls._create_security_incident(audit_event)
             
@@ -158,62 +152,52 @@ class AuditLogger:
         """Determine event category based on action and resource."""
         action_lower = action.lower()
         resource_lower = resource.lower()
-        
-        # Authentication events
+
         if any(keyword in action_lower for keyword in ['login', 'logout', 'auth', 'password']):
             return 'AUTH'
-        
+
         # API events (check before data access to avoid conflicts)
         if '/api/' in resource_lower or 'api' in action_lower:
             return 'API'
-        
-        # Data access events
+
         if any(keyword in resource_lower for keyword in ['dataset', 'data', 'query', 'export', 'download']):
             return 'DATA_ACCESS'
-        
-        # User management events
+
         if any(keyword in resource_lower for keyword in ['user', 'profile', 'account']):
             return 'USER_MGMT'
-        
-        # Dataset management events
+
         if any(keyword in action_lower for keyword in ['create_dataset', 'delete_dataset', 'update_dataset']):
             return 'DATASET_MGMT'
-        
-        # Federated training events
+
         if any(keyword in action_lower for keyword in ['train', 'federated', 'model', 'epoch']):
             return 'TRAINING'
-        
-        # API access events
+
         if any(keyword in resource_lower for keyword in ['api', '/api/']):
             return 'API'
-        
-        # Default to SYSTEM
+
         return 'SYSTEM'
 
     @classmethod
     def _determine_severity(cls, action: str, success: bool, details: Dict[str, Any]) -> str:
         """Determine event severity based on action and outcome."""
         action_lower = action.lower()
-        
-        # Security events
+
         if any(keyword in action_lower for keyword in ['unauthorized', 'breach', 'attack']):
             return 'SECURITY'
-        
-        # Critical events
+
         if any(keyword in action_lower for keyword in ['delete', 'drop', 'truncate', 'admin']):
             return 'CRITICAL'
-        
+
         # Failed actions are at least warnings
         if not success:
             if any(keyword in action_lower for keyword in ['login', 'auth', 'access']):
                 return 'WARNING'
             return 'ERROR'
-        
+
         # Bulk operations are warnings
         if any(keyword in action_lower for keyword in ['bulk', 'batch', 'mass']):
             return 'WARNING'
-        
-        # Default to INFO for successful operations
+
         return 'INFO'
 
     @classmethod
@@ -237,45 +221,40 @@ class AuditLogger:
         - User context
         - Historical patterns
         """
-        # Start with base score for category
         base_score = cls.BASE_RISK_SCORES.get(category, 5)
-        
-        # Apply action modifiers
+
         action_upper = action.upper()
         action_modifier = 0
         for keyword, modifier in cls.ACTION_MODIFIERS.items():
             if keyword in action_upper:
                 action_modifier = max(action_modifier, modifier)
-        
-        # Calculate total score
+
         risk_score = base_score + action_modifier
-        
+
         # Failure increases risk
         if not success:
             risk_score += 15
-        
+
         # Night access (22:00-06:00) increases risk
         current_hour = timezone.now().hour
         if current_hour >= 22 or current_hour <= 6:
             risk_score += 10
-        
+
         # Weekend access increases risk
         if timezone.now().weekday() >= 5:  # Saturday=5, Sunday=6
             risk_score += 5
-        
-        # Check for suspicious patterns in recent history
+
         if user and ip_address:
             suspicious_modifier = cls._check_suspicious_patterns(user, ip_address)
             risk_score += suspicious_modifier
-        
+
         # High-risk pattern detection
         action_details = f"{action} {details}"
         for pattern in cls.HIGH_RISK_PATTERNS:
             if re.match(pattern, action_details):
                 risk_score += 25
                 break
-        
-        # Cap at 100
+
         return min(risk_score, 100)
 
     @classmethod
@@ -331,8 +310,7 @@ class AuditLogger:
     ) -> int:
         """Calculate data sensitivity level (1-5) based on accessed data."""
         sensitivity_level = 1
-        
-        # High-sensitivity medical domains
+
         high_sensitivity_domains = [
             'psychiatry', 'oncology', 'genetics', 'cardiology',
             'reproductive', 'infectious_diseases'
@@ -363,31 +341,26 @@ class AuditLogger:
     @classmethod
     def _create_security_incident(cls, audit_event: AuditEvent) -> Optional[SecurityIncident]:
         """Create security incident for high-risk events."""
-        # Determine incident type based on event characteristics
         incident_type = cls._determine_incident_type(audit_event)
-        
-        # Determine severity (1-4) based on risk score
+
         if audit_event.risk_score >= 95:
-            severity = 4  # Critical
+            severity = 4
         elif audit_event.risk_score >= 90:
-            severity = 3  # High
+            severity = 3
         elif audit_event.risk_score >= 80:
-            severity = 2  # Medium
+            severity = 2
         else:
-            severity = 1  # Low
-        
-        # Generate description
+            severity = 1
+
         description = cls._generate_incident_description(audit_event)
-        
-        # Create incident
+
         incident = SecurityIncident.objects.create(
             incident_type=incident_type,
             severity=severity,
             description=description,
             risk_score=audit_event.risk_score,
         )
-        
-        # Link the triggering event
+
         incident.related_events.add(audit_event)
         
         return incident

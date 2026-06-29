@@ -266,7 +266,6 @@ class TestQueryPatternDetector:
 
         features = np.array([[0.5, 0.5]])
 
-        # Add queries
         for i in range(10):
             detector.analyze_query(
                 user_id=1,

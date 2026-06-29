@@ -53,13 +53,11 @@ class InputValidator:
         self.input_schema = input_schema
         self.output_schema = output_schema
 
-        # Extract schema components
         self.feature_names = input_schema.get('feature_names', [])
         self.dtypes = input_schema.get('dtypes', {})
         self.expected_shape = input_schema.get('shape', [])
         self.ranges = input_schema.get('ranges', {})
 
-        # Validate schema itself
         self._validate_schema()
 
     def _validate_schema(self):
@@ -70,7 +68,6 @@ class InputValidator:
         if not self.expected_shape:
             raise ValueError("Schema must include 'shape'")
 
-        # Check that dtypes are provided for all features
         for feature in self.feature_names:
             if feature not in self.dtypes:
                 raise ValueError(f"Missing dtype for feature: {feature}")
@@ -93,17 +90,14 @@ class InputValidator:
         errors = []
         warnings = []
 
-        # 1. Check data is not empty
         if not data or len(data) == 0:
             errors.append("Input data is empty")
             return {'valid': False, 'errors': errors, 'sanitized_data': None, 'warnings': warnings}
 
-        # 2. Check data is a list
         if not isinstance(data, list):
             errors.append(f"Input must be a list of records, got {type(data).__name__}")
             return {'valid': False, 'errors': errors, 'sanitized_data': None, 'warnings': warnings}
 
-        # 3. Validate each record
         sanitized_records = []
         for idx, record in enumerate(data):
             record_errors, record_warnings, sanitized_record = self._validate_record(record, idx)
@@ -113,18 +107,15 @@ class InputValidator:
             if not record_errors:
                 sanitized_records.append(sanitized_record)
 
-        # If any errors occurred, return invalid
         if errors:
             return {'valid': False, 'errors': errors, 'sanitized_data': None, 'warnings': warnings}
 
-        # Convert to numpy array
         try:
             sanitized_data = np.array(sanitized_records, dtype=np.float32)
         except Exception as e:
             errors.append(f"Failed to convert data to numpy array: {str(e)}")
             return {'valid': False, 'errors': errors, 'sanitized_data': None, 'warnings': warnings}
 
-        # 4. Validate final shape
         expected_num_features = len(self.feature_names)
         if sanitized_data.shape[1] != expected_num_features:
             errors.append(
@@ -159,14 +150,11 @@ class InputValidator:
         warnings = []
         sanitized_values = []
 
-        # Check record is a dict
         if not isinstance(record, dict):
             errors.append(f"Record {record_idx}: must be a dictionary, got {type(record).__name__}")
             return errors, warnings, []
 
-        # Validate each feature
         for feature_name in self.feature_names:
-            # 1. Check feature exists
             if feature_name not in record:
                 errors.append(f"Record {record_idx}: missing feature '{feature_name}'")
                 sanitized_values.append(0.0)  # Placeholder
@@ -175,7 +163,7 @@ class InputValidator:
             value = record[feature_name]
             expected_dtype = self.dtypes.get(feature_name)
 
-            # 2. Check for NaN/Inf early (before type conversion)
+            # Check for NaN/Inf early (before type conversion)
             if isinstance(value, (int, float)) and (np.isnan(value) or np.isinf(value)):
                 errors.append(
                     f"Record {record_idx}: feature '{feature_name}' has invalid value "
@@ -184,7 +172,6 @@ class InputValidator:
                 sanitized_values.append(0.0)
                 continue
 
-            # 3. Validate type and convert
             validated_value, type_errors, type_warnings = self._validate_type(
                 value, expected_dtype, feature_name, record_idx
             )
@@ -195,7 +182,7 @@ class InputValidator:
                 sanitized_values.append(0.0)  # Placeholder for failed validation
                 continue
 
-            # 4. Double-check for NaN/Inf after conversion (edge case)
+            # Double-check for NaN/Inf after conversion (edge case)
             if np.isnan(validated_value) or np.isinf(validated_value):
                 errors.append(
                     f"Record {record_idx}: feature '{feature_name}' has invalid value "
@@ -204,7 +191,6 @@ class InputValidator:
                 sanitized_values.append(0.0)
                 continue
 
-            # 5. Validate range
             if feature_name in self.ranges:
                 range_spec = self.ranges[feature_name]
                 min_val = range_spec.get('min')
@@ -260,9 +246,7 @@ class InputValidator:
         # Try to convert to float (most permissive)
         try:
             if isinstance(value, str):
-                # Try to parse string
                 try:
-                    # Handle strings like "123.45"
                     converted = float(value)
                 except ValueError:
                     errors.append(
@@ -279,7 +263,6 @@ class InputValidator:
                 )
                 return 0.0, errors, warnings
 
-            # Check dtype-specific constraints
             if expected_dtype in ['int32', 'int64']:
                 # For integer types, check if value is actually an integer
                 if not isinstance(value, int) and converted != int(converted):

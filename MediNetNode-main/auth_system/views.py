@@ -16,12 +16,11 @@ def login_view(request):
     if user is None:
         return JsonResponse({"ok": False, "error": "invalid_credentials"}, status=400)
 
-    # Regenerate session ID
+    # Regenerate session ID to prevent session fixation
     request.session.cycle_key()
 
     login(request, user)
 
-    # Initialize session activity timestamp
     from django.utils import timezone
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
@@ -46,13 +45,11 @@ def login_page(request):
     next_url = request.GET.get('next') or request.POST.get('next')
 
     if request.method == 'GET':
-        # For GET requests, only pass next_url if explicitly provided
         return render(request, 'auth/login.html', {
             'next': next_url,  # Don't set default here - let role-based redirect handle it
             'error': None,
         })
 
-    # POST branch
     username = request.POST.get("username", "")
     password = request.POST.get("password", "")
     user = authenticate(request, username=username, password=password)
@@ -62,21 +59,18 @@ def login_page(request):
             'error': 'Invalid username or password.'
         }, status=400)
 
-    # Regenerate session ID
+    # Regenerate session ID to prevent session fixation
     request.session.cycle_key()
 
     login(request, user)
-    
-    # Initialize session activity timestamp
+
     from django.utils import timezone
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
-    
-    # If there's a specific next URL, use it
+
     if next_url and next_url.strip():
         return redirect(next_url)
-    
-    # Default redirect based on user role
+
     try:
         if user.role and hasattr(user.role, 'name'):
             role_name = user.role.name

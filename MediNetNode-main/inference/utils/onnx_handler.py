@@ -102,7 +102,6 @@ class ONNXValidator:
         warnings = []
         metadata = {}
 
-        # Check file exists
         if not os.path.exists(file_path):
             errors.append(f"File does not exist: {file_path}")
             return {'valid': False, 'errors': errors, 'warnings': warnings, 'metadata': metadata}
@@ -116,14 +115,12 @@ class ONNXValidator:
             )
             return {'valid': False, 'errors': errors, 'warnings': warnings, 'metadata': metadata}
 
-        # Load ONNX model
         try:
             model = onnx.load(file_path)
         except Exception as e:
             errors.append(f"Failed to load ONNX model: {str(e)}")
             return {'valid': False, 'errors': errors, 'warnings': warnings, 'metadata': metadata}
 
-        # Check model integrity
         try:
             checker.check_model(model)
         except Exception as e:
@@ -141,13 +138,11 @@ class ONNXValidator:
             errors.append(f"Model contains disallowed operators: {', '.join(disallowed_ops)}")
             return {'valid': False, 'errors': errors, 'warnings': warnings, 'metadata': metadata}
 
-        # Extract metadata
         try:
             metadata = self._extract_metadata(model)
         except Exception as e:
             warnings.append(f"Failed to extract metadata: {str(e)}")
 
-        # All checks passed
         return {
             'valid': True,
             'errors': errors,
@@ -213,17 +208,14 @@ class ONNXValidator:
             'classes': {}  # For classification: {0: 'Class0', 1: 'Class1', ...}
         }
 
-        # Extract input information
         for input_tensor in model.graph.input:
             name = input_tensor.name
             input_schema['inputs'].append(name)
             input_schema['feature_names'].append(name)
 
-            # Get dtype
             dtype = self._get_dtype_string(input_tensor.type.tensor_type.elem_type)
             input_schema['dtypes'][name] = dtype
 
-            # Get shape
             shape = []
             for dim in input_tensor.type.tensor_type.shape.dim:
                 if dim.HasField('dim_value'):
@@ -232,17 +224,14 @@ class ONNXValidator:
                     shape.append(None)  # Dynamic dimension
             input_schema['shapes'][name] = shape
 
-        # Extract output information
         for output_tensor in model.graph.output:
             name = output_tensor.name
             output_schema['outputs'].append(name)
             output_schema['output_names'].append(name)
 
-            # Get dtype
             dtype = self._get_dtype_string(output_tensor.type.tensor_type.elem_type)
             output_schema['dtypes'][name] = dtype
 
-            # Get shape
             shape = []
             for dim in output_tensor.type.tensor_type.shape.dim:
                 if dim.HasField('dim_value'):
@@ -334,7 +323,6 @@ class ONNXInferenceEngine:
             raise ONNXValidationError(f"Model file not found: {model_path}")
 
         try:
-            # Create inference session with CPU provider
             sess_options = ort.SessionOptions()
             sess_options.intra_op_num_threads = 1  # Limit threads for security
             sess_options.inter_op_num_threads = 1
@@ -365,19 +353,15 @@ class ONNXInferenceEngine:
             ONNXValidationError: If inference fails
         """
         try:
-            # Validate inputs
             if not isinstance(input_data, dict):
                 raise ONNXValidationError("input_data must be a dictionary")
 
-            # Check all required inputs are provided
             for input_name in self.input_names:
                 if input_name not in input_data:
                     raise ONNXValidationError(f"Missing required input: {input_name}")
 
-            # Run inference
             outputs = self.session.run(self.output_names, input_data)
 
-            # Return as dict
             return {name: output for name, output in zip(self.output_names, outputs)}
 
         except Exception as e:
@@ -397,33 +381,27 @@ class ONNXInferenceEngine:
         Raises:
             ONNXValidationError: If inference fails
         """
-        # Get total number of samples from first input
         first_input = next(iter(input_data.values()))
         n_samples = first_input.shape[0]
 
-        # Process in batches
         all_outputs = None
 
         for start_idx in range(0, n_samples, batch_size):
             end_idx = min(start_idx + batch_size, n_samples)
 
-            # Extract batch
             batch_input = {
                 name: data[start_idx:end_idx]
                 for name, data in input_data.items()
             }
 
-            # Run inference on batch
             batch_outputs = self.predict(batch_input)
 
-            # Accumulate results
             if all_outputs is None:
                 all_outputs = {name: [] for name in batch_outputs.keys()}
 
             for name, output in batch_outputs.items():
                 all_outputs[name].append(output)
 
-        # Concatenate all batches
         return {
             name: np.concatenate(outputs, axis=0)
             for name, outputs in all_outputs.items()

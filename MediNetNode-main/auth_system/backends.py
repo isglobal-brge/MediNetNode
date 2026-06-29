@@ -36,7 +36,6 @@ class SecureLoginBackend(BaseBackend):
             self._log_attempt(user, 'LOGIN_SUCCESS', success=True, request=request)
             return user
 
-        # Failed password
         user.increment_failed_attempts()
         lock_after = getattr(settings, 'ACCOUNT_LOCKOUT_ATTEMPTS', 5)
         if (user.failed_login_attempts or 0) >= lock_after:
@@ -64,8 +63,7 @@ class SecureLoginBackend(BaseBackend):
                 ip = xff.split(',')[0].strip()
             else:
                 ip = request.META.get('REMOTE_ADDR')
-        
-        # Use new AuditLogger system
+
         AuditLogger.log_authentication(
             action=action,
             user=user,

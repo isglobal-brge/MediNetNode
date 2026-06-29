@@ -131,11 +131,9 @@ cg12135344
         if not model_file:
             raise ValidationError('Model file is required.')
 
-        # Check file extension
         if not model_file.name.endswith('.onnx'):
             raise ValidationError('File must be an ONNX model (.onnx extension).')
 
-        # Check file size (max 500MB)
         max_size = 500 * 1024 * 1024  # 500MB in bytes
         if model_file.size > max_size:
             size_mb = model_file.size / (1024 * 1024)
@@ -144,15 +142,12 @@ cg12135344
         # Validate ONNX format (if onnx library is available)
         if ONNX_AVAILABLE:
             try:
-                # Read file content
                 model_file.seek(0)
                 model_content = model_file.read()
                 model_file.seek(0)  # Reset for later use
 
-                # Try to load as ONNX model
                 onnx_model = onnx.load_model_from_string(model_content)
 
-                # Basic validation
                 onnx.checker.check_model(onnx_model)
 
             except Exception as e:
@@ -193,29 +188,23 @@ cg12135344
         schema_str = self.cleaned_data.get('input_schema')
 
         if isinstance(schema_str, dict):
-            # Already parsed
             schema = schema_str
         else:
             schema_str = schema_str.strip()
 
-            # Try to parse as JSON first
             try:
                 parsed = json.loads(schema_str)
 
                 if isinstance(parsed, dict):
-                    # Full schema format: {"features": [...]}
                     schema = parsed
                 elif isinstance(parsed, list):
-                    # Simple array of feature names: ["feat1", "feat2"]
                     schema = self._convert_feature_names_to_schema(parsed)
                 else:
                     raise ValidationError('JSON must be an object or array.')
 
             except json.JSONDecodeError:
-                # Not valid JSON - try to parse as CSV header
                 schema = self._parse_csv_header_to_schema(schema_str)
 
-        # Validate the final schema structure
         return self._validate_schema_structure(schema)
 
     def _convert_feature_names_to_schema(self, feature_names):
@@ -243,17 +232,13 @@ cg12135344
 
     def _parse_csv_header_to_schema(self, header_str):
         """Parse CSV header string (comma or newline separated) to schema."""
-        # Check if it's newline-separated (one feature per line)
         if '\n' in header_str:
             names = [line.strip() for line in header_str.split('\n')]
         elif ',' in header_str:
-            # Comma-separated
             names = [name.strip() for name in header_str.split(',')]
         else:
-            # Single feature or invalid
             names = [header_str.strip()]
 
-        # Clean up names (remove quotes, empty strings)
         clean_names = []
         for name in names:
             name = name.strip().strip('"').strip("'")
@@ -285,31 +270,26 @@ cg12135344
         if len(schema['features']) == 0:
             raise ValidationError('At least one feature is required.')
 
-        # Validate each feature
         valid_types = ['integer', 'float', 'string', 'boolean']
 
         for idx, feature in enumerate(schema['features']):
             if not isinstance(feature, dict):
                 raise ValidationError(f'Feature {idx + 1} must be an object.')
 
-            # Check 'name' is required
             if 'name' not in feature:
                 raise ValidationError(f'Feature {idx + 1} missing required field: "name"')
 
-            # Set defaults for optional fields
             if 'type' not in feature:
-                feature['type'] = 'float'  # Default to float
+                feature['type'] = 'float'
             if 'required' not in feature:
-                feature['required'] = True  # Default to required
+                feature['required'] = True
 
-            # Validate type
             if feature['type'] not in valid_types:
                 raise ValidationError(
                     f'Feature "{feature["name"]}" has invalid type "{feature["type"]}". '
                     f'Must be one of: {", ".join(valid_types)}'
                 )
 
-            # Validate min/max if present
             if 'min' in feature and 'max' in feature:
                 try:
                     if float(feature['min']) >= float(feature['max']):
@@ -333,7 +313,6 @@ cg12135344
             except json.JSONDecodeError as e:
                 raise ValidationError(f'Invalid JSON: {str(e)}')
 
-        # Validate schema structure
         if not isinstance(schema, dict):
             raise ValidationError('Schema must be a JSON object.')
 
@@ -344,7 +323,6 @@ cg12135344
         if schema['type'] not in valid_types:
             raise ValidationError(f'Type must be one of: {", ".join(valid_types)}')
 
-        # Validate classification schema
         if schema['type'] == 'classification':
             if 'classes' not in schema:
                 raise ValidationError('Classification schema must contain "classes" field.')
@@ -360,7 +338,6 @@ cg12135344
             elif isinstance(classes, dict):
                 if len(classes) < 2:
                     raise ValidationError('Classification requires at least 2 classes.')
-                # Normalize keys to strings
                 schema['classes'] = {str(k): v for k, v in classes.items()}
             else:
                 raise ValidationError('"classes" must be an array or object.')
@@ -374,19 +351,16 @@ cg12135344
         if accuracy_percent is None:
             return None
 
-        # Convert to decimal (0.0-1.0)
         return accuracy_percent / 100.0
 
     def save(self, commit=True):
         """Save model with calculated fields."""
         instance = super().save(commit=False)
 
-        # Set accuracy from percentage field
         accuracy_decimal = self.cleaned_data.get('accuracy_percent')
         if accuracy_decimal is not None:
             instance.accuracy = accuracy_decimal / 100.0
 
-        # Set source
         instance.source = 'upload'
 
         # File size and checksum are calculated in model's save() method
@@ -457,12 +431,10 @@ class ModelEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Pre-populate input_schema as formatted JSON
         if self.instance and self.instance.input_schema:
             self.initial['input_schema'] = json.dumps(
                 self.instance.input_schema, indent=2
             )
-        # Pre-populate output_schema as formatted JSON
         if self.instance and self.instance.output_schema:
             self.initial['output_schema'] = json.dumps(
                 self.instance.output_schema, indent=2

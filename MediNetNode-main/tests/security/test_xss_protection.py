@@ -181,7 +181,6 @@ class TestAutoescaping:
         # But if it somehow passes, template should escape it
         xss_payload = '<script>alert("XSS")</script>'
 
-        # Try to create user with malicious input
         response = client.post('/users/create/', {
             'username': xss_payload,
             'email': 'test@test.com',
@@ -200,7 +199,6 @@ class TestAutoescaping:
         """Test that API error messages don't allow XSS."""
         client = Client()
 
-        # Send malicious payload in request
         xss_payload = '<script>alert("XSS")</script>'
 
         response = client.post(
@@ -220,7 +218,6 @@ class TestAutoescaping:
         # This is a code review test - checks that audit/views.py uses |safe
         # only on server-controlled data (json.dumps output)
 
-        # Read audit/views.py
         import os
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         audit_views_path = os.path.join(base_dir, 'audit', 'views.py')
@@ -244,7 +241,6 @@ class TestXSSVectors:
 
         xss_payload = '<img src=x onerror=alert(1)>'
 
-        # Try XSS in search parameter
         response = client.get(f'/users/?search={xss_payload}')
 
         response_text = response.content.decode('utf-8')

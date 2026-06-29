@@ -65,7 +65,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("No legacy API keys found. All keys are indexed."))
             return
 
-        # ── Report ────────────────────────────────────────────────────────────
         self.stdout.write(self.style.WARNING(
             f"\nLegacy API keys: {total} total, {active_count} active"
         ))
@@ -89,7 +88,6 @@ class Command(BaseCommand):
 
         self.stdout.write('=' * 70)
 
-        # ── Optional deactivation ─────────────────────────────────────────────
         if options['deactivate']:
             active_qs = qs.filter(is_active=True)
             deactivated = active_qs.update(is_active=False)

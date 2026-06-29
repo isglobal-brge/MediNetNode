@@ -14,7 +14,6 @@ class ModelUploadFormTest(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Valid input schema
         self.valid_input_schema = {
             "features": [
                 {
@@ -36,7 +35,6 @@ class ModelUploadFormTest(TestCase):
             ]
         }
 
-        # Valid output schema
         self.valid_output_schema = {
             "type": "classification",
             "classes": ["no_risk", "at_risk", "high_risk"],
@@ -353,7 +351,6 @@ class ModelUploadFormTest(TestCase):
         """Test that form widgets include Bootstrap CSS classes."""
         form = ModelUploadForm()
 
-        # Check that widgets have form-control class
         self.assertIn('form-control', form.fields['name'].widget.attrs.get('class', ''))
         self.assertIn('form-control', form.fields['version'].widget.attrs.get('class', ''))
         self.assertIn('form-select', form.fields['domain'].widget.attrs.get('class', ''))

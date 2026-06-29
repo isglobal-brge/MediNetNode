@@ -26,15 +26,12 @@ class SessionTimeoutMiddleware:
             last_activity_ts = request.session.get('last_activity_ts')
             now_ts = int(timezone.now().timestamp())
 
-            # Initialize session activity timestamp if not present (new session)
             if last_activity_ts is None:
                 last_activity_ts = now_ts
                 request.session['last_activity_ts'] = now_ts
 
-            # Check if session has expired
             if (now_ts - int(last_activity_ts)) > idle_timeout:
                 logout(request)
-                # For AJAX requests, return JSON error instead of redirect
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     from django.http import JsonResponse
                     return JsonResponse({
@@ -43,12 +40,10 @@ class SessionTimeoutMiddleware:
                         'message': 'Your session has expired. Please log in again.'
                     }, status=401)
                 else:
-                    # For regular requests, redirect to login
                     return redirect('login')
 
-            # Update last activity markers for active sessions
             request.session['last_activity_ts'] = now_ts
-            request.session.modified = True  # Ensure session is saved
+            request.session.modified = True
             try:
                 request.user.last_activity = timezone.now()
                 request.user.is_active_session = True
@@ -81,25 +76,20 @@ class SessionTimeoutMiddleware:
         """Normalize path to prevent traversal attacks."""
         import urllib.parse
 
-        # URL decode the path
         decoded_path = urllib.parse.unquote(path)
 
-        # Remove any backslashes (Windows path separators)
         normalized = decoded_path.replace('\\', '/')
 
-        # Remove duplicate slashes
         while '//' in normalized:
             normalized = normalized.replace('//', '/')
 
-        # Ensure it starts with /
         if not normalized.startswith('/'):
             normalized = '/' + normalized
 
-        # Remove trailing slash for consistency (except for root /)
         if len(normalized) > 1 and normalized.endswith('/'):
             normalized = normalized[:-1]
 
-        return normalized.lower()  # Case insensitive
+        return normalized.lower()
 
     def _enforce_researcher_security(self, request):
         """Comprehensive security enforcement for RESEARCHER users."""
@@ -113,12 +103,10 @@ class SessionTimeoutMiddleware:
             '/auth/logout',       # Logout functionality (with or without trailing slash)
         ]
 
-        # Check if path starts with any allowed pattern
         is_allowed = any(normalized_path.startswith(pattern) for pattern in allowed_patterns)
 
-        # Allow specific static files (CSS, JS, images) but block admin static files
+        # Allow non-admin static files (CSS, JS, images) but block admin static files
         if normalized_path.startswith('/static/'):
-            # Block Django admin static files
             blocked_static_patterns = [
                 '/static/admin/',
                 '/static/debug_toolbar/',
@@ -129,14 +117,13 @@ class SessionTimeoutMiddleware:
                 self._log_security_violation(request, 'BLOCKED_ADMIN_STATIC', original_path)
                 return redirect('researcher_info')
             else:
-                is_allowed = True  # Allow non-admin static files
+                is_allowed = True
 
-        # Block access if not explicitly allowed
         if not is_allowed:
             self._log_security_violation(request, 'BLOCKED_WEB_ACCESS', original_path)
             return redirect('researcher_info')
 
-        return None  # Allow the request to proceed
+        return None
 
     def _log_security_violation(self, request, violation_type, attempted_path):
         """Log security violations for monitoring."""
@@ -161,25 +148,19 @@ class APIAuthenticationMiddleware:
         self.get_response = get_response
     
     def __call__(self, request):
-        # Only process API requests, but exclude documentation URLs and setup endpoint
         if not request.path.startswith('/api/') or request.path.startswith('/api/docs/') or request.path.startswith('/api/setup/'):
             return self.get_response(request)
-        
-        # Start timing for performance monitoring
+
         start_time = time.time()
-        
-        # Extract authentication headers
+
         api_key = request.headers.get('X-API-Key')
         client_ip = self.get_client_ip(request)
-        
-        # Log the API request attempt
+
         logger.info(f"API request: {request.method} {request.path} from IP {client_ip}")
-        
-        # Validate API authentication
+
         auth_result = self.authenticate_request(api_key, client_ip, request)
-        
+
         if not auth_result['success']:
-            # Log failed authentication
             self.log_api_request(
                 api_key=None,
                 user=None,
@@ -195,15 +176,12 @@ class APIAuthenticationMiddleware:
                 status=auth_result['status_code']
             )
         
-        # Set authenticated user and API key for the request
         request.api_key = auth_result['api_key']
         request.api_user = auth_result['user']
         request.start_time = start_time
-        
-        # Process request
+
         response = self.get_response(request)
-        
-        # Log successful request
+
         response_time_ms = int((time.time() - start_time) * 1000)
         self.log_api_request(
             api_key=auth_result['api_key'],
@@ -213,22 +191,19 @@ class APIAuthenticationMiddleware:
             response_time_ms=response_time_ms,
             is_successful=200 <= response.status_code < 400
         )
-        
-        # Update API key last used
+
         auth_result['api_key'].update_last_used(client_ip)
         
         return response
     
     def get_client_ip(self, request):
         """Extract client IP address from request."""
-        # Get the direct connection IP
         remote_addr = request.META.get('REMOTE_ADDR', '0.0.0.0')
 
         # Check for X-Forwarded-For only if request comes from trusted proxy
         trusted_proxies = getattr(settings, 'TRUSTED_PROXIES', [])
 
         if trusted_proxies and remote_addr in trusted_proxies:
-            # Request from trusted proxy, use X-Forwarded-For
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             if x_forwarded_for:
                 # Get first IP (original client) from chain
@@ -256,7 +231,6 @@ class APIAuthenticationMiddleware:
         # NEW SECURE METHOD: Check all active API keys by verifying hash
         # We can't query by plaintext key anymore since we store hashes
         try:
-            # Get all active API keys and check each one
             # This is secure because check_key() uses constant-time comparison
             api_key = None
             for candidate_key in APIKey.objects.select_related('user', 'user__role').filter(is_active=True):
@@ -265,7 +239,6 @@ class APIAuthenticationMiddleware:
                     break
 
             if not api_key:
-                # No matching key found
                 return {
                     'success': False,
                     'error': 'Invalid API key',
@@ -280,7 +253,6 @@ class APIAuthenticationMiddleware:
                 'status_code': 500
             }
 
-        # Check if API key is expired
         if api_key.is_expired():
             return {
                 'success': False,
@@ -288,7 +260,6 @@ class APIAuthenticationMiddleware:
                 'status_code': 401
             }
 
-        # Check IP whitelist
         if not api_key.is_ip_allowed(client_ip):
             return {
                 'success': False,
@@ -296,7 +267,6 @@ class APIAuthenticationMiddleware:
                 'status_code': 403
             }
 
-        # Validate user has RESEARCHER role
         if not api_key.user.role or api_key.user.role.name != 'RESEARCHER':
             return {
                 'success': False,
@@ -304,7 +274,6 @@ class APIAuthenticationMiddleware:
                 'status_code': 403
             }
 
-        # Check if user account is active
         if not api_key.user.is_active:
             return {
                 'success': False,
@@ -312,7 +281,6 @@ class APIAuthenticationMiddleware:
                 'status_code': 403
             }
 
-        # Check if user account is locked
         if api_key.user.is_account_locked():
             return {
                 'success': False,
@@ -356,15 +324,12 @@ class RateLimitMiddleware:
         }
     
     def __call__(self, request):
-        # Only apply rate limiting to API requests
         if not request.path.startswith('/api/'):
             return self.get_response(request)
-        
-        # Skip rate limiting if no API user is authenticated
+
         if not hasattr(request, 'api_user'):
             return self.get_response(request)
-        
-        # Check rate limits
+
         if self.is_rate_limited(request):
             return JsonResponse(
                 {
@@ -380,11 +345,9 @@ class RateLimitMiddleware:
         """Check if user has exceeded rate limits."""
         user = request.api_user
         endpoint_type = self.get_endpoint_type(request.path)
-        
-        # Get rate limit config
+
         limit_config = self.rate_limits.get(endpoint_type, self.rate_limits['default'])
-        
-        # Count recent requests within the time window
+
         from datetime import timedelta
         time_threshold = timezone.now() - timedelta(seconds=limit_config['window'])
         

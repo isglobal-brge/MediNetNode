@@ -339,10 +339,8 @@ class RateLimiter:
         current = cache.get(key, 0)
 
         if current == 0:
-            # First request, set with TTL
             cache.set(key, 1, ttl)
         else:
-            # Increment existing counter
             cache.set(key, current + 1, ttl)
 
     def _get_ttl(self, prefix: str, identifier) -> int:

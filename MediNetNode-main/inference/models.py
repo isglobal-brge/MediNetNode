@@ -20,29 +20,24 @@ class DeployedModelManager(models.Manager):
         Returns:
             QuerySet of DeployedModel instances the user can access
         """
-        # Superusers see everything
         if user.is_superuser:
             return self.get_queryset()
 
-        # Get user's inference.execute permission scope
         scope = user.get_permission_scope('inference.execute')
 
         if scope is None:
-            # No permission at all
             return self.none()
 
         # Filter by approved and public models first
         qs = self.filter(status='approved', is_public=True)
 
         if scope == 'ALL':
-            # User can access all domains
             return qs
 
         if isinstance(scope, list):
             # User can access specific domains only
             return qs.filter(domain__in=scope)
 
-        # Unknown scope type
         return self.none()
 
 
@@ -237,7 +232,6 @@ class DeployedModel(models.Model):
 
     def save(self, *args, **kwargs):
         """Override save to compute checksum and file size."""
-        # Compute checksum if model_file exists and checksum is empty
         if self.model_file and not self.checksum:
             self.model_file.seek(0)
             file_hash = hashlib.sha256()
@@ -246,7 +240,6 @@ class DeployedModel(models.Model):
             self.checksum = file_hash.hexdigest()
             self.model_file.seek(0)
 
-        # Set file size
         if self.model_file and not self.file_size:
             self.file_size = self.model_file.size
 
@@ -319,7 +312,6 @@ class DeployedModel(models.Model):
         """Extract rejection reason from validation_notes."""
         if self.status == 'rejected' and self.validation_notes:
             if self.validation_notes.startswith('REJECTED:'):
-                # Extract reason until double newline
                 reason = self.validation_notes[9:].split('\n\n')[0].strip()
                 return reason
         return None

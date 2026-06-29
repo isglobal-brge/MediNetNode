@@ -70,7 +70,6 @@ print(f"[OK] Created: csv/genetics_large.csv ({len(genetics_df.columns)} feature
 # 4. Unordered CSV (same as small but columns shuffled)
 print("\nCreating unordered CSV (columns shuffled)...")
 unordered_df = small_df.copy()
-# Shuffle columns
 cols = list(unordered_df.columns)
 np.random.shuffle(cols)
 unordered_df = unordered_df[cols]

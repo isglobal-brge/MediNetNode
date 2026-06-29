@@ -16,8 +16,7 @@ User = get_user_model()
 
 class Dataset(models.Model):
     """Main dataset model with medical data management capabilities."""
-    
-    # Medical domain choices
+
     MEDICAL_DOMAINS = (
         ('cardiology', 'Cardiology'),
         ('neurology', 'Neurology'), 
@@ -29,8 +28,7 @@ class Dataset(models.Model):
         ('general', 'General Medicine'),
         ('other', 'Other'),
     )
-    
-    # Data type choices
+
     DATA_TYPES = (
         ('tabular', 'Tabular Data'),
         ('image', 'Image Data'),
@@ -38,8 +36,7 @@ class Dataset(models.Model):
         ('time_series', 'Time Series'),
         ('mixed', 'Mixed Data'),
     )
-    
-    # File format choices
+
     FILE_FORMATS = (
         ('csv', 'CSV'),
         ('json', 'JSON'),
@@ -48,15 +45,13 @@ class Dataset(models.Model):
         ('npy', 'NumPy'),
         ('other', 'Other'),
     )
-    
-    # Basic fields
+
     name = models.CharField(max_length=200, unique=True)
     description = models.TextField()
     file_path = models.CharField(max_length=500)
     # Store user ID instead of foreign key for cross-database compatibility
     uploaded_by_id = models.IntegerField(help_text="ID of user who uploaded the dataset")
-    
-    # Medical fields
+
     medical_domain = models.CharField(
         max_length=50,
         choices=MEDICAL_DOMAINS,
@@ -69,8 +64,7 @@ class Dataset(models.Model):
         default='tabular'
     )
     anonymized = models.BooleanField(default=True)
-    
-    # Technical fields
+
     file_size = models.BigIntegerField(help_text="File size in bytes")
     file_format = models.CharField(
         max_length=50,
@@ -79,13 +73,11 @@ class Dataset(models.Model):
     )
     columns_count = models.PositiveIntegerField(null=True, blank=True)
     rows_count = models.PositiveIntegerField(null=True, blank=True)
-    
-    # Audit fields
+
     uploaded_at = models.DateTimeField(auto_now_add=True)
     last_accessed = models.DateTimeField(null=True, blank=True)
     access_count = models.PositiveIntegerField(default=0)
-    
-    # Security and integrity fields
+
     checksum_sha256 = models.CharField(
         max_length=64,
         editable=False,
@@ -101,8 +93,7 @@ class Dataset(models.Model):
         help_text='DEPRECATED: MD5 checksum (vulnerable). Use checksum_sha256 instead.'
     )
     is_active = models.BooleanField(default=True)
-    
-    # Federated learning fields
+
     target_column = models.CharField(
         max_length=100,
         blank=True,
@@ -160,27 +151,22 @@ class Dataset(models.Model):
     def clean(self):
         """Validate model fields."""
         super().clean()
-        
-        # Validate medical domain
+
         if self.medical_domain not in [choice[0] for choice in self.MEDICAL_DOMAINS]:
             raise ValidationError({'medical_domain': 'Invalid medical domain.'})
-            
-        # Validate file path exists
+
         if self.file_path and not os.path.exists(self.file_path):
             raise ValidationError({'file_path': 'File does not exist.'})
-            
-        # Validate patient count for certain domains
+
         if self.data_type in ['tabular', 'mixed'] and not self.patient_count:
             raise ValidationError({'patient_count': 'Patient count is required for tabular and mixed data.'})
     
     def save(self, *args, **kwargs):
         """Override save to automatically calculate checksum."""
-        # Calculate file size if not provided
         if self.file_path and os.path.exists(self.file_path):
             if not self.file_size:
                 self.file_size = os.path.getsize(self.file_path)
 
-            # Calculate checksum if not provided or file changed
             if not self.checksum_sha256:
                 self.checksum_sha256 = self.calculate_checksum()
 
@@ -199,8 +185,7 @@ class DatasetAccess(models.Model):
     user_id = models.IntegerField(help_text="ID of user in main database")
     assigned_by_id = models.IntegerField(help_text="ID of user who assigned access in main database")
     assigned_at = models.DateTimeField(auto_now_add=True)
-    
-    # Permission fields
+
     can_train = models.BooleanField(default=True)
     can_view_metadata = models.BooleanField(default=True)
     can_use_experiment = models.BooleanField(default=False)
@@ -242,8 +227,7 @@ class DatasetMetadata(models.Model):
         related_name='metadata',
         primary_key=True
     )
-    
-    # Statistical data stored as JSON
+
     statistical_summary = models.JSONField(
         default=dict,
         help_text="Statistical summary (mean, std, min, max, etc.)"
@@ -256,8 +240,7 @@ class DatasetMetadata(models.Model):
         default=dict,
         help_text="Data distribution information per column"
     )
-    
-    # Quality metrics
+
     quality_score = models.FloatField(
         null=True,
         blank=True,
@@ -268,8 +251,7 @@ class DatasetMetadata(models.Model):
         blank=True,
         help_text="Data completeness percentage"
     )
-    
-    # Metadata generation timestamp
+
     generated_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -303,11 +285,9 @@ class DatasetMetadata(models.Model):
         
         # Add other quality factors as needed
         if self.statistical_summary:
-            # Bonus for having statistical summary
             quality_factors.append(0.1)
-            
+
         if self.data_distribution:
-            # Bonus for having distribution data
             quality_factors.append(0.1)
         
         quality_score = sum(quality_factors) / len(quality_factors)
@@ -395,14 +375,6 @@ class DatasetPrivacyPolicy(models.Model):
             f"spent={self.spent_epsilon:.4f}/{self.lifetime_budget})"
         )
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------------------
-
     def clean(self) -> None:
         super().clean()
         for field_name, value in [
@@ -424,10 +396,6 @@ class DatasetPrivacyPolicy(models.Model):
                 'max_epsilon_per_job no puede superar lifetime_budget.'
             )
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     def save(self, *args, **kwargs) -> None:
         """Auto-populate budget limits from sensitivity preset when not set.
 
@@ -442,10 +410,6 @@ class DatasetPrivacyPolicy(models.Model):
             self.lifetime_budget = defaults['lifetime_budget']
         self.clean()  # Enforce field-level constraints on every ORM save
         super().save(*args, **kwargs)
-
-    # ------------------------------------------------------------------
-    # Budget properties
-    # ------------------------------------------------------------------
 
     @property
     def remaining_budget(self) -> float:
@@ -462,10 +426,6 @@ class DatasetPrivacyPolicy(models.Model):
         ):
             return 0.0
         return max(0.0, self.lifetime_budget - self.spent_epsilon)
-
-    # ------------------------------------------------------------------
-    # Enforcement API
-    # ------------------------------------------------------------------
 
     def can_accept_job(self, estimated_epsilon: float) -> tuple[bool, str]:
         """Return (True, 'ok') or (False, human-readable reason).

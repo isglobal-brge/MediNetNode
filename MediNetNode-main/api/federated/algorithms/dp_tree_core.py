@@ -87,7 +87,6 @@ class SecureDPTree:
         self.n_features = X.shape[1]
         self.n_classes = len(np.unique(y))
 
-        # Validate feature bounds
         if self.feature_bounds is None:
             raise ValueError(
                 "feature_bounds must be provided for DP tree. "
@@ -130,7 +129,6 @@ class SecureDPTree:
         max_val = self.feature_bounds['max'][feature_idx]
         threshold = self.random_state.uniform(min_val, max_val)
 
-        # Recursively build left and right subtrees
         left_child = self._build_random_tree(depth + 1)
         right_child = self._build_random_tree(depth + 1)
 
@@ -169,11 +167,9 @@ class SecureDPTree:
         feature_idx = node['feature_idx']
         threshold = node['threshold']
 
-        # Split samples based on threshold
         left_mask = X[:, feature_idx] <= threshold
         right_mask = ~left_mask
 
-        # Recursively assign labels to children
         self._assign_labels_dp(node['left'], X[left_mask], y[left_mask])
         self._assign_labels_dp(node['right'], X[right_mask], y[right_mask])
 
@@ -189,7 +185,6 @@ class SecureDPTree:
         Returns:
             Selected label (int)
         """
-        # Count samples per class
         class_counts = np.zeros(self.n_classes)
         for label in y:
             class_counts[int(label)] += 1
@@ -198,7 +193,6 @@ class SecureDPTree:
         scores = np.exp(self.epsilon * class_counts / 2.0)
         probabilities = scores / scores.sum()
 
-        # Sample label according to probabilities
         # Use numpy for weighted sampling (secrets doesn't support this)
         return np.random.choice(self.n_classes, p=probabilities)
 
@@ -292,9 +286,7 @@ def permute_and_flip(
     if random_state is None:
         random_state = check_random_state_secure()
 
-    # Compute probabilities
     scores = np.exp(epsilon * counts / 2.0)
     probabilities = scores / scores.sum()
 
-    # Sample according to probabilities
     return np.random.choice(len(counts), p=probabilities)

@@ -54,8 +54,7 @@ class SecureUserCreationForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         self.created_by = kwargs.pop('created_by', None)
         super().__init__(*args, **kwargs)
-        
-        # Add Bootstrap classes to password fields
+
         self.fields['password1'].widget.attrs.update({
             'class': 'form-control',
             'placeholder': 'Password'
@@ -135,8 +134,7 @@ class UserUpdateForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         self.request_user = kwargs.pop('request_user', None)
         super().__init__(*args, **kwargs)
-        
-        # Remove password field
+
         if 'password' in self.fields:
             del self.fields['password']
 

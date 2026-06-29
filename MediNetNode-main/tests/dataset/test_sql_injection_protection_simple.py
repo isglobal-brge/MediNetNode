@@ -68,7 +68,6 @@ class SQLInjectionProtectionSimpleTests(TestCase):
         """
 
         with connections['datasets_db'].cursor() as cursor:
-            # Execute parameterized query
             cursor.execute(sql_parameterized, params)
 
             # Verify the malicious name was stored as-is (not executed)

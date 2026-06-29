@@ -15,7 +15,6 @@ os.environ.setdefault('DEBUG', 'True')
 os.environ.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
 
-# Setup Django
 if not settings.configured:
     django.setup()
 
@@ -29,7 +28,6 @@ def django_db_setup(django_db_setup, django_db_blocker):
     from users.models import Role
 
     with django_db_blocker.unblock():
-        # Create roles if they don't exist
         # Using dot-notation permissions to match production code
         admin_permissions = {
             'api.access': True,

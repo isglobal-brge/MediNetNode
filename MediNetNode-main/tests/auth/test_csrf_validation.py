@@ -37,12 +37,10 @@ class CSRFValidationTests(TestCase):
         
         with patch('auth_system.views.security_logger') as mock_logger:
             response = csrf_failure(request, reason='CSRF token missing')
-            
-            # Check response
+
             self.assertEqual(response.status_code, 403)
             self.assertIn('CSRF verification failed', response.content.decode())
-            
-            # Check security logging
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
             self.assertIn('CSRF_FAILURE from 192.168.1.100', call_args[0][0])
@@ -61,11 +59,9 @@ class CSRFValidationTests(TestCase):
              patch('auth_system.views.get_token', return_value=None):
             
             response = dummy_view(request)
-            
-            # Check response still works
+
             self.assertEqual(response.status_code, 200)
-            
-            # Check security logging for missing token
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
             self.assertIn('CSRF_NO_TOKEN from 192.168.1.100', call_args[0][0])
@@ -100,8 +96,7 @@ class CSRFValidationTests(TestCase):
     def test_csrf_settings_configured(self):
         """Test: CSRF settings are properly configured in Django settings"""
         from django.conf import settings
-        
-        # Check CSRF settings exist and are properly configured
+
         # Note: During testing, Django might override DEBUG, so we check the setting exists
         self.assertTrue(hasattr(settings, 'CSRF_COOKIE_SECURE'))
         
@@ -113,8 +108,7 @@ class CSRFValidationTests(TestCase):
         self.assertTrue(getattr(settings, 'CSRF_COOKIE_HTTPONLY', False))
         self.assertEqual(getattr(settings, 'CSRF_COOKIE_SAMESITE', None), 'Lax')
         self.assertEqual(getattr(settings, 'CSRF_FAILURE_VIEW', None), 'auth_system.views.csrf_failure')
-        
-        # Check trusted origins exist
+
         trusted_origins = getattr(settings, 'CSRF_TRUSTED_ORIGINS', [])
         self.assertIsInstance(trusted_origins, list)
         self.assertGreater(len(trusted_origins), 0)

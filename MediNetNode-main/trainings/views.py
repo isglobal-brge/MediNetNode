@@ -32,60 +32,52 @@ def dashboard(request):
     """
     Training monitoring dashboard with overview statistics and active sessions.
     """
-    # Calculate dashboard statistics
     now = timezone.now()
     today = now.date()
     week_ago = now - timedelta(days=7)
-    
-    # Active trainings count
+
     active_count = TrainingSession.objects.filter(
         status__in=['STARTING', 'ACTIVE']
     ).count()
-    
-    # Today's completed trainings
+
     today_completed = TrainingSession.objects.filter(
         completed_at__date=today,
         status='COMPLETED'
     ).count()
-    
-    # Success rate (last 7 days)
+
     week_sessions = TrainingSession.objects.filter(
         started_at__gte=week_ago,
         status__in=['COMPLETED', 'FAILED']
     )
-    
+
     if week_sessions.count() > 0:
         success_rate = (week_sessions.filter(status='COMPLETED').count() / week_sessions.count()) * 100
     else:
         success_rate = 0
-    
-    # Average training duration (completed sessions, last 7 days)
+
     completed_sessions = TrainingSession.objects.filter(
         completed_at__gte=week_ago,
         status='COMPLETED'
     )
-    
+
     avg_duration_seconds = 0
     if completed_sessions.exists():
         durations = []
         for session in completed_sessions:
             if session.duration:
                 durations.append(session.duration.total_seconds())
-        
+
         if durations:
             avg_duration_seconds = sum(durations) / len(durations)
-    
-    # Convert to readable format
+
     avg_duration_minutes = int(avg_duration_seconds / 60)
     avg_duration_hours = int(avg_duration_minutes / 60)
     avg_duration_display = f"{avg_duration_hours}h {avg_duration_minutes % 60}m"
-    
-    # Active training sessions (for dashboard widget)
+
     active_sessions = TrainingSession.objects.filter(
         status__in=['STARTING', 'ACTIVE']
     ).select_related('user').order_by('-started_at')[:4]
-    
-    # Recent completed sessions
+
     recent_sessions = TrainingSession.objects.filter(
         status__in=['COMPLETED', 'FAILED', 'CANCELLED']
     ).select_related('user').order_by('-completed_at')[:4]
@@ -129,15 +121,13 @@ def training_history(request):
     Training history with filtering and pagination.
     """
     sessions = TrainingSession.objects.select_related('user').order_by('-started_at')
-    
-    # Filtering
+
     status_filter = request.GET.get('status')
-    user_filter = request.GET.get('user_id')  # Changed from 'user' to 'user_id'
+    user_filter = request.GET.get('user_id')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     search = request.GET.get('search')
 
-    # Get user display name for filter
     user_display = None
     if user_filter:
         try:
@@ -174,13 +164,11 @@ def training_history(request):
             Q(dataset_name__icontains=search) |
             Q(user__username__icontains=search)
         )
-    
-    # Pagination
+
     paginator = Paginator(sessions, 20)
     page = request.GET.get('page')
     sessions_page = paginator.get_page(page)
-    
-    # Get available users for filter dropdown
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
     available_users = User.objects.filter(
@@ -215,8 +203,7 @@ def session_detail(request, session_id):
         TrainingSession.objects.select_related('user').prefetch_related('rounds'),
         session_id=session_id
     )
-    
-    # Get training rounds
+
     rounds = session.rounds.order_by('round_number')
     
     context = {
@@ -253,10 +240,10 @@ def export_training_history(request):
     Export training history as CSV.
     """
     sessions = TrainingSession.objects.select_related('user').order_by('-started_at')
-    
+
     # Apply same filters as history view
     status_filter = request.GET.get('status')
-    user_filter = request.GET.get('user_id')  # Changed from 'user' to 'user_id'
+    user_filter = request.GET.get('user_id')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     search = request.GET.get('search')
@@ -287,8 +274,7 @@ def export_training_history(request):
             Q(dataset_name__icontains=search) |
             Q(user__username__icontains=search)
         )
-    
-    # Create CSV response
+
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="training_history_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
     
@@ -327,8 +313,6 @@ def export_training_history(request):
     
     return response
 
-
-# AJAX API endpoints for real-time updates
 
 @login_required
 @require_role('ADMIN', 'AUDITOR')
@@ -412,8 +396,7 @@ def session_status_api(request, session_id):
     """
     try:
         session = TrainingSession.objects.select_related('user').get(session_id=session_id)
-        
-        # Get training rounds count for comparison
+
         rounds_count = session.rounds.count()
         
         return JsonResponse({
@@ -451,10 +434,6 @@ def active_sessions_refresh(request):
     return render(request, 'trainings/partials/active_sessions_table.html', context)
 
 
-# ---------------------------------------------------------------------------
-# Budget Reset Request admin views (ADMIN only)
-# ---------------------------------------------------------------------------
-
 @login_required
 @require_role('ADMIN')
 def budget_reset_list(request):
@@ -467,7 +446,6 @@ def budget_reset_list(request):
     if status_filter in ('pending', 'approved', 'rejected'):
         qs = qs.filter(status=status_filter)
 
-    # Enrich with researcher usernames
     researcher_ids = list(qs.values_list('researcher_id', flat=True).distinct())
     user_map = {u.id: u for u in User.objects.filter(id__in=researcher_ids)}
 
@@ -506,20 +484,17 @@ def budget_reset_detail(request, request_id):
     """
     reset_req = get_object_or_404(BudgetResetRequest, pk=request_id)
 
-    # Resolve researcher and dataset
     researcher = User.objects.filter(id=reset_req.researcher_id).first()
     try:
         dataset = Dataset.objects.get(id=reset_req.dataset_id)
     except Dataset.DoesNotExist:
         dataset = None
 
-    # Training history for this researcher + dataset
     training_sessions = TrainingSession.objects.filter(
         user_id=reset_req.researcher_id,
         dataset_id=reset_req.dataset_id,
     ).order_by('-started_at')
 
-    # Epsilon budget for this researcher + dataset
     epsilon_budget = ResearcherEpsilonBudget.objects.filter(
         dataset_id=reset_req.dataset_id,
         researcher_id=reset_req.researcher_id,
@@ -532,7 +507,6 @@ def budget_reset_detail(request, request_id):
         if action == 'approve':
             try:
                 reset_req.approve(admin=request.user, notes=notes)
-                # Apply the actual budget reset
                 if epsilon_budget:
                     epsilon_budget.reset_period()
                 messages.success(request, 'Budget reset request approved and budget has been reset.')

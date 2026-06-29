@@ -47,7 +47,7 @@ class TrainingSessionModelTests(TestCase):
     def test_session_creation(self):
         """Test basic training session creation."""
         session = self.training_session
-        
+
         # Test basic fields
         self.assertEqual(session.client_id, 'test_client_001')
         self.assertEqual(session.user, self.user)
@@ -75,7 +75,6 @@ class TrainingSessionModelTests(TestCase):
     
     def test_duration_property_completed(self):
         """Test duration property with completed session."""
-        # Set completion time
         self.training_session.completed_at = timezone.now()
         self.training_session.save()
         
@@ -399,7 +398,6 @@ class TrainingRoundModelTests(TestCase):
     
     def test_ordering(self):
         """Test model ordering."""
-        # Create additional rounds
         round2 = TrainingRound.objects.create(
             session=self.training_session,
             round_number=2,
@@ -420,10 +418,9 @@ class TrainingRoundModelTests(TestCase):
     def test_cascade_delete(self):
         """Test cascade delete when session is deleted."""
         round_id = self.training_round.id
-        
-        # Delete the session
+
         self.training_session.delete()
-        
+
         # Round should be deleted too
         self.assertFalse(TrainingRound.objects.filter(id=round_id).exists())
 
@@ -449,33 +446,28 @@ class TrainingModelIntegrationTests(TestCase):
     
     def test_full_training_workflow(self):
         """Test complete training workflow."""
-        # Start training
         self.assertEqual(self.training_session.status, 'STARTING')
         self.assertEqual(self.training_session.current_round, 0)
-        
+
         # Simulate 3 training rounds
         for round_num in range(1, 4):
-            # Create and complete round
             training_round = TrainingRound.objects.create(
                 session=self.training_session,
                 round_number=round_num,
                 loss=0.8 - (round_num * 0.2),  # Decreasing loss
                 accuracy=0.6 + (round_num * 0.1)  # Increasing accuracy
             )
-            
-            # Complete the round
+
             training_round.complete_round(
                 loss=training_round.loss,
                 accuracy=training_round.accuracy
             )
-            
-            # Check progress updates
+
             self.training_session.refresh_from_db()
             self.assertEqual(self.training_session.current_round, round_num)
             expected_progress = (round_num / 3) * 100
             self.assertEqual(self.training_session.progress_percentage, expected_progress)
-        
-        # Complete training
+
         final_metrics = {
             'accuracy': 0.9,
             'loss': 0.2,
@@ -484,24 +476,21 @@ class TrainingModelIntegrationTests(TestCase):
             'f1': 0.90
         }
         self.training_session.mark_completed(**final_metrics)
-        
+
         # Verify final state
         self.training_session.refresh_from_db()
         self.assertEqual(self.training_session.status, 'COMPLETED')
         self.assertEqual(self.training_session.progress_percentage, 100.0)
         self.assertEqual(float(self.training_session.final_accuracy), 0.9)
-        
-        # Verify rounds were created
+
         self.assertEqual(self.training_session.rounds.count(), 3)
-        
-        # Verify round metrics
+
         first_round = self.training_session.rounds.get(round_number=1)
         self.assertAlmostEqual(float(first_round.loss), 0.6, places=7)
         self.assertAlmostEqual(float(first_round.accuracy), 0.7, places=7)
     
     def test_training_failure_workflow(self):
         """Test training failure workflow."""
-        # Start some rounds
         round1 = TrainingRound.objects.create(
             session=self.training_session,
             round_number=1,
@@ -509,19 +498,19 @@ class TrainingModelIntegrationTests(TestCase):
             accuracy=0.7
         )
         round1.complete_round(loss=0.6, accuracy=0.7)
-        
+
         # Simulate failure during round 2
         error_msg = "Out of memory error during training"
         traceback_msg = "Traceback...\nRuntimeError: CUDA out of memory"
-        
+
         self.training_session.mark_failed(error_msg, traceback_msg)
-        
+
         # Verify failure state
         self.training_session.refresh_from_db()
         self.assertEqual(self.training_session.status, 'FAILED')
         self.assertIsNotNone(self.training_session.completed_at)
         self.assertEqual(self.training_session.error_message, error_msg)
         self.assertEqual(self.training_session.error_traceback, traceback_msg)
-        
+
         # Verify partial rounds still exist
         self.assertEqual(self.training_session.rounds.count(), 1)

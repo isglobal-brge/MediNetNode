@@ -31,10 +31,6 @@ def _dataset_detail_view():
 User = get_user_model()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _make_dataset(name="dp_view_ds") -> Dataset:
     """Create a Dataset bypassing file-hashing in Dataset.save()."""
     ds = Dataset(
@@ -78,10 +74,6 @@ def _request(method, user, data=None):
     return req
 
 
-# ---------------------------------------------------------------------------
-# Model-level: DatasetPrivacyPolicy SENSITIVITY_DEFAULTS
-# ---------------------------------------------------------------------------
-
 class TestSensitivityDefaults:
     """DatasetPrivacyPolicy.SENSITIVITY_DEFAULTS covers all choice values."""
 
@@ -105,10 +97,6 @@ class TestSensitivityDefaults:
         assert d['max_epsilon_per_job'] == 3.0
         assert d['lifetime_budget'] == 15.0
 
-
-# ---------------------------------------------------------------------------
-# View tests: RequestFactory (avoids full test-client migration overhead)
-# ---------------------------------------------------------------------------
 
 @pytest.mark.django_db(databases=['default', 'datasets_db'])
 class TestDatasetDetailPrivacyPolicyContext:

@@ -85,7 +85,6 @@ class CustomUser(AbstractUser):
 
         permission_value = self.role.permissions.get(permission_key)
 
-        # No permission found
         if permission_value is None:
             return False
 
@@ -93,11 +92,9 @@ class CustomUser(AbstractUser):
         if isinstance(permission_value, bool):
             return permission_value
 
-        # Scope-based permission
         if isinstance(permission_value, dict):
             scope = permission_value.get('scope')
 
-            # If no scope defined in the permission, deny access
             if scope is None:
                 return False
 
@@ -106,14 +103,12 @@ class CustomUser(AbstractUser):
             if domain is None:
                 return True
 
-            # Check domain against scope
             if scope == 'ALL':
                 return True
 
             if isinstance(scope, list):
                 return domain in scope
 
-            # Unknown scope type
             return False
 
         # Fail-closed: unexpected permission type — deny and log for investigation.
@@ -157,8 +152,7 @@ class CustomUser(AbstractUser):
 
     def set_password(self, raw_password):
         """Override to save password history before changing password."""
-        if self.pk and self.password:  # Only if user exists and has a current password
-            # Save current password to history
+        if self.pk and self.password:
             PasswordHistory.objects.create(
                 user=self,
                 password_hash=self.password
@@ -175,12 +169,10 @@ class CustomUser(AbstractUser):
         """Check if password was used in the last 5 passwords."""
         if not raw_password:
             return False
-            
-        # Check current password
+
         if check_password(raw_password, self.password):
             return True
-            
-        # Check last 5 passwords in history
+
         if not self.pk:
             return False
         for history in PasswordHistory.objects.filter(user=self).order_by('-created_at')[:5]:
@@ -290,7 +282,6 @@ class APIKey(models.Model):
         return check_password(raw_key, self.key_hash)
 
     def save(self, *args, **kwargs):
-        # Only generate new key if this is a new instance and no key_hash set
         if not self.pk and not self.key_hash:
             raw_key = self.generate_api_key()
             self.set_key(raw_key)
@@ -318,10 +309,8 @@ class APIKey(models.Model):
         import ipaddress
         
         try:
-            # Convert string IP to IP object
             client_ip = ipaddress.ip_address(ip_address)
-            
-            # Check each whitelist entry
+
             for allowed_ip in self.ip_whitelist:
                 try:
                     # Handle CIDR notation (e.g., '0.0.0.0/0', '192.168.1.0/24')
@@ -330,7 +319,6 @@ class APIKey(models.Model):
                         if client_ip in network:
                             return True
                     else:
-                        # Handle single IP address
                         allowed = ipaddress.ip_address(allowed_ip)
                         if client_ip == allowed:
                             return True
@@ -386,8 +374,7 @@ class APIRequest(models.Model):
     status_code = models.PositiveIntegerField()
     response_time_ms = models.PositiveIntegerField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
-    
-    # Security fields
+
     is_successful = models.BooleanField(default=True)
     error_message = models.TextField(blank=True)
     

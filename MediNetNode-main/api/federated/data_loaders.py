@@ -49,7 +49,6 @@ def load_data_from_django(dataset_id: int, use_experiment: bool = False) -> Tupl
 
         print(f"[SEARCH] Fetching dataset {dataset_id} from Django...")
 
-        # Get dataset from Django
         try:
             dataset = Dataset.objects.using('datasets_db').get(id=dataset_id)
             print(f"[OK] Dataset found: {dataset.name}")
@@ -65,14 +64,12 @@ def load_data_from_django(dataset_id: int, use_experiment: bool = False) -> Tupl
         elif use_experiment:
             print(f"[EXP] use_experiment=True but no experiment file available — falling back to production file")
 
-        # Get file path
         if not file_path or not os.path.exists(file_path):
             print(f"[ERROR] Dataset file not found: {file_path}")
             return None, None
 
         print(f"Loading data from: {file_path}")
 
-        # Load CSV data
         data_df = pd.read_csv(file_path)
         
         if data_df.empty:
@@ -81,7 +78,6 @@ def load_data_from_django(dataset_id: int, use_experiment: bool = False) -> Tupl
             
         print(f"[OK] Data loaded: {len(data_df)} rows, {len(data_df.columns)} columns")
         
-        # Get target column from dataset metadata
         target_column = None
         if dataset.target_column:
             try:
@@ -206,7 +202,6 @@ def load_ml_data(
         >>> print(X_val.shape, y_val.shape)
         (200, 30) (200,)
     """
-    # Input validation
     if not isinstance(dataset_id, int) or dataset_id <= 0:
         raise ValueError(f"dataset_id must be positive integer, got: {dataset_id}")
     if not 0.0 <= val_size <= 1.0:
@@ -220,7 +215,6 @@ def load_ml_data(
     print(f"   Random state: {random_state}")
 
     try:
-        # Load dataset from Django system
         data_df, target_column = load_data_from_django(dataset_id, use_experiment=use_experiment)
 
         if data_df is None or target_column is None:
@@ -233,7 +227,6 @@ def load_ml_data(
         print(f"   Columns: {len(data_df.columns)}")
         print(f"   Target column: {target_column}")
 
-        # Split data into train and validation sets
         print(f"\nSplitting data...")
         train_df, val_df = train_test_split(
             data_df,
@@ -250,7 +243,6 @@ def load_ml_data(
 
         feature_cols = [c for c in data_df.columns if c != target_column]
 
-        # Training data
         X_train = train_df[feature_cols].values.astype(np.float64)
         y_train = train_df[target_column].values
 
@@ -268,7 +260,6 @@ def load_ml_data(
         X_train = ml_scaler.fit_transform(X_train)
         print(f"   StandardScaler fitted on {len(train_df)} training samples")
 
-        # Validation data
         X_val = val_df[feature_cols].values.astype(np.float64)
         X_val = ml_scaler.transform(X_val)
         y_val = val_df[target_column].values
@@ -329,18 +320,16 @@ def create_train_val_loaders(
         ValueError: If parameters are invalid
         RuntimeError: If dataset loading fails
     """
-    # Input validation
     if not isinstance(dataset_id, int) or dataset_id <= 0:
         raise ValueError(f"dataset_id must be positive integer, got: {dataset_id}")
     if not 0.0 <= val_size <= 1.0:
         raise ValueError(f"val_size must be between 0.0 and 1.0, got: {val_size}")
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError(f"batch_size must be positive integer, got: {batch_size}")
-    
+
     print(f"[SEARCH] Loading dataset {dataset_id} from Django system...")
-    
+
     try:
-        # Load dataset from Django system
         data_df, target_column = load_data_from_django(dataset_id, use_experiment=use_experiment)
 
         if data_df is None or target_column is None:
@@ -380,18 +369,15 @@ def create_train_val_loaders(
             label_encoder = LabelEncoder()
             label_encoder.fit(data_df[target_column].values)
 
-        # Prepare tensors
         print("[CONFIG] Converting to PyTorch tensors...")
         X_train, y_train = prepare_dataset(train_df, target_column, scaler=scaler, label_encoder=label_encoder)
         X_val, y_val = prepare_dataset(val_df, target_column, scaler=scaler, label_encoder=label_encoder)
-        
+
         print(f"[INIT] Tensor shapes - Train: X{X_train.shape}, y{y_train.shape} | Val: X{X_val.shape}, y{y_val.shape}")
-        
-        # Create datasets
+
         train_dataset = SQLiteDataset(X_train, y_train)
         val_dataset = SQLiteDataset(X_val, y_val)
-        
-        # Create dataloaders
+
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         

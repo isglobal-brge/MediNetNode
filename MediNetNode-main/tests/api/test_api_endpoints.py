@@ -21,7 +21,6 @@ class APIEndpointTests(TestCase):
         """Set up test data."""
         self.client = Client()
 
-        # Get or create RESEARCHER role
         self.researcher_role, _ = Role.objects.get_or_create(
             name='RESEARCHER',
             defaults={
@@ -32,23 +31,20 @@ class APIEndpointTests(TestCase):
                 }
             }
         )
-        
-        # Create RESEARCHER user
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_api_test',
             email='researcher@test.com',
             password='ResearcherPass123!',
             role=self.researcher_role
         )
-        
-        # Create API key
+
         self.api_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key',
             ip_whitelist=['127.0.0.1', '192.168.1.100']
         )
-        
-        # Create test datasets
+
         self.dataset1 = Dataset.objects.using('datasets_db').create(
             name='Heart Disease Dataset',
             description='Heart disease prediction dataset',
@@ -72,8 +68,7 @@ class APIEndpointTests(TestCase):
             file_size=512000,
             file_format='csv'
         )
-        
-        # Grant access to datasets
+
         DatasetAccess.objects.using('datasets_db').create(
             dataset=self.dataset1,
             user_id=self.researcher_user.id,
@@ -154,13 +149,12 @@ class APIEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         
         data = json.loads(response.content.decode('utf-8'))
-        
-        # Check that we get the expected structure
-        expected_keys = ['dataset_id', 'dataset_name', 'medical_domain', 
+
+        expected_keys = ['dataset_id', 'dataset_name', 'medical_domain',
                         'patient_count', 'data_type', 'file_size', 'description', 'created_at']
         for key in expected_keys:
             self.assertIn(key, data)
-        
+
         # Check that we get both datasets
         self.assertEqual(len(data['dataset_id']), 2)
         self.assertIn('Heart Disease Dataset', data['dataset_name'])
@@ -174,7 +168,6 @@ class APIEndpointTests(TestCase):
     
     def test_get_data_info_no_datasets(self):
         """Test get_data_info when user has no dataset access."""
-        # Remove dataset access
         DatasetAccess.objects.using('datasets_db').filter(
             user_id=self.researcher_user.id
         ).delete()
@@ -284,7 +277,6 @@ class APIEndpointTests(TestCase):
     
     def test_start_client_no_train_permission(self):
         """Test start_client endpoint when user lacks train permission."""
-        # Remove train permission
         self.researcher_role.permissions = {
             'api.access': True, 
             'dataset.view': True
@@ -314,16 +306,14 @@ class APIEndpointTests(TestCase):
     def test_api_request_logging(self):
         """Test that API requests are properly logged."""
         from users.models import APIRequest
-        
-        # Make a request
+
         response = self.client.get(
             '/api/v2/ping',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Check that request was logged
+
         log_entry = APIRequest.objects.filter(
             api_key=self.api_key,
             endpoint='/api/v2/ping',
@@ -338,19 +328,16 @@ class APIEndpointTests(TestCase):
     
     def test_api_key_last_used_update(self):
         """Test that API key last_used fields are updated."""
-        # Check initial state
         self.assertIsNone(self.api_key.last_used_at)
         self.assertIsNone(self.api_key.last_used_ip)
-        
-        # Make a request
+
         response = self.client.get(
             '/api/v2/ping',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Reload API key and check updates
+
         self.api_key.refresh_from_db()
         self.assertIsNotNone(self.api_key.last_used_at)
         self.assertEqual(self.api_key.last_used_ip, '127.0.0.1')
@@ -375,12 +362,10 @@ class APIEndpointTests(TestCase):
         self.assertIsInstance(data['file_size'], list)
         self.assertIsInstance(data['description'], list)
         self.assertIsInstance(data['created_at'], list)
-        
-        # Verify all lists have same length
+
         lengths = [len(data[key]) for key in data.keys()]
         self.assertTrue(all(length == lengths[0] for length in lengths))
-        
-        # Verify data types
+
         if data['dataset_id']:  # If we have data
             self.assertIsInstance(data['dataset_id'][0], int)
             self.assertIsInstance(data['dataset_name'][0], str)

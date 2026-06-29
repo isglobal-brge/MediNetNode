@@ -14,31 +14,28 @@ class AuditorDashboardAccessControlTest(TestCase):
     
     def setUp(self):
         """Set up test users with different roles."""
-        # Create roles
         self.admin_role = Role.objects.get(name='ADMIN')
         self.investigador_role = Role.objects.get(name='RESEARCHER')
         self.auditor_role = Role.objects.get(name='AUDITOR')
-        
-        # Create users with different roles
+
         self.admin_user = CustomUser.objects.create_user(
             username='admin_user',
             password='StrongPass123!',
             role=self.admin_role
         )
-        
+
         self.investigador_user = CustomUser.objects.create_user(
-            username='investigador_user', 
+            username='investigador_user',
             password='StrongPass123!',
             role=self.investigador_role
         )
-        
+
         self.auditor_user = CustomUser.objects.create_user(
             username='auditor_user',
-            password='StrongPass123!', 
+            password='StrongPass123!',
             role=self.auditor_role
         )
-        
-        # Create test data
+
         self.audit_event = AuditEvent.objects.create(
             user=self.admin_user,
             action='TEST_ACTION',
@@ -177,8 +174,7 @@ class AuditorDashboardAccessControlTest(TestCase):
             {'state': 'INVESTIGATING'}
         )
         self.assertEqual(response.status_code, 200)
-        
-        # Verify the incident was updated
+
         self.security_incident.refresh_from_db()
         self.assertEqual(self.security_incident.state, 'INVESTIGATING')
 
@@ -235,7 +231,7 @@ class AuditorDashboardFunctionalityTest(TestCase):
                 risk_score=10 + (i * 10),
                 success=i % 3 != 0  # Some failures
             )
-        
+
         self.client = Client()
         self.client.login(username='auditor_user', password='StrongPass123!')
 
@@ -243,13 +239,11 @@ class AuditorDashboardFunctionalityTest(TestCase):
         """Test that dashboard displays correct metrics."""
         response = self.client.get(reverse('audit:auditor_dashboard'))
         self.assertEqual(response.status_code, 200)
-        
-        # Check if metrics are displayed
+
         self.assertContains(response, 'Total Events')
         self.assertContains(response, 'Security Events')
         self.assertContains(response, 'Failed Events')
-        
-        # Check for chart data
+
         self.assertContains(response, 'trendsChart')
         self.assertContains(response, 'categoryChart')
 
@@ -259,11 +253,11 @@ class AuditorDashboardFunctionalityTest(TestCase):
         response = self.client.get(reverse('audit:audit_search'), {'category': 'SYSTEM'})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'TEST_ACTION_0')
-        
+
         # Test severity filter
         response = self.client.get(reverse('audit:audit_search'), {'severity': 'CRITICAL'})
         self.assertEqual(response.status_code, 200)
-        
+
         # Test success filter by searching for failed events
         response = self.client.get(reverse('audit:audit_search'), {'search': 'TEST_ACTION'})
         self.assertEqual(response.status_code, 200)
@@ -272,14 +266,13 @@ class AuditorDashboardFunctionalityTest(TestCase):
         """Test that dataset analysis displays data correctly."""
         response = self.client.get(reverse('audit:dataset_analysis'))
         self.assertEqual(response.status_code, 200)
-        
+
         self.assertContains(response, 'Total Accesses')
         self.assertContains(response, 'Unique Users')
         self.assertContains(response, 'Access Patterns by Hour')
 
     def test_security_incidents_management(self):
         """Test security incidents management functionality."""
-        # Create a test incident
         incident = SecurityIncident.objects.create(
             incident_type='SUSPICIOUS_ACTIVITY',
             description='Test incident for management',
@@ -315,7 +308,7 @@ class AuditorDashboardSecurityTest(TestCase):
             password='StrongPass123!',
             role=self.auditor_role
         )
-        
+
         self.client = Client()
 
     def test_csrf_protection_on_incident_update(self):
@@ -326,9 +319,9 @@ class AuditorDashboardSecurityTest(TestCase):
             severity=2,
             state='OPEN'
         )
-        
+
         self.client.login(username='auditor_user', password='StrongPass123!')
-        
+
         # Try to update without CSRF token (should fail in production)
         response = self.client.post(
             reverse('audit:update_incident_state', args=[incident.id]),
@@ -343,17 +336,16 @@ class AuditorDashboardSecurityTest(TestCase):
     def test_sql_injection_protection(self):
         """Test that search parameters are properly sanitized."""
         self.client.login(username='auditor_user', password='StrongPass123!')
-        
+
         # Attempt SQL injection in search parameter
         malicious_search = "'; DROP TABLE audit_auditevent; --"
         response = self.client.get(
             reverse('audit:audit_search'),
             {'search': malicious_search}
         )
-        
-        # Should not cause an error and should return normally
+
         self.assertEqual(response.status_code, 200)
-        
+
         # Verify table still exists by trying to create an audit event
         AuditEvent.objects.create(
             action='TEST_AFTER_INJECTION',
@@ -364,7 +356,7 @@ class AuditorDashboardSecurityTest(TestCase):
     def test_xss_protection_in_templates(self):
         """Test that user input is properly escaped in templates."""
         self.client.login(username='auditor_user', password='StrongPass123!')
-        
+
         # Create audit event with potentially malicious content
         AuditEvent.objects.create(
             action='<script>alert("xss")</script>',
@@ -372,10 +364,10 @@ class AuditorDashboardSecurityTest(TestCase):
             category='SYSTEM',
             details={'malicious': '<script>alert("xss")</script>'}
         )
-        
+
         response = self.client.get(reverse('audit:audit_search'))
         self.assertEqual(response.status_code, 200)
-        
+
         # Verify script tags are escaped
         content = response.content.decode('utf-8')
         self.assertNotIn('<script>alert("xss")</script>', content)

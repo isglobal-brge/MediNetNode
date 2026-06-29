@@ -23,12 +23,8 @@ def set_parameters(net, parameters: List[np.ndarray]):
         parameters (List[np.ndarray]): The model parameters.
     """
     try:
-        # Parameter setup
-        
-        # Obtenir les claus del model
         keys = list(net.state_dict().keys())
-        # Parameter count verification
-        
+
         # Fail fast on parameter count mismatch. Silent truncation would train
         # on partially-stale local weights without any signal, which is a
         # data-integrity attack vector when the Hub sends a short parameter list.
@@ -37,25 +33,21 @@ def set_parameters(net, parameters: List[np.ndarray]):
                 f"Parameter count mismatch: model has {len(keys)} layers, "
                 f"Hub sent {len(parameters)}. Refusing to load partial parameters."
             )
-        
-        # Crear el nou state_dict amb parells de clau-valor verificats
+
         state_dict = OrderedDict()
         for i, (key, param) in enumerate(zip(keys, parameters)):
             try:
                 state_dict[key] = torch.Tensor(param)
             except Exception as e:
-                # Parameter processing error
                 raise
-        
-        # Carregar l'state_dict actualitzat.
+
         # strict=True is intentional: the count guard above already validated
         # that len(keys) == len(parameters), so any shape mismatch indicates a
         # Hub/Node model definition mismatch that should fail loudly rather than
         # silently loading mismatched tensors.
         net.load_state_dict(state_dict, strict=True)
-        
+
     except Exception as e:
-        # Parameter setting error
         raise e
 
 def get_parameters(net):
@@ -166,7 +158,6 @@ class DLFlowerClient(NumPyClient):
             # "epsilon measurement failed — treat as unbounded privacy cost".
             epsilon_serializable = self.epsilon if math.isfinite(self.epsilon) else -1.0
 
-            # Update training progress with round metrics
             round_metrics = {
                 'loss': float(self.loss),
                 'accuracy': float(self.accuracy),
@@ -242,7 +233,6 @@ class DLFlowerClient(NumPyClient):
         print(f"[Client {self.partition_id}] evaluate, config: {config}")
         set_parameters(self.net, parameters)
 
-        # Use global TABLE_NAME for consistent data loading
         print(f"DEBUG EVALUATE: Using TABLE_NAME: {self.table_name}")
 
         # Pass the same loss_function that was used during training so test()

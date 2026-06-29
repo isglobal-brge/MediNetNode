@@ -10,10 +10,6 @@ import torch
 import torch.utils.data
 
 
-# ---------------------------------------------------------------------------
-# Shared configs
-# ---------------------------------------------------------------------------
-
 # in_features=52: matches heart_attack_prediction_dataset_preprocessed.csv
 # (52 feature columns after dropping 'Heart Attack Risk' target column).
 DL_CONFIG = {
@@ -106,10 +102,6 @@ DPRF_CONFIG = {
 }
 
 
-# ---------------------------------------------------------------------------
-# DynamicModel tests
-# ---------------------------------------------------------------------------
-
 class TestDynamicModelBuilding:
     """Tests for DynamicModel — DL architecture construction from JSON config."""
 
@@ -171,10 +163,6 @@ class TestDynamicModelBuilding:
         assert dp["max_grad_norm"] > 0, "max_grad_norm must be positive for DP"
 
 
-# ---------------------------------------------------------------------------
-# FedSVM tests
-# ---------------------------------------------------------------------------
-
 class TestSVMAlgorithmInstantiation:
     """Tests for FedSVMAlgorithm instantiation and parameter extraction."""
 
@@ -218,10 +206,6 @@ class TestSVMAlgorithmInstantiation:
         assert isinstance(loss, float)
         assert isinstance(accuracy, float)
 
-
-# ---------------------------------------------------------------------------
-# DP Random Forest tests
-# ---------------------------------------------------------------------------
 
 class TestDPRandomForestInstantiation:
     """Tests for FedDPRandomForest algorithm — explicit epsilon-DP."""

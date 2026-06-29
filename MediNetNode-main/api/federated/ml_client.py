@@ -64,21 +64,17 @@ class MLFlowerClient(NumPyClient):
         # Store algorithm instance (Strategy pattern)
         self.algorithm = algorithm_instance
 
-        # Validation data
         self.X_val, self.y_val = validation_data
 
-        # Client metadata
         self.partition_id = partition_id
         self.assigned_client_id = None
 
-        # Configuration and tracking
         self.model_json = model_json
         self.training_session = training_session
         self.client_ip = client_ip
         self.table_name = table_name
         self.current_process = current_process
 
-        # Get algorithm info
         algo_info = self.algorithm.get_model_info()
 
         print(f"\n{'='*60}")
@@ -145,7 +141,6 @@ class MLFlowerClient(NumPyClient):
                 print(f"[ML CLIENT] Parameter shapes: {[p.shape if hasattr(p, 'shape') else 'no shape' for p in parameters]}")
             print(f"{'='*70}")
 
-            # Determine current round number
             if self.training_session:
                 current_round = self.training_session.current_round + 1
                 print(f"[INFO] Round {current_round} (from persistent session state)")
@@ -154,7 +149,6 @@ class MLFlowerClient(NumPyClient):
                 setattr(self, '_round_counter', current_round)
                 print(f"[INFO] Round {current_round} (local fallback counter)")
 
-            # CHECK CONVERGENCE FLAG
             converged = config.get("converged", 0)
 
             if converged:
@@ -165,11 +159,9 @@ class MLFlowerClient(NumPyClient):
                 print(f"   Returning current parameters without modification")
                 print(f"{'='*70}\n")
 
-                # Return current parameters without training
                 current_params = self.algorithm.get_parameters()
                 num_examples = max(len(self.algorithm.X_train), 1)
 
-                # Prepare convergence metrics
                 convergence_metrics = {
                     "converged": True,
                     "client_name": f"ML_Client_{self.partition_id}",
@@ -183,10 +175,8 @@ class MLFlowerClient(NumPyClient):
 
                 return current_params, num_examples, convergence_metrics
 
-            # NORMAL TRAINING: Algorithm has not converged
             print(f"[ML CLIENT] Training in progress - executing fit()")
 
-            # [INIT] DELEGATE to algorithm
             updated_params, metrics = self.algorithm.fit(parameters)
 
             # Obtain privacy_epsilon for ML: use max_epsilon_per_job as conservative proxy.
@@ -198,7 +188,6 @@ class MLFlowerClient(NumPyClient):
             except Exception:
                 ml_epsilon = float('inf')
 
-            # Prepare metrics for tracking
             round_metrics = {
                 'loss': float(metrics.get('loss', 0.0)),
                 'accuracy': float(metrics.get('accuracy', 0.0)),
@@ -208,7 +197,6 @@ class MLFlowerClient(NumPyClient):
                 'privacy_epsilon': ml_epsilon,
             }
 
-            # Update training progress in Django
             update_training_progress(
                 self.training_session,
                 current_round,
@@ -216,7 +204,6 @@ class MLFlowerClient(NumPyClient):
                 round_metrics
             )
 
-            # Prepare full metrics for Flower server
             full_metrics = {
                 **metrics,
                 "client_name": f"ML_Client_{self.partition_id}",
@@ -227,7 +214,6 @@ class MLFlowerClient(NumPyClient):
                 "algorithm": type(self.algorithm).__name__
             }
 
-            # Log summary
             print(f"\n[INFO] Round {current_round} Summary:")
             print(f"   Accuracy:  {metrics.get('accuracy', 0):.4f}")
             print(f"   Loss:      {metrics.get('loss', 0):.4f}")
@@ -250,14 +236,12 @@ class MLFlowerClient(NumPyClient):
             traceback.print_exc()
             print(f"{'='*70}\n")
 
-            # Mark training session as failed
             fail_training_session(
                 self.training_session,
                 str(e),
                 traceback.format_exc()
             )
 
-            # Return empty parameters on error
             return parameters, 0, {}
 
     def evaluate(self, parameters, config):
@@ -276,7 +260,6 @@ class MLFlowerClient(NumPyClient):
             print(f"[INFO] ML CLIENT {self.partition_id} - EVALUATION")
             print(f"{'='*70}")
 
-            # [INIT] DELEGATE to algorithm
             loss, accuracy = self.algorithm.evaluate(
                 parameters,
                 self.X_val,
@@ -305,5 +288,4 @@ class MLFlowerClient(NumPyClient):
             traceback.print_exc()
             print(f"{'='*70}\n")
 
-            # Return default values on error
             return 0.0, len(self.X_val), {"accuracy": 0.0, "loss": 0.0}
