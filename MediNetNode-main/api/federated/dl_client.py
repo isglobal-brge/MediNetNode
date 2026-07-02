@@ -195,7 +195,7 @@ class DLFlowerClient(NumPyClient):
                 "train_samples": len(self.trainloader.dataset) if self.trainloader else 0,
             }
 
-            print(f"[INFO] CLIENT_METRICS: client_id='{self.assigned_client_id}' | acc={self.accuracy:.3f} | loss={self.loss:.3f} | f1={self.f1:.3f} | ε={epsilon_serializable:.4f}")
+            print(f"[INFO] CLIENT_METRICS: client_id='{self.assigned_client_id}' | acc={self.accuracy:.3f} | loss={self.loss:.3f} | f1={self.f1:.3f} | eps={epsilon_serializable:.4f}")
             print(f"[SEARCH] DEBUG FIT: Metrics sent for client_id: {self.assigned_client_id}")
             print(f"[SEARCH] DEBUG FIT: Trainloader length: {len(self.trainloader)}")
             

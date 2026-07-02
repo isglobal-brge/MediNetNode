@@ -1,3 +1,11 @@
+# Never let a Unicode log char (e.g. DP 'ε') crash the client on a cp1252 console.
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(errors="backslashreplace")
+    except (AttributeError, ValueError):
+        pass
+
 import numpy as np
 import torch
 import warnings
@@ -84,7 +92,7 @@ def client_fn(context: Context):
         print(f"{'='*70}")
 
         training_config = model_config.get('training', {})
-        ml_method = training_config.get('ml_method', 'fedsvm').lower()
+                     or 'fedsvm').lower()
 
         print(f"[INFO] ML Algorithm: {ml_method}")
         print(f"[PACKAGE] Dataset: {TABLE_NAME}")
@@ -107,7 +115,8 @@ def client_fn(context: Context):
             raise
 
         print(f"\n[CONFIG] Initializing {ml_method} algorithm...")
-        algorithm_instance = AlgorithmClass(X_train, y_train, MODEL_JSON, X_val, y_val)
+        algo_config = {**MODEL_JSON, 'training': training_config}
+        algorithm_instance = AlgorithmClass(X_train, y_train, algo_config, X_val, y_val)
         print(f"[OK] Algorithm initialized successfully")
         print(f"   Training samples: {len(X_train)}")
         print(f"   Validation samples: {len(X_val)}")

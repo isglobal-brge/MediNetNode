@@ -785,8 +785,9 @@ class TestRecordPrivacySpendNominal(TestCase):
         self.policy.refresh_from_db()
         self.assertAlmostEqual(self.policy.spent_epsilon, 0.75, places=5)
 
-    def test_uses_highest_round_number(self):
-        """When multiple rounds exist, uses the highest round_number."""
+    def test_composes_epsilon_across_rounds(self):
+        """Multi-round leakage composes: spend is the SUM of every round's ε,
+        not just the last round (each federated round is a fresh DP mechanism)."""
         session = _make_session(self.user, self.dataset.id)
         _make_round(session, round_number=1, privacy_epsilon=0.3)
         _make_round(session, round_number=2, privacy_epsilon=0.5)
@@ -795,7 +796,7 @@ class TestRecordPrivacySpendNominal(TestCase):
         self._call(session)
 
         self.policy.refresh_from_db()
-        self.assertAlmostEqual(self.policy.spent_epsilon, 0.8, places=5)
+        self.assertAlmostEqual(self.policy.spent_epsilon, 1.6, places=5)
 
     def test_accumulated_epsilon_across_multiple_sessions(self):
         """Multiple complete_training_session calls accumulate spent_epsilon."""

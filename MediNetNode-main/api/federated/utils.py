@@ -206,53 +206,45 @@ def _record_privacy_spend(training_session) -> None:
             )
             return
 
-        # The actual epsilon comes from the last completed round's metrics JSONField.
-        # TrainingRound.complete_round(**kwargs) stores extra kwargs (incl. privacy_epsilon)
-        # in the metrics column via update_training_progress in this same file.
-        # Use the reverse relation (training_session.rounds) so tests can mock it easily.
-        last_round = (
-            training_session.rounds
-            .order_by('-round_number')
-            .first()
-        )
-        if last_round is None:
+        rounds = list(training_session.rounds.order_by('round_number'))
+        if not rounds:
             logger.warning(
                 "[DP] No TrainingRound records for session %s — privacy spend not recorded",
                 training_session.session_id,
             )
             return
 
-        metrics_dict = last_round.metrics or {}
-        raw_eps = metrics_dict.get('privacy_epsilon')
-        if raw_eps is None:
+        per_round = []
+        for r in rounds:
+            raw_eps = (r.metrics or {}).get('privacy_epsilon')
+            if raw_eps is None:
+                continue
+            try:
+                eps = float(raw_eps)
+            except (TypeError, ValueError):
+                logger.error(
+                    "[DP] Non-numeric privacy_epsilon (%r) in round %s of session %s",
+                    raw_eps, r.round_number, training_session.session_id,
+                )
+                continue
+            if math.isfinite(eps) and eps > 0.0:
+                per_round.append(eps)
+
+        if not per_round:
             logger.warning(
-                "[DP] privacy_epsilon absent from round %s metrics in session %s — "
+                "[DP] No valid privacy_epsilon across %d round(s) of session %s — "
                 "DP may not have been active for this job",
-                last_round.round_number, training_session.session_id,
+                len(rounds), training_session.session_id,
             )
             return
 
-        try:
-            actual_epsilon = float(raw_eps)
-        except (TypeError, ValueError):
-            logger.error(
-                "[DP] Non-numeric privacy_epsilon (%r) in round %s of session %s",
-                raw_eps, last_round.round_number, training_session.session_id,
-            )
-            return
-
-        if not math.isfinite(actual_epsilon) or actual_epsilon <= 0.0:
-            logger.warning(
-                "[DP] Invalid privacy_epsilon=%.6g in session %s — skipping record",
-                actual_epsilon, training_session.session_id,
-            )
-            return
+        actual_epsilon = float(sum(per_round))
 
         policy.record_spent(actual_epsilon)
         logger.info(
-            "[DP] Recorded ε=%.6f for dataset %s (session %s, round %s)",
-            actual_epsilon, dataset_id,
-            training_session.session_id, last_round.round_number,
+            "[DP] Recorded ε=%.6f for dataset %s (session %s, composed over %d round(s): %s)",
+            actual_epsilon, dataset_id, training_session.session_id,
+            len(per_round), [round(e, 4) for e in per_round],
         )
 
         # Update per-researcher epsilon budget. Delegate to the model's

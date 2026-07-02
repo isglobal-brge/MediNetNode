@@ -16,7 +16,8 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
 from multiprocessing import Process
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.db.models import Q
 from medinet.error_handlers import SafeErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,45 @@ logger = logging.getLogger(__name__)
 CLIENT_VERSION = "0.1"
 
 MAX_CONCURRENT_TRAINING_SESSIONS = 3
+
+# Overridable via settings.
+STALE_STARTING_TIMEOUT_MINUTES = 5
+STALE_ACTIVE_TIMEOUT_HOURS = 6
+
+
+def reap_stale_training_sessions(user):
+    """Fail abandoned sessions (dead client process) so they stop consuming a
+    concurrency slot. Time-based: process_id holds the server PID, not the child's.
+    """
+    now = timezone.now()
+    starting_cutoff = now - timedelta(
+        minutes=getattr(settings, 'FL_STALE_STARTING_TIMEOUT_MINUTES', STALE_STARTING_TIMEOUT_MINUTES)
+    )
+    active_cutoff = now - timedelta(
+        hours=getattr(settings, 'FL_STALE_ACTIVE_TIMEOUT_HOURS', STALE_ACTIVE_TIMEOUT_HOURS)
+    )
+
+    stale = TrainingSession.objects.filter(user=user).filter(
+        Q(status='STARTING', started_at__lt=starting_cutoff)
+        | Q(status='ACTIVE', started_at__lt=active_cutoff)
+    )
+
+    reaped = 0
+    for session in stale:
+        session.status = 'FAILED'
+        if hasattr(session, 'error_message') and not session.error_message:
+            session.error_message = 'Auto-failed: session abandoned (client process died before completion)'
+        if hasattr(session, 'completed_at') and not session.completed_at:
+            session.completed_at = now
+        session.save(update_fields=['status', 'error_message', 'completed_at'])
+        reaped += 1
+
+    if reaped:
+        logger.warning(
+            f"Reaped {reaped} stale training session(s) for user "
+            f"{getattr(user, 'username', user)}"
+        )
+    return reaped
 
 # JSON schema for training configuration validation
 TRAINING_CONFIG_SCHEMA = {
@@ -232,6 +272,9 @@ def start_client(request):
         logger.info(f"start_client request from user {user.username}")
         logger.debug(f"Request data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
 
+        # Free slots held by dead clients before enforcing the limit below.
+        reap_stale_training_sessions(request.api_user)
+
         # Limit concurrent active training sessions per researcher
         active_sessions = TrainingSession.objects.filter(
             user=request.api_user,
@@ -344,12 +387,14 @@ def start_client(request):
         except Exception as e:
             logger.error(f"[ERROR] Failed to save training request to documentation: {e}")
         
-        # Pass training_session and SSL certificate to flower client.
-        # Imported lazily: keeps the heavy ML stack (torch/numpy/flwr) out of
-        # module import, so the HTTP/permission layer (e.g. budget enforcement)
-        # can be imported and tested without it.
-        from .federated import client
-        process = Process(target=client.start_flower_client, args=(model_json, server_address, client_id, user, training_session.session_id, ca_cert), daemon=True)
+        # Lightweight launcher so the heavy torch import runs in the child, not here.
+        from .federated.launcher import run_flower_client
+        # Pass user.pk, not the User instance (unpicklable across spawn before setup).
+        process = Process(
+            target=run_flower_client,
+            args=(model_json, server_address, client_id, user.pk, training_session.session_id, ca_cert),
+            daemon=True,
+        )
         process.start()
         
         response_data = {
@@ -445,14 +490,27 @@ def estimate_job_epsilon(config: dict, dataset_size: int) -> float:
         raw_epochs = 3
     epochs = min(max(raw_epochs, 1), _MAX_EPOCHS)
 
+    # Each federated round re-runs DP-SGD locally with a fresh accountant, so the
+    # total cost composes across rounds. Mirror the recording side (which sums the
+    # per-round epsilon) by estimating one round's epsilon and multiplying by the
+    # round count — basic composition, a safe upper bound.
+    try:
+        rounds = int(config.get('train', {}).get('rounds', 1))
+    except (TypeError, ValueError):
+        rounds = 1
+    rounds = max(rounds, 1)
+
     sample_rate = batch_size / dataset_size
     steps = max(int(epochs * dataset_size / batch_size), 1)
 
     try:
         acc = RDPAccountant()
         acc.history = [(noise_multiplier, sample_rate, steps)]
-        eps = float(acc.get_epsilon(delta=_DP_DELTA))
-        return eps if math.isfinite(eps) else float('inf')
+        eps_one_round = float(acc.get_epsilon(delta=_DP_DELTA))
+        if not math.isfinite(eps_one_round):
+            return float('inf')
+        total_eps = eps_one_round * rounds
+        return total_eps if math.isfinite(total_eps) else float('inf')
     except Exception as exc:
         logger.warning("[DP] RDPAccountant epsilon estimation failed: %s", exc)
         return float('inf')

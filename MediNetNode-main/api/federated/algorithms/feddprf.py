@@ -8,7 +8,7 @@ Reference: DP Random Forest paper
 """
 
 import numpy as np
-import pickle
+import json
 import base64
 from typing import List, Tuple, Dict, Any, Optional
 from .base import FederatedMLAlgorithm
@@ -449,11 +449,42 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
 
         return sanitized_config
 
+    @staticmethod
+    def _node_to_wire(node: dict) -> dict:
+        """Internal node dict -> Hub wire schema ('feature' key, native types)."""
+        if node.get('type') == 'split':
+            return {
+                'type': 'split',
+                'feature': int(node['feature_idx']),
+                'threshold': float(node['threshold']),
+                'left': FedDPRandomForestAlgorithm._node_to_wire(node['left']),
+                'right': FedDPRandomForestAlgorithm._node_to_wire(node['right']),
+            }
+        label = node.get('label')
+        return {'type': 'leaf', 'label': int(label) if label is not None else None}
+
+    @staticmethod
+    def _node_from_wire(node: dict) -> dict:
+        """Hub wire schema -> internal node dict ('feature_idx' key)."""
+        if node.get('type') == 'split':
+            return {
+                'type': 'split',
+                'feature_idx': int(node['feature']),
+                'threshold': float(node['threshold']),
+                'left': FedDPRandomForestAlgorithm._node_from_wire(node['left']),
+                'right': FedDPRandomForestAlgorithm._node_from_wire(node['right']),
+            }
+        label = node.get('label')
+        return {'type': 'leaf', 'label': int(label) if label is not None else None}
+
     def _serialize_trees(self, trees: List[SecureDPTree]) -> List[np.ndarray]:
         """
         Serialize trees for transmission.
 
-        Format: pickle → base64 → numpy array of bytes
+        Format: JSON → base64 → numpy array of bytes. The Hub validates and
+        relays tree states as JSON only (pickle over the network would be an
+        RCE vector), with 'feature' as the split-key name — see the server's
+        deserialize_trees/validate_tree_format contract.
 
         Args:
             trees: List of SecureDPTree instances
@@ -464,18 +495,30 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         if not trees:
             return [np.array([])]
 
-        tree_states = [tree.get_state() for tree in trees]
+        wire_states = []
+        for tree in trees:
+            state = tree.get_state()
+            wire_states.append({
+                'tree_structure': self._node_to_wire(state['tree_structure']),
+                'n_classes': int(state['n_classes']),
+                'n_features': int(state['n_features']),
+                'max_depth': int(state['max_depth']),
+                'min_samples_split': int(state['min_samples_split']),
+                'epsilon': float(state['epsilon']),
+                'feature_bounds': {
+                    'min': [float(v) for v in state['feature_bounds']['min']],
+                    'max': [float(v) for v in state['feature_bounds']['max']],
+                },
+            })
 
-        pickled = pickle.dumps(tree_states)
-        encoded = base64.b64encode(pickled)
-
+        encoded = base64.b64encode(json.dumps(wire_states).encode('utf-8'))
         serialized_array = np.frombuffer(encoded, dtype=np.uint8)
 
         return [serialized_array]
 
     def _deserialize_trees(self, serialized_array: np.ndarray) -> List[SecureDPTree]:
         """
-        Deserialize trees from transmission format.
+        Deserialize trees from transmission format (JSON, see _serialize_trees).
 
         Args:
             serialized_array: Numpy array of bytes
@@ -487,11 +530,12 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
             return []
 
         encoded_bytes = serialized_array.tobytes()
-        pickled = base64.b64decode(encoded_bytes)
-        tree_states = pickle.loads(pickled)
+        wire_states = json.loads(base64.b64decode(encoded_bytes).decode('utf-8'))
 
         trees = []
-        for state in tree_states:
+        for wire in wire_states:
+            state = dict(wire)
+            state['tree_structure'] = self._node_from_wire(wire['tree_structure'])
             tree = SecureDPTree()
             tree.set_state(state)
             trees.append(tree)
