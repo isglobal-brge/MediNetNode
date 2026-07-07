@@ -252,7 +252,6 @@ class TestPredictionLoadDataView:
 
     def test_load_data_view_rejects_non_approved_model(self, client, member_user):
         """Test that pending models cannot be used."""
-        # Create a pending model
         pending_model = DeployedModel.objects.create(
             name='Pending Model',
             version='1.0.0',

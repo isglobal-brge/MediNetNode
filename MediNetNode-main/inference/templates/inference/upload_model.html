@@ -567,7 +567,6 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
@@ -656,13 +655,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Parse CSV
             const headers = lines[0].split(',').map(h => h.trim());
             const sampleRows = lines.slice(1, 6).map(line =>
                 line.split(',').map(v => v.trim())
             );
 
-            // Auto-detect types and ranges
             const features = headers.map((name, idx) => {
                 const values = sampleRows.map(row => row[idx]).filter(v => v);
                 const feature = {
@@ -671,7 +668,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     description: `Auto-detected from CSV`
                 };
 
-                // Type detection
                 if (values.every(v => v === '0' || v === '1')) {
                     feature.type = 'boolean';
                 } else if (values.every(v => !isNaN(v) && Number.isInteger(parseFloat(v)))) {
@@ -773,13 +769,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Parse CSV
             const headers = lines[0].split(',').map(h => h.trim());
             const sampleRows = lines.slice(1, 50).map(line =>
                 line.split(',').map(v => v.trim())
             );
 
-            // Detect output type and structure
             const outputSchema = detectOutputSchema(headers, sampleRows);
             displayDetectedOutputSchema(outputSchema);
         };

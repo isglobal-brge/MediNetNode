@@ -73,8 +73,10 @@ class UserViewsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('/admin/', response['Location'])
 
-    def test_django_superuser_is_treated_as_admin(self):
-        """A Django superuser (without role) can access admin dashboard."""
+    def test_django_superuser_without_role_is_denied(self):
+        """H9: a Django superuser without a role no longer bypasses RBAC. The
+        admin dashboard requires the ADMIN role, so a bare superuser is denied
+        (403). `is_superuser` alone only grants Django's /django-admin/."""
         User = get_user_model()
         su = User.objects.create_superuser(
             username='root_su', email='su@test.com', password='RootPass123!'
@@ -83,7 +85,7 @@ class UserViewsTests(TestCase):
         self.assertIsNone(su.role)
         self.client.login(username='root_su', password='RootPass123!')
         response = self.client.get('/admin/')
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
 
     def test_create_user_generates_audit_log(self):
         """Test: Crear usuario genera log de auditoría"""

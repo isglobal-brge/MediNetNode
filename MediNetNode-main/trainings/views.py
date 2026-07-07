@@ -286,12 +286,13 @@ def export_training_history(request):
         'Final F1', 'CPU Usage %', 'Memory Usage MB', 'Error Message'
     ])
     
+    from medinet_core.security.csv_safe import csv_safe_cell
     for session in sessions:
         duration_seconds = ''
         if session.duration:
             duration_seconds = int(session.duration.total_seconds())
-        
-        writer.writerow([
+
+        writer.writerow([csv_safe_cell(v) for v in (
             str(session.session_id),
             session.client_id or '',
             session.user.username,
@@ -309,7 +310,7 @@ def export_training_history(request):
             session.cpu_usage or '',
             session.memory_usage or '',
             session.error_message or ''
-        ])
+        )])
     
     return response
 

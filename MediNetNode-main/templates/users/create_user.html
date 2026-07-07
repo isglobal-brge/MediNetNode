@@ -364,8 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (generateButton) {
         generateButton.addEventListener('click', function() {
             const generatedPassword = generateSecurePassword();
-            
-            // Set password values
+
             password1.value = generatedPassword;
             password2.value = generatedPassword;
             

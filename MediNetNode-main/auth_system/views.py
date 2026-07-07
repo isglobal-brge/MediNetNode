@@ -68,8 +68,17 @@ def login_page(request):
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
 
+    # Only honor `next` when it points back to this host — otherwise a crafted
+    # ?next=https://evil.com would turn the post-login redirect into an open
+    # redirect (phishing). Reject external/scheme-relative targets.
     if next_url and next_url.strip():
-        return redirect(next_url)
+        from django.utils.http import url_has_allowed_host_and_scheme
+        if url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
 
     try:
         if user.role and hasattr(user.role, 'name'):
@@ -131,11 +140,10 @@ def csrf_validate(view_func):
 
 
 def get_client_ip(request):
-    """Get the real client IP address."""
-    xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
+    """Get the real client IP address (spoof-resistant — trusts X-Forwarded-For
+    only from configured trusted proxies)."""
+    from medinet_core.security.ip import get_trusted_client_ip
+    return get_trusted_client_ip(request)
 
 
 def logout_view(request):

@@ -399,8 +399,9 @@ def export_audit_report(request):
         'Success', 'Risk Score', 'Severity', 'Requires Review', 'Details'
     ])
     
+    from medinet_core.security.csv_safe import csv_safe_cell
     for event in events[:5000]:  # Limitar a 5000 registros para evitar timeouts
-        writer.writerow([
+        writer.writerow([csv_safe_cell(v) for v in (
             event.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             event.category,
             event.action,
@@ -412,7 +413,7 @@ def export_audit_report(request):
             event.severity,
             'Yes' if event.requires_review else 'No',
             json.dumps(event.details) if event.details else ''
-        ])
+        )])
     
     return response
 

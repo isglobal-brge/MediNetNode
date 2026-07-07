@@ -211,21 +211,18 @@ class RateLimiter:
         slot_id = f"{user_id}:{model_id}:{time.time()}"
         key = self._make_key(self.PREFIX_CONCURRENT, user_id, model_id)
 
-        # Get current slots
         slots = cache.get(key, [])
 
         # Clean up expired slots (older than TTL)
         current_time = time.time()
         slots = [s for s in slots if current_time - float(s.split(':')[-1]) < self.TTL_CONCURRENT]
 
-        # Check if we can acquire a new slot
         if len(slots) >= self.MAX_CONCURRENT_REQUESTS:
             raise RateLimitExceeded(
                 f"Maximum concurrent requests ({self.MAX_CONCURRENT_REQUESTS}) exceeded",
                 retry_after=60
             )
 
-        # Add new slot
         slots.append(slot_id)
         cache.set(key, slots, self.TTL_CONCURRENT)
 
@@ -242,10 +239,8 @@ class RateLimiter:
         """
         key = self._make_key(self.PREFIX_CONCURRENT, user_id, model_id)
 
-        # Get current slots
         slots = cache.get(key, [])
 
-        # Remove this slot
         if slot_id in slots:
             slots.remove(slot_id)
             cache.set(key, slots, self.TTL_CONCURRENT)
@@ -287,7 +282,6 @@ class RateLimiter:
         model_hourly = model_hourly_limit or self.MODEL_HOURLY_DEFAULT
         model_daily = model_daily_limit or self.MODEL_DAILY_DEFAULT
 
-        # Get current counts
         global_hourly = self._get_count(self.PREFIX_GLOBAL_HOURLY, user_id)
         global_daily = self._get_count(self.PREFIX_GLOBAL_DAILY, user_id)
 

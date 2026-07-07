@@ -82,7 +82,6 @@ class RealDataAnalysisAccessControlTest(TestCase):
         response = self.client.get(reverse('audit:medical_data_analysis'))
         self.assertEqual(response.status_code, 200)
 
-        # Check that access was logged
         audit_events = AuditEvent.objects.filter(
             action='REAL_DATA_ACCESS_REQUEST',
             user=self.auditor_user
@@ -157,7 +156,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check that watermarking is applied
         self.assertContains(response, 'CONFIDENTIAL MEDICAL DATA')
         self.assertContains(response, 'AUTHORIZED ACCESS ONLY')
 
@@ -176,7 +174,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check watermark elements
         self.assertContains(response, 'watermark-info')
         self.assertContains(response, 'watermark-bottom')
         self.assertContains(response, self.auditor_user.username.upper())
@@ -190,7 +187,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check anonymization analysis section
         self.assertContains(response, 'Anonymization Quality')
         self.assertContains(response, '/100')  # Score display
 
@@ -202,7 +198,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check compliance analysis section
         self.assertContains(response, 'Medical Compliance Analysis')
         self.assertContains(response, 'K-Anonymity')
         self.assertContains(response, 'Data Completeness')
@@ -215,7 +210,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check column analysis
         self.assertContains(response, 'Column Analysis')
         self.assertContains(response, 'age')
         self.assertContains(response, 'gender')
@@ -234,7 +228,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-        # Check that detailed access was logged
         preview_events = AuditEvent.objects.filter(
             action='REAL_DATA_PREVIEW_ACCESSED',
             user=self.auditor_user
@@ -245,7 +238,6 @@ class RealDataAnalysisFunctionalityTest(TestCase):
         self.assertEqual(preview_event.resource, f'dataset:{self.test_dataset.name}')
         self.assertTrue(preview_event.success)
 
-        # Check detailed logging
         details = preview_event.details
         self.assertIn('dataset_id', details)
         self.assertIn('rows_accessed', details)
@@ -363,7 +355,6 @@ Jane Smith,jane@email.com,555-5678,25,hypertension"""
             )
             self.assertEqual(response.status_code, 200)
 
-            # Should show compliance analysis
             self.assertContains(response, 'Medical Compliance Analysis')
             self.assertContains(response, 'Valid Medical Domain')
             self.assertContains(response, 'Minimum Dataset Size')
@@ -406,14 +397,12 @@ class SecurityAndWatermarkingTest(TestCase):
                 uploaded_by_id=self.auditor_user.id
             )
             
-            # First access
             response1 = self.client.get(
                 reverse('audit:medical_data_analysis'),
                 {'dataset_id': dataset.id}
             )
             self.assertEqual(response1.status_code, 200)
 
-            # Second access
             response2 = self.client.get(
                 reverse('audit:medical_data_analysis'),
                 {'dataset_id': dataset.id}
@@ -428,7 +417,6 @@ class SecurityAndWatermarkingTest(TestCase):
             content1 = response1.content.decode()
             content2 = response2.content.decode()
 
-            # Both should contain the auditor username
             self.assertIn(self.auditor_user.username.upper(), content1)
             self.assertIn(self.auditor_user.username.upper(), content2)
             
@@ -440,7 +428,6 @@ class SecurityAndWatermarkingTest(TestCase):
         response = self.client.get(reverse('audit:medical_data_analysis'))
         self.assertEqual(response.status_code, 200)
 
-        # Check security warnings
         self.assertContains(response, 'RESTRICTED ACCESS - MEDICAL DATA')
         self.assertContains(response, 'This access is logged and monitored')
         self.assertContains(response, 'Maximum 100 rows per dataset')
@@ -453,7 +440,6 @@ class SecurityAndWatermarkingTest(TestCase):
         
         content = response.content.decode()
 
-        # Check print CSS rules for watermark preservation
         self.assertIn('media="print"', content)
         self.assertIn('color-adjust: exact', content)
         self.assertIn('display: block !important', content)
@@ -465,7 +451,6 @@ class SecurityAndWatermarkingTest(TestCase):
         
         content = response.content.decode()
 
-        # Check for security JavaScript
         self.assertIn('contextmenu', content)  # Right-click prevention
         self.assertIn('beforeunload', content)  # Page unload warning
         self.assertIn('beforeprint', content)  # Print watermarking

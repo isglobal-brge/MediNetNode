@@ -559,8 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // User Activity Timeline Chart (30-day trend)
     const activityCtx = document.getElementById('activityChart').getContext('2d');
-    
-    // Get real activity data from backend
+
     const activityData = [
         {% for activity in activity_data %}
         {

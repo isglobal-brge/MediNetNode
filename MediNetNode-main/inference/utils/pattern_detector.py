@@ -83,7 +83,6 @@ class QueryPatternDetector:
         patterns_detected = []
         risk_scores = {}
 
-        # Get query history for this user+model
         history = self._get_query_history(user_id, model_id)
 
         # Detection 1: Grid search attack
@@ -108,14 +107,11 @@ class QueryPatternDetector:
             patterns_detected.append('membership_inference')
             risk_scores['membership'] = self.WEIGHT_MEMBERSHIP
 
-        # Calculate overall risk score
         risk_score = sum(risk_scores.values())
         risk_score = min(risk_score, 1.0)  # Cap at 1.0
 
-        # Determine action based on risk score
         action = self._determine_action(risk_score)
 
-        # Store this query in history
         self._add_to_history(user_id, model_id, features, input_hash)
 
         return {
@@ -178,7 +174,6 @@ class QueryPatternDetector:
         Returns:
             bool: True if boundary probing detected
         """
-        # Flatten features to 1D
         features_flat = features.flatten()
 
         # Count how many features are at extremes
@@ -296,7 +291,6 @@ class QueryPatternDetector:
         key = self._make_key(self.PREFIX_QUERY_HISTORY, user_id, model_id)
         history = self._get_query_history(user_id, model_id)
 
-        # Add new entry
         entry = {
             'timestamp': timezone.now(),
             'features': features.tolist(),  # Convert to list for JSON serialization

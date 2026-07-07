@@ -69,8 +69,12 @@ class SecureDatasetUploader:
         '.npy': ['application/octet-stream'],
     }
     
-    # No file size limit for medical datasets (they can be very large)
-    MAX_FILE_SIZE = None
+    # Upper bound on the on-disk size of an uploaded dataset. Medical datasets
+    # can be large, so the default is generous, but the old unbounded value
+    # (None) let a crafted/compressed upload exhaust memory (OOM). Override with
+    # settings.DATASET_MAX_FILE_SIZE (bytes); set it to None to disable the cap
+    # (not recommended in production).
+    MAX_FILE_SIZE = getattr(settings, 'DATASET_MAX_FILE_SIZE', 2 * 1024 * 1024 * 1024)  # 2 GiB
     
     # Minimum rows for k-anonymity
     MIN_K_ANONYMITY = 5
@@ -127,17 +131,14 @@ class SecureDatasetUploader:
         try:
             self._update_progress("initializing", "Initializing upload...")
 
-            # Create temporary directory for processing
             self.temp_dir = tempfile.mkdtemp(prefix='dataset_upload_')
 
-            # Step 1: Validate file
             self._update_progress("validating", "Validating file...")
             self._validate_file(file_path)
 
             # Step 1.5: Pre-process CSV to remove index columns (fixes DataFrame export issues)
             file_path = self._preprocess_csv_file(file_path)
 
-            # Step 2: Extract metadata
             self._update_progress("extracting_metadata", "Extracting metadata...")
             metadata = self._extract_metadata(file_path, target_column)
 
@@ -145,7 +146,6 @@ class SecureDatasetUploader:
             self._update_progress("validating_metadata", "Validating medical compliance...")
             metadata = self._validate_medical_compliance(metadata, file_path, target_column)
             
-            # Step 4: Calculate checksum
             self._update_progress("calculating_checksum", "Calculating SHA-256 checksum...")
             sha256_hash = self._calculate_checksum(file_path)
             
@@ -195,7 +195,6 @@ class SecureDatasetUploader:
                 # If we get here, commit the transaction
                 datasets_connection.commit()
                 
-                # Get dataset instance for return
                 dataset = Dataset.objects.using('datasets_db').get(id=dataset_id)
                 
             except Exception as e:
@@ -261,10 +260,16 @@ class SecureDatasetUploader:
         if not os.path.exists(file_path):
             raise SecurityValidationError("File does not exist")
             
-        # Check file size (only check for empty files)
+        # Check file size: reject empty files and enforce the upper bound so an
+        # oversized (or decompression-bomb) upload cannot exhaust memory.
         file_size = os.path.getsize(file_path)
         if file_size == 0:
             raise SecurityValidationError("File is empty")
+        if self.MAX_FILE_SIZE is not None and file_size > self.MAX_FILE_SIZE:
+            raise SecurityValidationError(
+                f"File too large: {file_size} bytes exceeds the maximum "
+                f"allowed size of {self.MAX_FILE_SIZE} bytes"
+            )
             
         # Validate extension
         file_ext = Path(file_path).suffix.lower()
@@ -316,7 +321,6 @@ class SecureDatasetUploader:
         try:
             import pandas as pd
 
-            # Read CSV
             df = pd.read_csv(file_path)
 
             if len(df.columns) == 0:
@@ -395,7 +399,6 @@ class SecureDatasetUploader:
             raise MetadataExtractionError("pandas not available for CSV processing")
 
         try:
-            # Read CSV with pandas
             df = pd.read_csv(file_path)
 
             # Auto-detect and remove index column (first column with empty/unnamed header)
@@ -825,7 +828,6 @@ class SecureDatasetUploader:
             except ImportError:
                 raise MetadataExtractionError("pyarrow not available for Parquet processing")
 
-            # Read parquet file
             table = pq.read_table(file_path)
             df = table.to_pandas()
 
@@ -1069,7 +1071,6 @@ class SecureDatasetUploader:
             return
         
         try:
-            # Read the CSV file
             df = pd.read_csv(file_path)
 
             # Auto-detect and remove index column (first column with empty/unnamed header)
@@ -1237,7 +1238,6 @@ class SecureDatasetUploader:
         from django.db import connections
         from django.conf import settings
         
-        # Get the datasets database connection
         datasets_connection = connections['datasets_db']
         
         # Prepare the parameters
@@ -1266,15 +1266,13 @@ class SecureDatasetUploader:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, params)
                 
-                # Get the ID of the inserted record
                 dataset_id = cursor.lastrowid
         finally:
             # Restore debug setting
             settings.DEBUG = old_debug
         
-        # Create a dataset instance for return
         dataset = Dataset.objects.using('datasets_db').get(id=dataset_id)
-        
+
         return dataset
     
     def _create_dataset_record_raw_sql(
@@ -1350,8 +1348,7 @@ class SecureDatasetUploader:
         """
 
         cursor.execute(sql_parameterized, params)
-        
-        # Get the ID of the inserted record
+
         return cursor.lastrowid
     
     def _create_metadata_record_raw_sql(self, cursor, dataset_id: int, metadata: Dict[str, Any]) -> None:

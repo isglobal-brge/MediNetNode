@@ -58,14 +58,12 @@ class DifferentialPrivacy:
         Returns:
             Noisy probabilities (re-normalized to sum to 1.0)
         """
-        # Generate Laplace noise
         noise = np.random.laplace(
             loc=0.0,
             scale=sensitivity * self.scale,
             size=probabilities.shape
         )
 
-        # Add noise to probabilities
         noisy_probs = probabilities + noise
 
         # Clip to [0, 1] range

@@ -5,6 +5,7 @@ from typing import Optional
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth.hashers import check_password
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 
 from users.models import CustomUser
@@ -26,7 +27,11 @@ class SecureLoginBackend(BaseBackend):
 
         if user.is_account_locked():
             self._log_attempt(user, 'LOGIN_FAIL_LOCKED', success=False, request=request)
-            return None
+            # Raise (don't return None): Django stops trying further backends on
+            # PermissionDenied. Returning None would fall through to ModelBackend,
+            # which authenticates with the correct password and IGNORES the lock —
+            # defeating the lockout entirely.
+            raise PermissionDenied("Account is locked")
 
         if user.password and check_password(password, user.password):
             user.reset_failed_attempts()
@@ -58,11 +63,8 @@ class SecureLoginBackend(BaseBackend):
     def _log_attempt(user: Optional[CustomUser], action: str, success: bool, request=None, details: Optional[dict] = None) -> None:
         ip = None
         if request is not None:
-            xff = request.META.get('HTTP_X_FORWARDED_FOR')
-            if xff:
-                ip = xff.split(',')[0].strip()
-            else:
-                ip = request.META.get('REMOTE_ADDR')
+            from medinet_core.security.ip import get_trusted_client_ip
+            ip = get_trusted_client_ip(request)
 
         AuditLogger.log_authentication(
             action=action,

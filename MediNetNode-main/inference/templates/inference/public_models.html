@@ -504,7 +504,6 @@
 
 {% block extra_js %}
 <script>
-    // Clear search on escape key
     document.querySelector('input[name="q"]').addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             this.value = '';

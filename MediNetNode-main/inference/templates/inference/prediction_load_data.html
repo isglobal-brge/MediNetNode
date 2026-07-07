@@ -705,7 +705,6 @@
     const dataPreview = document.getElementById('dataPreview');
     const runBtn = document.getElementById('runPredictionBtn');
 
-    // Drag and drop handlers
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('dragover');
@@ -725,7 +724,6 @@
         }
     });
 
-    // File input change handler
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             handleFileSelect(e.target.files[0]);
@@ -733,7 +731,6 @@
     });
 
     function handleFileSelect(file) {
-        // Validate file type
         const validTypes = ['.csv', '.json', 'text/csv', 'application/json'];
         const fileExt = '.' + file.name.split('.').pop().toLowerCase();
 
@@ -742,16 +739,13 @@
             return;
         }
 
-        // Show file info
         document.getElementById('fileName').textContent = file.name;
         document.getElementById('fileSize').textContent = formatFileSize(file.size);
         fileInfo.classList.add('show');
         dropZone.style.display = 'none';
 
-        // Enable run button
         runBtn.disabled = false;
 
-        // Parse and preview file
         parseFile(file);
     }
 
@@ -814,7 +808,6 @@
             data.push(row);
         }
 
-        // Store total row count
         data.totalRows = lines.length - 1;
         data.headers = headers;
         return data;
@@ -824,7 +817,6 @@
         const parsed = JSON.parse(content);
         let data = Array.isArray(parsed) ? parsed : [parsed];
 
-        // Store total and get preview
         const totalRows = data.length;
         data = data.slice(0, 5);  // Preview first 5 rows
         data.totalRows = totalRows;
@@ -837,18 +829,15 @@
         const headerRow = document.getElementById('previewHeader');
         const body = document.getElementById('previewBody');
 
-        // Clear existing content
         headerRow.innerHTML = '';
         body.innerHTML = '';
 
-        // Add headers
         data.headers.forEach(header => {
             const th = document.createElement('th');
             th.textContent = header;
             headerRow.appendChild(th);
         });
 
-        // Add rows
         data.forEach(row => {
             const tr = document.createElement('tr');
             data.headers.forEach(header => {
@@ -859,11 +848,9 @@
             body.appendChild(tr);
         });
 
-        // Update stats
         document.getElementById('rowCount').textContent = data.totalRows;
         document.getElementById('colCount').textContent = data.headers.length;
 
-        // Show preview
         dataPreview.classList.add('show');
     }
 </script>

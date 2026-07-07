@@ -474,9 +474,10 @@ def export_users_csv(request):
     ])
     
     users = User.objects.select_related('role').all()
-    
+
+    from medinet_core.security.csv_safe import csv_safe_cell
     for user in users:
-        writer.writerow([
+        writer.writerow([csv_safe_cell(v) for v in (
             user.username,
             user.email,
             user.first_name,
@@ -485,7 +486,7 @@ def export_users_csv(request):
             'Yes' if user.is_active else 'No',
             user.date_joined.strftime('%Y-%m-%d %H:%M:%S'),
             user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else 'Never',
-        ])
+        )])
     
     return response
 

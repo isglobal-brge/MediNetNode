@@ -193,8 +193,13 @@ class SecureDPTree:
         scores = np.exp(self.epsilon * class_counts / 2.0)
         probabilities = scores / scores.sum()
 
-        # Use numpy for weighted sampling (secrets doesn't support this)
-        return np.random.choice(self.n_classes, p=probabilities)
+        # Cryptographically-secure weighted sampling via SystemRandom.choices.
+        # NOT numpy's global RNG: it is non-secure and becomes predictable if
+        # numpy is seeded globally elsewhere (a live pattern in train_functions),
+        # which would leak the DP label selection and break the guarantee.
+        return self.random_state.choices(
+            range(self.n_classes), weights=probabilities.tolist(), k=1
+        )[0]
 
     def predict_sample(self, x: np.ndarray) -> int:
         """
@@ -289,4 +294,7 @@ def permute_and_flip(
     scores = np.exp(epsilon * counts / 2.0)
     probabilities = scores / scores.sum()
 
-    return np.random.choice(len(counts), p=probabilities)
+    # Secure weighted sampling (SystemRandom.choices), not numpy's global RNG.
+    return random_state.choices(
+        range(len(counts)), weights=np.asarray(probabilities).tolist(), k=1
+    )[0]

@@ -50,6 +50,16 @@ def reap_stale_training_sessions(user):
 
     reaped = 0
     for session in stale:
+        # Release/reconcile the reserved privacy budget before failing the session,
+        # otherwise an abandoned job's reservation would be leaked (permanently
+        # consumed) from the researcher's budget. _record_privacy_spend is
+        # exactly-once guarded and never raises.
+        try:
+            from api.federated.utils import _record_privacy_spend
+            _record_privacy_spend(session)
+        except Exception as exc:
+            logger.error("Error reconciling budget for reaped session %s: %s",
+                         getattr(session, 'session_id', '?'), exc)
         session.status = 'FAILED'
         if hasattr(session, 'error_message') and not session.error_message:
             session.error_message = 'Auto-failed: session abandoned (client process died before completion)'
@@ -347,12 +357,29 @@ def start_client(request):
                 server_address=server_address,
                 status='STARTING',
                 process_id=current_process.pid,
-                use_experiment=bool(model_json.get('use_experiment', False)),
+                # Same decision as the enforcement gate (validate_training_permissions):
+                # recording is skipped iff budget was skipped. Using the raw flag here
+                # would let a gate-enforced job still skip recording → uncharged spend.
+                use_experiment=is_genuine_experiment_job(
+                    user, model_json, extract_dataset_id_from_model(model_json)
+                ),
             )
             training_session.save()
-            
+
             logger.info(f"[OK] Training session created: {training_session.session_id}")
-            
+
+            # Authoritatively reserve the privacy budget now that the session row
+            # exists (closes the accept-vs-record TOCTOU). On rejection, mark the
+            # session FAILED so it frees its concurrency slot and is not left STARTING.
+            reservation_error = reserve_job_budget(user, model_json, training_session)
+            if reservation_error is not None:
+                TrainingSession.objects.filter(pk=training_session.pk).update(
+                    status='FAILED',
+                    error_message='Budget reservation rejected',
+                    completed_at=timezone.now(),
+                )
+                return reservation_error
+
         except Exception as e:
             return SafeErrorResponse.internal_error(request, e, "create_training_session")
         
@@ -446,6 +473,60 @@ def extract_dataset_id_from_model(model_json):
     return None
 
 
+def _estimate_dp_forest_epsilon(config: dict, rounds: int):
+    """Composed ε for a DP Random Forest job, or None if the job is not DP-RF.
+
+    A DP-RF round trains n_trees_per_client trees, each spending
+    epsilon_total / n_trees_per_client, so the round spends epsilon_total and the
+    job spends epsilon_total × rounds (sequential composition). The DP-SGD
+    accountant does NOT model this, so RF jobs must be estimated here instead of
+    silently going through the (wrong) Opacus path.
+    """
+    import math
+    if not isinstance(config, dict):
+        return None
+
+    model = config.get('model') if isinstance(config.get('model'), dict) else {}
+    method = str(
+        config.get('ml_method') or config.get('model_type')
+        or (model.get('ml_method') if isinstance(model, dict) else None) or ''
+    ).lower()
+
+    # Find the training block that carries the RF budget, across config shapes.
+    training = {}
+    for candidate in (
+        model.get('training') if isinstance(model, dict) else None,
+        config.get('training'),
+    ):
+        if isinstance(candidate, dict) and (
+            candidate.get('epsilon_total') is not None
+            or candidate.get('n_trees_per_client') is not None
+        ):
+            training = candidate
+            break
+
+    is_forest = (
+        'forest' in method
+        or method in ('rf', 'dp_random_forest', 'feddprf', 'random_forest')
+        or training.get('epsilon_total') is not None
+        or training.get('n_trees_per_client') is not None
+    )
+    if not is_forest:
+        return None
+
+    try:
+        eps_total = float(training.get('epsilon_total', 1.0))
+    except (TypeError, ValueError):
+        eps_total = 1.0
+    if not math.isfinite(eps_total) or eps_total <= 0:
+        return float('inf')
+    # Safe upper bound: clamp to the RF algorithm's own hard max
+    # (FedDPRandomForestAlgorithm.MAX_EPSILON_ALLOWED = 5.0) per round.
+    eps_total = min(eps_total, 5.0)
+    total = eps_total * max(rounds, 1)
+    return total if math.isfinite(total) else float('inf')
+
+
 def estimate_job_epsilon(config: dict, dataset_size: int) -> float:
     """
     Estimate ε for a training job using RDPAccountant with Node-enforced minimums.
@@ -500,6 +581,12 @@ def estimate_job_epsilon(config: dict, dataset_size: int) -> float:
         rounds = 1
     rounds = max(rounds, 1)
 
+    # DP Random Forest jobs don't use DP-SGD — account for them separately with
+    # the correct composition (epsilon_total × rounds) instead of the Opacus path.
+    forest_eps = _estimate_dp_forest_epsilon(config, rounds)
+    if forest_eps is not None:
+        return forest_eps
+
     sample_rate = batch_size / dataset_size
     steps = max(int(epochs * dataset_size / batch_size), 1)
 
@@ -514,6 +601,138 @@ def estimate_job_epsilon(config: dict, dataset_size: int) -> float:
     except Exception as exc:
         logger.warning("[DP] RDPAccountant epsilon estimation failed: %s", exc)
         return float('inf')
+
+
+def is_genuine_experiment_job(user, model_json, dataset_id):
+    """Single source of truth for whether a job qualifies as experimental.
+
+    Only a genuine experiment job may skip epsilon budget checks (gate) AND
+    budget recording — the two MUST agree, or a job could pass the enforcement
+    gate yet never be charged. Fail-closed: any missing condition or error
+    returns False (→ normal budget enforcement on real patient data).
+
+    All of these must hold:
+      • the request asked for experiment mode,
+      • the researcher was granted can_use_experiment on THIS dataset (admin
+        permission — the Hub-supplied flag alone is not enough), and
+      • the dataset has an experiment file that actually EXISTS on disk. This
+        matches the loader (data_loaders.load_data_from_django), which falls
+        back to the PRODUCTION patient file when the experiment file is missing.
+        Skipping the budget while training on production data is the leak.
+    """
+    if not bool(model_json.get('use_experiment', False)):
+        return False
+    if dataset_id is None:
+        return False
+    try:
+        from dataset.models import DatasetAccess, Dataset
+        access = DatasetAccess.objects.using('datasets_db').get(
+            user_id=user.id, dataset_id=dataset_id
+        )
+        if not getattr(access, 'can_use_experiment', False):
+            return False
+        dataset_obj = Dataset.objects.using('datasets_db').get(id=dataset_id)
+        exp_path = dataset_obj.experiment_file_path
+        return bool(exp_path and os.path.exists(exp_path))
+    except Exception:
+        return False
+
+
+def reserve_job_budget(user, model_json, training_session):
+    """Admission-control the accepted job against the researcher budget (H3).
+
+    Closes the accept-vs-record TOCTOU WITHOUT changing single-job dynamics: it does
+    NOT debit spent_epsilon (real spend is still recorded at job end). Instead it runs
+    an atomic check under a row lock that accounts for the estimated cost of OTHER jobs
+    already in flight (STARTING/ACTIVE), so N concurrent start-client requests cannot all
+    pass against the same remaining budget. Because nothing is debited up front, a
+    finished job frees its in-flight cost and sequential jobs see the budget exactly as
+    the old check-then-record flow did. The estimate is stamped on the session
+    (reserved_epsilon) purely as the in-flight marker other concurrent admits sum over.
+
+    Returns None on success, or a JsonResponse to abort. Genuine experiment jobs are
+    exempt (they skip budget by design).
+    """
+    if getattr(training_session, 'use_experiment', False):
+        return None  # experimental subset — no budget, consistent with the gate
+
+    dataset_id = extract_dataset_id_from_model(model_json)
+    if dataset_id is None:
+        return None  # no dataset → nothing to admit (gate already validated access)
+
+    try:
+        from django.db import transaction
+        from django.db.models import Sum
+
+        access = DatasetAccess.objects.using('datasets_db').get(
+            user_id=user.id, dataset_id=dataset_id
+        )
+        try:
+            policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+        except DatasetPrivacyPolicy.DoesNotExist:
+            # Gate already blocks missing-policy datasets; treat as fail-closed here too.
+            return JsonResponse(
+                {'error': f'Dataset {dataset_id} has no privacy policy configured.'},
+                status=403,
+            )
+
+        estimated_eps = estimate_job_epsilon(model_json, access.dataset.patient_count or 0)
+        researcher_budget, _ = ResearcherEpsilonBudget.get_or_create_for(
+            dataset=access.dataset, researcher_id=user.id, policy=policy,
+        )
+
+        # Serialize concurrent admits for this budget on the row lock. On PostgreSQL
+        # (prod) select_for_update gives true serialization; on SQLite (dev) it degrades
+        # to the DB write lock. The in-flight sum is read under the lock so it is
+        # consistent, and this job's marker is written before the lock releases, so the
+        # next concurrent admit sees it.
+        with transaction.atomic(using='datasets_db'):
+            locked = (
+                ResearcherEpsilonBudget.objects.using('datasets_db')
+                .select_for_update().get(pk=researcher_budget.pk)
+            )
+            if locked.is_period_expired():
+                locked.reset_period()
+                locked.refresh_from_db()
+
+            in_flight = (
+                TrainingSession.objects
+                .filter(user_id=user.id, dataset_id=dataset_id, status__in=['STARTING', 'ACTIVE'])
+                .exclude(pk=training_session.pk)
+                .aggregate(s=Sum('reserved_epsilon'))['s'] or 0.0
+            )
+            ok, reason = locked.admit(estimated_eps, in_flight_epsilon=in_flight)
+            if not ok:
+                logger.warning(
+                    "Researcher %s rechazado en admisión de presupuesto: %s",
+                    user.username, reason,
+                )
+                return JsonResponse(
+                    {
+                        'error': f'Presupuesto de privacidad del researcher agotado: {reason}',
+                        'budget_exhausted': True,
+                        'dataset_id': dataset_id,
+                    },
+                    status=403,
+                )
+            # Stamp the in-flight marker while still holding the lock.
+            TrainingSession.objects.filter(pk=training_session.pk).update(
+                reserved_epsilon=round(float(estimated_eps), 6)
+            )
+
+        training_session.reserved_epsilon = round(float(estimated_eps), 6)
+        logger.info(
+            "[DP] Admitted job (est ε=%.6f, in-flight=%.6f) for researcher %s on dataset %s (session %s).",
+            estimated_eps, in_flight, user.username, dataset_id, training_session.session_id,
+        )
+        return None
+    except DatasetAccess.DoesNotExist:
+        return JsonResponse({'error': f'Access denied to dataset {dataset_id}'}, status=403)
+    except Exception as exc:
+        logger.error("[DP] Budget admission error: %s", exc)
+        return JsonResponse(
+            {'error': 'Error verificando presupuesto de privacidad.'}, status=500
+        )
 
 
 def validate_training_permissions(user, model_json):
@@ -581,26 +800,23 @@ def validate_training_permissions(user, model_json):
         )
 
         # 4b. Experimental job fast-path: skip ALL epsilon budget checks.
-        # The researcher is operating on the small experiment subset which has no
-        # budget tracking by design.  We still validate access (step 3) above.
-        use_experiment = bool(model_json.get('use_experiment', False))
-        if use_experiment:
-            try:
-                dataset_obj = Dataset.objects.using('datasets_db').get(id=dataset_id)
-                if dataset_obj.experiment_file_path:
-                    logger.info(
-                        "[EXP] Experimental job for user %s on dataset %s — skipping budget checks.",
-                        user.username, dataset_id,
-                    )
-                    return None  # Validation passed — no budget consumed
-                else:
-                    logger.warning(
-                        "[EXP] use_experiment=True but dataset %s has no experiment_file_path — "
-                        "falling through to normal budget checks.",
-                        dataset_id,
-                    )
-            except Dataset.DoesNotExist:
-                pass  # Fall through to normal budget checks
+        # ONLY genuine experiment jobs qualify (permission granted + experiment
+        # file present on disk) — see is_genuine_experiment_job. A bare Hub flag
+        # is NOT sufficient: without the file the loader trains on production
+        # patient data, and without the permission any researcher could opt out
+        # of accounting. Non-genuine requests fall through to normal enforcement.
+        if bool(model_json.get('use_experiment', False)):
+            if is_genuine_experiment_job(user, model_json, dataset_id):
+                logger.info(
+                    "[EXP] Genuine experimental job for user %s on dataset %s — skipping budget checks.",
+                    user.username, dataset_id,
+                )
+                return None  # Validation passed — no budget consumed
+            logger.warning(
+                "[EXP] use_experiment=True for user %s on dataset %s but not a genuine "
+                "experiment (missing permission or experiment file) — enforcing normal budget.",
+                user.username, dataset_id,
+            )
 
         # 5. Privacy budget pre-check (Node protects itself; Hub is untrusted).
         # Design invariants (see docs/superpowers/specs/
@@ -872,6 +1088,7 @@ def cancel_training(request, session_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@api_view_required
 def budget_status(request):
     """
     GET /api/v2/budget-status/
@@ -960,6 +1177,7 @@ def budget_status(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view_required
 def estimate_epsilon(request):
     """
     POST /api/v2/estimate-epsilon/

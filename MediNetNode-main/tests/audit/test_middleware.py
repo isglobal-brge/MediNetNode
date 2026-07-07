@@ -73,15 +73,20 @@ class AuditMiddlewareTests(TestCase):
         self.assertEqual(latest_event.user, self.user)
 
     def test_ip_address_extraction(self):
-        """Test that IP address is extracted correctly."""
-        # Test X-Forwarded-For header
-        response = self.client.get(
-            '/admin/login/',
-            HTTP_X_FORWARDED_FOR='192.168.1.100, 10.0.0.1'
-        )
-        
+        """IP extraction is spoof-resistant: client-supplied X-Forwarded-For is
+        ignored unless the request originates from a configured trusted proxy."""
+        from django.test import override_settings
+
+        # Untrusted source: XFF is ignored, REMOTE_ADDR (127.0.0.1) is used.
+        self.client.get('/admin/login/', HTTP_X_FORWARDED_FOR='192.168.1.100, 10.0.0.1')
         latest_event = AuditEvent.objects.latest('timestamp')
-        self.assertEqual(latest_event.ip_address, '192.168.1.100')
+        self.assertEqual(latest_event.ip_address, '127.0.0.1')
+
+        # Trusted proxy: the first X-Forwarded-For entry is honored.
+        with override_settings(TRUSTED_PROXIES=['127.0.0.1']):
+            self.client.get('/admin/login/', HTTP_X_FORWARDED_FOR='192.168.1.100, 10.0.0.1')
+            latest_event = AuditEvent.objects.latest('timestamp')
+            self.assertEqual(latest_event.ip_address, '192.168.1.100')
 
     def test_request_duration_capture(self):
         """Test that request duration is captured."""

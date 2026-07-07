@@ -441,7 +441,6 @@ function collapseAll() {
     });
 }
 
-// Mark event as reviewed
 function markAsReviewed(eventId) {
     if (confirm('Mark this event as reviewed?')) {
         fetch(`/audit/events/${eventId}/mark-reviewed/`, {
@@ -574,8 +573,7 @@ function openCustomExport() {
     
     document.getElementById('export_end_date').value = endDate.toISOString().split('T')[0];
     document.getElementById('export_start_date').value = startDate.toISOString().split('T')[0];
-    
-    // Show modal
+
     new bootstrap.Modal(document.getElementById('customExportModal')).show();
 }
 
@@ -601,13 +599,11 @@ function executeCustomExport() {
         params.append('success', 'true');
     }
     
-    // Create download URL
     const exportUrl = "{% url 'audit:export_audit_report' %}?" + params.toString();
-    
+
     // Hide modal and initiate download
     bootstrap.Modal.getInstance(document.getElementById('customExportModal')).hide();
-    
-    // Start download
+
     window.location.href = exportUrl;
 }
 </script>

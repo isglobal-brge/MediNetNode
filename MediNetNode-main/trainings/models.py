@@ -41,6 +41,20 @@ class TrainingSession(models.Model):
         help_text="True when the job runs on the experimental subset — epsilon spend is not recorded.",
     )
 
+    # DP budget reservation bookkeeping. To close the accept-vs-record TOCTOU,
+    # the estimated epsilon is RESERVED against the researcher budget when the job
+    # is accepted, then reconciled to the real spend when the job ends. reserved_epsilon
+    # holds the amount reserved; budget_reconciled guards exactly-once reconciliation
+    # (a session ends via exactly one of complete / fail / reap).
+    reserved_epsilon = models.FloatField(
+        default=0.0,
+        help_text="Epsilon reserved against the researcher budget at accept time (reconciled at end).",
+    )
+    budget_reconciled = models.BooleanField(
+        default=False,
+        help_text="True once the reserved epsilon has been reconciled to actual spend (exactly-once guard).",
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='STARTING')
 
     started_at = models.DateTimeField(auto_now_add=True)

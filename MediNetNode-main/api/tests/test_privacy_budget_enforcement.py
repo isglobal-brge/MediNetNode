@@ -136,7 +136,6 @@ class TestEstimateJobEpsilon(TestCase):
         mock_acc.get_epsilon.return_value = 0.75
         from api.views import estimate_job_epsilon
         with patch('api.views.RDPAccountant', mock_acc, create=True):
-            # Import the accountant as used in the function
             with patch('opacus.accountants.RDPAccountant', return_value=mock_acc):
                 result = estimate_job_epsilon(_model_json(1), 1000)
         # Even without mocking, function must return a float
@@ -639,7 +638,6 @@ class TestValidatePermissionsPrivacyStep(TestCase):
 
     def test_zero_patient_count_gives_inf_epsilon_rejected(self):
         """dataset.patient_count=0 → size=0 → estimate_job_epsilon returns inf → rejected."""
-        # Update dataset to have 0 patient count
         Dataset.objects.filter(pk=self.dataset.pk).update(patient_count=0)
         _make_policy(self.dataset, sensitivity='low')
 

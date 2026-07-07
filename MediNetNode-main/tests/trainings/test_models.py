@@ -102,45 +102,35 @@ class TrainingSessionModelTests(TestCase):
     
     def test_is_active_property(self):
         """Test is_active property."""
-        # Test STARTING status
         self.training_session.status = 'STARTING'
         self.assertTrue(self.training_session.is_active)
         
-        # Test ACTIVE status
         self.training_session.status = 'ACTIVE'
         self.assertTrue(self.training_session.is_active)
         
-        # Test COMPLETED status
         self.training_session.status = 'COMPLETED'
         self.assertFalse(self.training_session.is_active)
         
-        # Test FAILED status
         self.training_session.status = 'FAILED'
         self.assertFalse(self.training_session.is_active)
         
-        # Test CANCELLED status
         self.training_session.status = 'CANCELLED'
         self.assertFalse(self.training_session.is_active)
     
     def test_is_finished_property(self):
         """Test is_finished property."""
-        # Test STARTING status
         self.training_session.status = 'STARTING'
         self.assertFalse(self.training_session.is_finished)
         
-        # Test ACTIVE status
         self.training_session.status = 'ACTIVE'
         self.assertFalse(self.training_session.is_finished)
         
-        # Test COMPLETED status
         self.training_session.status = 'COMPLETED'
         self.assertTrue(self.training_session.is_finished)
         
-        # Test FAILED status
         self.training_session.status = 'FAILED'
         self.assertTrue(self.training_session.is_finished)
         
-        # Test CANCELLED status
         self.training_session.status = 'CANCELLED'
         self.assertTrue(self.training_session.is_finished)
     

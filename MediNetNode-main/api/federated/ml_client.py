@@ -179,14 +179,18 @@ class MLFlowerClient(NumPyClient):
 
             updated_params, metrics = self.algorithm.fit(parameters)
 
-            # Obtain privacy_epsilon for ML: use max_epsilon_per_job as conservative proxy.
-            # Classical ML has no formal DP guarantee; this records the maximum allowed per job.
-            try:
-                from dataset.models import DatasetPrivacyPolicy
-                _policy = DatasetPrivacyPolicy.objects.get(dataset_id=self.table_name)
-                ml_epsilon = _policy.max_epsilon_per_job
-            except Exception:
-                ml_epsilon = float('inf')
+            # Privacy epsilon: prefer the REAL value the algorithm computed from its
+            # DP accountant (DP-SGD FedSVM / DP-RF). Only fall back to the policy cap
+            # for algorithms that genuinely report no epsilon — never fabricate one.
+            if 'privacy_epsilon' in metrics and metrics['privacy_epsilon'] is not None:
+                ml_epsilon = float(metrics['privacy_epsilon'])
+            else:
+                try:
+                    from dataset.models import DatasetPrivacyPolicy
+                    _policy = DatasetPrivacyPolicy.objects.get(dataset_id=self.table_name)
+                    ml_epsilon = _policy.max_epsilon_per_job
+                except Exception:
+                    ml_epsilon = float('inf')
 
             round_metrics = {
                 'loss': float(metrics.get('loss', 0.0)),

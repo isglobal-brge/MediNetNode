@@ -749,7 +749,6 @@
 {% block extra_js %}
 <script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
-    // Auto-submit form on filter changes
     const autoSubmitElements = ['domain', 'data_type', 'format', 'page_size'];
     
     autoSubmitElements.forEach(name => {
@@ -761,7 +760,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Sort headers functionality
     document.querySelectorAll('.sort-header').forEach(header => {
         header.addEventListener('click', function() {
             const sortField = this.dataset.sort;
@@ -794,7 +792,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Date inputs auto-submit
     document.querySelectorAll('input[type="date"]').forEach(input => {
         input.addEventListener('change', function() {
             document.getElementById('filtersForm').submit();
@@ -857,7 +854,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Create and submit form
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = `/datasets/${currentDatasetId}/toggle-active/`;

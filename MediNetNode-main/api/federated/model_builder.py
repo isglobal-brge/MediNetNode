@@ -43,6 +43,108 @@ _UI_TO_PYTORCH: dict = {
 }
 
 
+# Only these PyTorch nn classes may be instantiated from a (Hub-supplied, i.e.
+# attacker-influenced) model config. Without this allowlist, `_UI_TO_PYTORCH.get(
+# raw, raw)` falls through to the raw string and `getattr(nn, raw)` would build
+# ANY torch.nn attribute with hostile kwargs (crashes / unexpected behavior).
+# Derived from the supported mapping so it stays in sync automatically.
+_ALLOWED_NN_LAYERS = frozenset(_UI_TO_PYTORCH.values())
+
+
+# --- Resource-safety bounds (H6) -------------------------------------------------
+# A malicious/buggy Hub must not be able to make the Node allocate unbounded memory
+# when materializing a model. These caps sit far above any realistic medical model
+# but block adversarial dimensions (e.g. a Linear with in/out_features=1e6 → ~4 TB
+# weight → OOM of the hospital process before any DP/permission logic runs).
+_MAX_DIM = 100_000                # any single feature/channel/hidden dimension
+_MAX_KERNEL = 10_000              # any kernel spatial extent
+_MAX_RNN_LAYERS = 100            # LSTM/GRU stacked layers
+_MAX_LAYER_PARAMS = 50_000_000    # learnable params one layer may allocate (~200 MB fp32)
+_MAX_LAYERS = 1_000               # layers in one model config
+
+_DIM_KEYS = (
+    'in_features', 'out_features', 'in_channels', 'out_channels',
+    'num_features', 'input_size', 'hidden_size', 'proj_size', 'num_layers',
+)
+
+
+def _as_int(value, name):
+    """Coerce a config value to a non-negative int, or raise ValueError."""
+    if isinstance(value, bool):  # bool is an int subclass — reject to avoid surprises
+        raise ValueError(f"{name} must be an integer, got bool")
+    try:
+        iv = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be an integer, got {value!r}")
+    if iv < 0:
+        raise ValueError(f"{name} must be non-negative, got {iv}")
+    return iv
+
+
+def _kernel_volume(value):
+    """Product of kernel dims (int or tuple/list), each bounded by _MAX_KERNEL."""
+    dims = value if isinstance(value, (tuple, list)) else [value]
+    vol = 1
+    for d in dims:
+        di = _as_int(d, 'kernel_size')
+        if di > _MAX_KERNEL:
+            raise ValueError(f"kernel_size {di} exceeds max {_MAX_KERNEL}")
+        vol *= max(di, 1)
+    return vol
+
+
+def _validate_layer_dims(layer_class, params, layer_id):
+    """Reject layer params that would allocate unbounded memory (H6).
+
+    Bounds each dimension by _MAX_DIM and the per-layer learnable-parameter count by
+    _MAX_LAYER_PARAMS. Raises ValueError, surfaced by callers as a build error.
+    """
+    for key in _DIM_KEYS:
+        if params.get(key) is not None:
+            iv = _as_int(params[key], key)
+            if iv > _MAX_DIM:
+                raise ValueError(
+                    f"Layer {layer_id}: {key}={iv} exceeds max {_MAX_DIM} (resource guard)"
+                )
+
+    est = 0
+    if layer_class == 'Linear':
+        est = (_as_int(params.get('in_features', 0), 'in_features')
+               * _as_int(params.get('out_features', 0), 'out_features'))
+    elif layer_class in ('Conv1d', 'Conv2d', 'Conv3d'):
+        ic = _as_int(params.get('in_channels', 0), 'in_channels')
+        oc = _as_int(params.get('out_channels', 0), 'out_channels')
+        groups = max(_as_int(params.get('groups', 1) or 1, 'groups'), 1)
+        est = (ic // groups) * oc * _kernel_volume(params.get('kernel_size', 1))
+    elif layer_class in ('LSTM', 'GRU'):
+        gates = 4 if layer_class == 'LSTM' else 3
+        nl = max(_as_int(params.get('num_layers', 1) or 1, 'num_layers'), 1)
+        if nl > _MAX_RNN_LAYERS:
+            raise ValueError(
+                f"Layer {layer_id}: num_layers={nl} exceeds max {_MAX_RNN_LAYERS} (resource guard)"
+            )
+        isz = _as_int(params.get('input_size', 0), 'input_size')
+        hsz = _as_int(params.get('hidden_size', 0), 'hidden_size')
+        est = gates * hsz * (isz + hsz) * nl
+    elif layer_class in ('BatchNorm1d', 'BatchNorm2d', 'BatchNorm3d'):
+        est = _as_int(params.get('num_features', 0), 'num_features')
+
+    if est > _MAX_LAYER_PARAMS:
+        raise ValueError(
+            f"Layer {layer_id} ({layer_class}) would allocate ~{est:,} parameters, "
+            f"exceeding the {_MAX_LAYER_PARAMS:,} limit (resource guard)"
+        )
+
+
+def _check_layer_count(layers, where):
+    n = len(layers) if layers else 0
+    if n > _MAX_LAYERS:
+        raise ValueError(
+            f"Model config has {n} layers, exceeding the {_MAX_LAYERS} limit "
+            f"(resource guard, {where})"
+        )
+
+
 class _LSTMWrapper(nn.Module):
     """Wraps nn.LSTM so it can live inside nn.Sequential.
 
@@ -177,6 +279,8 @@ class DynamicModel(nn.Module):
         if not layers and "model" in self.cleaned_config:
             layers = self.cleaned_config["model"].get("layers", [])
 
+        _check_layer_count(layers, "DynamicModel")
+
         # Auto-assign IDs and sequential 'inputs' connections for layers that
         # come from a simple flat list (no "id"/"inputs" fields).  This makes
         # _create_layers() consistent with forward() which already has this
@@ -223,9 +327,17 @@ class DynamicModel(nn.Module):
             # Translate UI type names to PyTorch class names
             raw = layer_type if layer_type else layer_name
             layer_class = _UI_TO_PYTORCH.get(raw, raw)
+            if layer_class not in _ALLOWED_NN_LAYERS:
+                raise ValueError(
+                    f"Unsupported layer type: {raw!r} (resolved to {layer_class!r}). "
+                    "Only whitelisted torch.nn layers may be built from a model config."
+                )
 
             # Filter out display-only parameters that aren't valid for PyTorch
             filtered_params = self._filter_pytorch_params(layer_class, layer_params)
+
+            # Resource guard (H6): reject unbounded dimensions before allocation.
+            _validate_layer_dims(layer_class, filtered_params, layer_id)
 
             try:
                 layer = getattr(nn, layer_class)(**filtered_params)
@@ -387,6 +499,8 @@ class SequentialModel(nn.Module):
         if not layers:
             layers = self.cleaned_config.get("layers", [])
 
+        _check_layer_count(layers, "SequentialModel")
+
         pytorch_layers = []
 
         for layer_config in layers:
@@ -404,8 +518,16 @@ class SequentialModel(nn.Module):
             # Translate UI type names to PyTorch class names
             raw = layer_type if layer_type else layer_name
             layer_class = _UI_TO_PYTORCH.get(raw, raw)
+            if layer_class not in _ALLOWED_NN_LAYERS:
+                raise ValueError(
+                    f"Unsupported layer type: {raw!r} (resolved to {layer_class!r}). "
+                    "Only whitelisted torch.nn layers may be built from a model config."
+                )
 
             filtered_params = self._filter_pytorch_params(layer_class, layer_params)
+
+            # Resource guard (H6): reject unbounded dimensions before allocation.
+            _validate_layer_dims(layer_class, filtered_params, layer_config.get('id'))
 
             try:
                 # LSTM/GRU return tuples — use wrapper classes that extract

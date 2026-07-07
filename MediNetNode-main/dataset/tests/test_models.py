@@ -519,4 +519,4 @@ class DatabaseRoutingTest(TestCase):
         # Test that users app migrations go to both databases in test environment
         # (This is needed for FK relationships to work in tests)
         self.assertTrue(router.allow_migrate('default', 'users'))
-        self.assertTrue(router.allow_migrate('datasets_db', 'users'))  # Changed from False to True
+        self.assertTrue(router.allow_migrate('datasets_db', 'users'))

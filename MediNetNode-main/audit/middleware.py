@@ -221,16 +221,10 @@ class AuditMiddleware(MiddlewareMixin):
         return f'HTTP_{method}'
 
     def _get_client_ip(self, request) -> str:
-        """Extract real client IP address."""
-        xff = request.META.get('HTTP_X_FORWARDED_FOR')
-        if xff:
-            return xff.split(',')[0].strip()
-
-        x_real_ip = request.META.get('HTTP_X_REAL_IP')
-        if x_real_ip:
-            return x_real_ip.strip()
-
-        return request.META.get('REMOTE_ADDR', '')
+        """Extract real client IP address (spoof-resistant — trusts proxy
+        headers only from configured trusted proxies)."""
+        from medinet_core.security.ip import get_trusted_client_ip
+        return get_trusted_client_ip(request)
 
     def _calculate_duration(self, request) -> Optional[int]:
         """Calculate request duration in milliseconds."""

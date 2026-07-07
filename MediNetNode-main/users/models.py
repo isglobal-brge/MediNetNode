@@ -77,9 +77,11 @@ class CustomUser(AbstractUser):
         - Simple: 'api.access': True
         - Scope: 'inference.execute': {'scope': 'ALL'} or {'scope': ['cardiology', 'neurology']}
         """
-        # Superusers have all permissions by definition
-        if getattr(self, 'is_superuser', False):
-            return True
+        # H9: Django superusers do NOT get implicit permissions. Authorization
+        # is driven solely by the assigned role, so the 4-role model is the
+        # single boundary. The platform admin holds the ADMIN role (all
+        # permissions); a bare superuser (e.g. created via CLI) has none until
+        # a role is assigned. `is_superuser` is only for Django's /django-admin/.
         if not self.role or not self.role.permissions:
             return False
 
@@ -98,13 +100,15 @@ class CustomUser(AbstractUser):
             if scope is None:
                 return False
 
-            # No domain provided: just confirm the permission exists.
-            # Callers that need domain filtering must supply a domain argument.
-            if domain is None:
-                return True
-
+            # 'ALL' scope grants the permission regardless of domain.
             if scope == 'ALL':
                 return True
+
+            # Restricted (list) scope requires a domain to authorize. When no
+            # domain is supplied we fail closed rather than granting broadly —
+            # a gate that forgets to pass the domain must NOT over-grant.
+            if domain is None:
+                return False
 
             if isinstance(scope, list):
                 return domain in scope

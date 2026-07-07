@@ -310,7 +310,20 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
                     dataset__name=_ds_name
                 ).max_epsilon_per_job
         except Exception as _exc:
-            print(f"[DP] Could not look up per_job_max ({_exc}); using fallback floor")
+            print(f"[DP] Could not look up per_job_max ({_exc}); failing closed")
+
+    # Fail closed: if we could not resolve a per-job epsilon cap, do NOT drop to
+    # the permissive minimum-noise floor (which can yield ε above any intended
+    # cap). Size the DP noise to a conservative default budget instead, so a
+    # policy-lookup failure strengthens privacy rather than removing the cap.
+    # Override with settings.DP_FALLBACK_TARGET_EPSILON.
+    if _target_eps is None:
+        try:
+            from django.conf import settings as _dp_settings
+            _target_eps = float(getattr(_dp_settings, 'DP_FALLBACK_TARGET_EPSILON', 1.0))
+        except Exception:
+            _target_eps = 1.0
+        print(f"[DP] No per-job epsilon cap resolved; failing closed to target_epsilon={_target_eps}")
 
     _dynamic_min = (
         compute_min_noise_multiplier(
@@ -336,17 +349,36 @@ def train(net, trainloader, config, partition_id, verbose=True, device='cpu'):
         _MIN_GRAD_NORM,
     )
     # Security: never use a Hub-supplied seed — a chosen seed makes Gaussian
-    # noise predictable, potentially leaking gradient information.
-    _noise_seed = secrets.randbelow(2**31)
+    # noise predictable, potentially leaking gradient information. Use a full
+    # 63-bit CSPRNG seed (secrets) so the noise stream is infeasible to guess/
+    # reproduce without the secret. This is the dependency-free equivalent of
+    # Opacus secure_mode (which needs the unmaintained torchcsprng, incompatible
+    # with modern PyTorch); secure_mode remains available via DP_SECURE_MODE.
+    _noise_seed = secrets.randbits(63)
 
-    privacy_engine = PrivacyEngine(secure_mode=False)
-    net, opt, trainloader = privacy_engine.make_private(
+    # secure_mode drives the DP noise source. In secure mode Opacus uses its own
+    # CSPRNG (requires the `torchcsprng` package) and forbids a custom
+    # noise_generator; it is the production-appropriate setting. It is OPT-IN via
+    # DP_SECURE_MODE=true (production should enable it and install torchcsprng) so
+    # that environments without that dependency don't crash. When off, we still
+    # seed a torch.Generator from a CSPRNG seed so the noise is unpredictable to
+    # the Hub.
+    import os as _os
+    _dp_secure_mode = _os.environ.get(
+        'DP_SECURE_MODE', 'false'
+    ).strip().lower() in ('1', 'true', 'yes')
+
+    privacy_engine = PrivacyEngine(secure_mode=_dp_secure_mode)
+    _make_private_kwargs = dict(
         module=net,
         optimizer=opt,
         data_loader=trainloader,
         noise_multiplier=_noise_multiplier,
         max_grad_norm=_max_grad_norm,
-        noise_generator=torch.Generator().manual_seed(_noise_seed))
+    )
+    if not _dp_secure_mode:
+        _make_private_kwargs['noise_generator'] = torch.Generator().manual_seed(_noise_seed)
+    net, opt, trainloader = privacy_engine.make_private(**_make_private_kwargs)
     net.train()
 
     all_predictions = []

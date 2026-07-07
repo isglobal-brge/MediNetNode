@@ -75,8 +75,7 @@ def dataset_detail(request, dataset_id):
     ).order_by('-generated_at').first()
     
 
-    
-    # Initialize metadata with proper structure
+
     metadata = {
         'data_quality_score': None,
         'privacy_score': None,
@@ -685,7 +684,6 @@ def _save_temp_file(uploaded_file, request=None) -> str:
 
         raise ValueError(error_msg)
 
-    # Create temporary directory
     temp_dir = tempfile.mkdtemp(prefix='upload_')
     temp_path = os.path.join(temp_dir, filename)
 

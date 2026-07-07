@@ -215,18 +215,19 @@ class TestNodeSecurityEnforcement:
         # but we can assert the function completes without using Hub seed deterministically.
         # The real assertion is that secrets.randbelow is called, tested via patch below.
 
-    def test_secrets_randbelow_called_not_hub_seed(self):
-        """Verify the Node calls secrets.randbelow, ignoring Hub's random_seed."""
+    def test_secrets_csprng_seed_used_not_hub_seed(self):
+        """Verify the Node seeds the DP noise from a CSPRNG (secrets.randbits),
+        ignoring any Hub-supplied random_seed."""
         model = _make_model()
         loader = _make_loader()
         config = _minimal_config()
         config["model"]["training"]["optimizer"]["differential_privacy"]["random_seed"] = 9999
 
-        with patch("api.federated.train_functions.secrets.randbelow", wraps=__import__("secrets").randbelow) as mock_rb:
+        with patch("api.federated.train_functions.secrets.randbits", wraps=__import__("secrets").randbits) as mock_rb:
             train(model, loader, config, partition_id=0, verbose=False)
             mock_rb.assert_called_once()
-            # The argument must be 2**31 (our entropy range)
-            mock_rb.assert_called_with(2**31)
+            # Full 63-bit CSPRNG entropy (infeasible to guess/reproduce).
+            mock_rb.assert_called_with(63)
 
 
 class TestEpsilonScaling:

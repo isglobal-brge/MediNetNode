@@ -156,13 +156,10 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
         # Privacy budget per tree
         self.epsilon_per_tree = self.epsilon_total / self.n_trees_per_client
 
-        # Initialize secure random state
         self.random_state = check_random_state_secure()
 
-        # Store trained trees
         self.trees: List[SecureDPTree] = []
 
-        # Class information
         self.n_classes = len(np.unique(y_train))
 
         # Store data hash for integrity verification
@@ -248,10 +245,16 @@ class FedDPRandomForestAlgorithm(FederatedMLAlgorithm):
                 'f1': 0.0
             }
 
+        # Real DP spend for THIS round: each of the n_trees_per_client new trees
+        # consumes epsilon_per_tree, so the round spends n_trees × epsilon_per_tree
+        # = epsilon_total (sequential composition). Report it as privacy_epsilon so
+        # the client records the REAL cost, not the policy cap max_epsilon_per_job.
+        round_epsilon = self.epsilon_per_tree * len(new_trees)
         metrics.update({
             'n_trees_local': len(self.trees),
             'n_trees_sent': len(new_trees),
             'epsilon_per_tree': self.epsilon_per_tree,
+            'privacy_epsilon': round_epsilon,
             'round_type': 'training'
         })
 

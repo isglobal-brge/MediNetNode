@@ -29,6 +29,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings')
 warnings.filterwarnings("ignore")
 
+
+def _insecure_transport_allowed():
+    """Plaintext Flower transport requires an explicit local opt-in (H5).
+
+    True only when `FLOWER_ALLOW_INSECURE` is truthy or the Node runs in DEBUG.
+    In production this is False, so the client refuses to connect in the clear
+    even if the Hub omits the CA certificate — a malicious Hub cannot force a
+    plaintext downgrade to sniff gradients.
+    """
+    if os.environ.get('FLOWER_ALLOW_INSECURE', 'false').strip().lower() in ('1', 'true', 'yes'):
+        return True
+    try:
+        from django.conf import settings as _dj_settings
+        return bool(_dj_settings.DEBUG)
+    except Exception:
+        return False
+
 try:
     import django
     django.setup()
@@ -48,10 +65,10 @@ MODEL_VALIDATED = False
 TABLE_NAME = None
 USE_EXPERIMENT = False
 CLIENT_IP = "localhost"
-ASSIGNED_CLIENT_ID = None  # Global variable for client_id
-TRAINING_SESSION = None  # Global training session instance
-CURRENT_USER = None  # Global user context
-CURRENT_PROCESS = None  # Current training process
+ASSIGNED_CLIENT_ID = None
+TRAINING_SESSION = None
+CURRENT_USER = None
+CURRENT_PROCESS = None
 disable_progress_bar()
 
 
@@ -92,6 +109,8 @@ def client_fn(context: Context):
         print(f"{'='*70}")
 
         training_config = model_config.get('training', {})
+        ml_method = (training_config.get('ml_method')
+                     or model_config.get('architecture', {}).get('ml_algorithm', {}).get('type')
                      or 'fedsvm').lower()
 
         print(f"[INFO] ML Algorithm: {ml_method}")
@@ -256,7 +275,18 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         if root_certificates:
             print(f"[LOCKED] Starting Flower client with SSL/TLS (certificate provided)")
         else:
-            print(f"[WARNING] Starting Flower client without SSL (no certificate)")
+            # H5: fail closed. The Node must not connect in plaintext just
+            # because the Hub omitted a CA cert (a malicious Hub could force
+            # plaintext to sniff gradients). Plaintext requires an explicit
+            # local opt-in — FLOWER_ALLOW_INSECURE=true or DEBUG — never the
+            # Hub's say-so.
+            if not _insecure_transport_allowed():
+                raise RuntimeError(
+                    "No CA certificate provided for the Flower connection and plaintext "
+                    "transport is not permitted. Refusing to connect in the clear "
+                    "(fail-closed, H5). Set FLOWER_ALLOW_INSECURE=true (dev only) to override."
+                )
+            print(f"[WARNING] Starting Flower client without SSL — insecure transport explicitly allowed (dev only)")
 
         start_client(
             server_address=server_address,

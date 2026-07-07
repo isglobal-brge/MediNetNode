@@ -194,6 +194,7 @@ class Command(BaseCommand):
         if not self.dry_run:
             with file_open(filepath, 'wt', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
+                from medinet_core.security.csv_safe import csv_safe_cell
 
                 headers = [
                     'id', 'timestamp', 'user_id', 'username', 'action', 'resource',
@@ -236,7 +237,7 @@ class Command(BaseCommand):
                             json.dumps(data_access.columns_accessed) if data_access else None,
                             data_access.query_hash if data_access else None,
                         ]
-                        writer.writerow(row)
+                        writer.writerow([csv_safe_cell(v) for v in row])
                         exported_count += 1
         
         else:

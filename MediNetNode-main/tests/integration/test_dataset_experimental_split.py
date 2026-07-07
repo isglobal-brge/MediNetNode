@@ -242,11 +242,21 @@ class TestBudgetSkipForExperimentalJobs:
     def test_skips_budget_when_experiment_file_exists(
         self, db, _datasets_db, integration_researcher_user, tmp_path
     ):
-        """Returns None (no error) when use_experiment=True and experiment_file_path is set."""
+        """Returns None (skips budget) for a GENUINE experiment job: use_experiment=True,
+        the researcher has can_use_experiment granted, and the experiment file exists.
+        (Tightened by H2 — the flag + file alone is no longer sufficient.)"""
         from api.views import validate_training_permissions
+        from dataset.models import DatasetAccess
 
         dataset = _make_dataset_record(
             tmp_path, integration_researcher_user.id, split_ratio=0.2
+        )
+        access = DatasetAccess.objects.using("datasets_db").create(
+            dataset=dataset,
+            user_id=integration_researcher_user.id,
+            assigned_by_id=integration_researcher_user.id,
+            can_train=True,
+            can_use_experiment=True,
         )
 
         model_json = self._make_model_json(dataset.id, use_experiment=True)
@@ -255,6 +265,36 @@ class TestBudgetSkipForExperimentalJobs:
             result = validate_training_permissions(integration_researcher_user, model_json)
             assert result is None, f"Expected None (pass), got: {result}"
         finally:
+            access.delete()
+            dataset.delete()
+
+    def test_experiment_flag_without_permission_enforces_budget(
+        self, db, _datasets_db, integration_researcher_user, tmp_path
+    ):
+        """H2: use_experiment=True + experiment file present but WITHOUT can_use_experiment
+        must NOT skip the budget — it falls through to normal enforcement."""
+        from api.views import validate_training_permissions
+        from dataset.models import DatasetAccess
+
+        dataset = _make_dataset_record(
+            tmp_path, integration_researcher_user.id, split_ratio=0.2
+        )
+        access = DatasetAccess.objects.using("datasets_db").create(
+            dataset=dataset,
+            user_id=integration_researcher_user.id,
+            assigned_by_id=integration_researcher_user.id,
+            can_train=True,
+            can_use_experiment=False,  # permission NOT granted
+        )
+
+        model_json = self._make_model_json(dataset.id, use_experiment=True)
+
+        try:
+            result = validate_training_permissions(integration_researcher_user, model_json)
+            # No experiment bypass → hits the budget step (no policy configured) → non-None.
+            assert result is not None
+        finally:
+            access.delete()
             dataset.delete()
 
     def test_falls_through_budget_when_no_experiment_file(

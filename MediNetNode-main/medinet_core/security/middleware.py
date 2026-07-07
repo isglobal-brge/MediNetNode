@@ -209,11 +209,25 @@ class APIAuthenticationMiddleware:
         api_key_value = request.headers.get('X-API-Key')
         client_ip = self.get_client_ip(request)
 
+        # Brute-force / DoS throttle BEFORE the expensive auth path. Failed auth
+        # returns early below and never reaches RateLimitMiddleware, so unbounded
+        # API-key guessing would otherwise pay a PBKDF2 hash + an APIRequest INSERT
+        # per attempt with no throttle. Cap FAILED attempts per client IP; only
+        # failures increment the counter, so legitimate authenticated traffic (and
+        # the per-user RateLimitMiddleware limit) is unaffected.
+        ip_fail_key = f'ratelimit_authfail_{client_ip}'
+        if cache.get(ip_fail_key, 0) >= _IP_RATE_LIMIT_MAX:
+            return JsonResponse(
+                {'error': 'Demasiadas peticiones. Inténtalo más tarde.'},
+                status=429,
+            )
+
         logger.info(f"API request: {request.method} {request.path} from IP {client_ip}")
 
         auth_result = self.authenticate_request(api_key_value, client_ip, request)
 
         if not auth_result['success']:
+            cache.set(ip_fail_key, cache.get(ip_fail_key, 0) + 1, _IP_RATE_LIMIT_WINDOW)
             self.log_api_request(
                 api_key=None, user=None, request=request,
                 status_code=auth_result['status_code'],
@@ -266,12 +280,23 @@ class APIAuthenticationMiddleware:
             # Optimized: use key_prefix index to narrow candidates, then verify hash.
             # Legacy keys (key_prefix='__LEGACY__') still work via full hash scan.
             key_prefix = api_key_value[:8] if len(api_key_value) >= 8 else ''
-            if key_prefix:
-                candidates = APIKey.objects.select_related('user', 'user__role').filter(
-                    is_active=True
-                ).filter(Q(key_prefix=key_prefix) | Q(key_prefix='__LEGACY__'))
-            else:
-                candidates = APIKey.objects.select_related('user', 'user__role').filter(is_active=True)
+            if not key_prefix:
+                # A well-formed key is always >= 8 chars, so a shorter value can
+                # match nothing. Reject without scanning every active key.
+                return {'success': False, 'error': 'Invalid API key', 'status_code': 401}
+
+            base = APIKey.objects.select_related('user', 'user__role').filter(is_active=True)
+            # Exact (indexed) prefix match first — a modern key resolves here and
+            # NEVER triggers the legacy hash-scan below.
+            candidates = list(base.filter(key_prefix=key_prefix))
+            # Bounded legacy fallback: legacy keys (key_prefix='__LEGACY__') have
+            # no usable prefix and must be hash-scanned, but only when the prefix
+            # matched nothing, and capped so a growing pool of un-migrated keys
+            # can't amplify PBKDF2 cost into a CPU DoS (see also H1 throttle).
+            if not candidates:
+                candidates = list(
+                    base.filter(key_prefix='__LEGACY__').order_by('id')[:_MAX_LEGACY_SCAN]
+                )
 
             api_key = None
             for candidate in candidates:
@@ -322,6 +347,10 @@ class APIAuthenticationMiddleware:
 _IP_RATE_LIMIT_MAX = 20
 _IP_RATE_LIMIT_WINDOW = 60  # seconds
 
+# Cap on legacy API keys hash-scanned per request when the prefix matches nothing,
+# so an un-migrated key pool cannot amplify PBKDF2 cost into a CPU DoS.
+_MAX_LEGACY_SCAN = 50
+
 
 class RateLimitMiddleware:
     """Rate limiting for API endpoints. Counts ALL requests (including failed auth)."""
@@ -359,10 +388,17 @@ class RateLimitMiddleware:
         return self.get_response(request)
 
     def _get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR', '0.0.0.0')
+        # Only trust X-Forwarded-For when the direct peer (REMOTE_ADDR) is a
+        # configured trusted proxy; otherwise the header is client-controlled
+        # and rotating it would mint a fresh rate-limit bucket per request.
+        # Mirrors APIAuthenticationMiddleware.get_client_ip (single source of truth).
+        remote_addr = request.META.get('REMOTE_ADDR', '0.0.0.0')
+        trusted_proxies = getattr(settings, 'TRUSTED_PROXIES', [])
+        if trusted_proxies and remote_addr in trusted_proxies:
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                return x_forwarded_for.split(',')[0].strip()
+        return remote_addr
 
     def is_rate_limited(self, request):
         from datetime import timedelta

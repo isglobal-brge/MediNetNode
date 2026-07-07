@@ -17,6 +17,22 @@ from inference.forms import ModelUploadForm, ModelEditForm
 from dataset.models import Dataset
 
 
+def _enforce_inference_upload_size(data_file):
+    """Reject oversized inference inputs BEFORE reading them into memory.
+
+    ``data_file.read()`` materializes the whole upload, so the byte-size guard
+    must run first — otherwise a huge file OOMs the process before the row-count
+    (max_batch_size) check ever runs. Configurable via INFERENCE_MAX_UPLOAD_SIZE.
+    """
+    from django.conf import settings
+    max_bytes = getattr(settings, 'INFERENCE_MAX_UPLOAD_SIZE', 50 * 1024 * 1024)  # 50 MiB
+    size = getattr(data_file, 'size', None)
+    if size is not None and size > max_bytes:
+        raise ValueError(
+            f"Input file too large ({size} bytes); maximum allowed is {max_bytes} bytes"
+        )
+
+
 @login_required
 @require_role('MEMBER', 'ADMIN')
 def member_dashboard(request):
@@ -709,6 +725,7 @@ def run_prediction(request):
     input_data = None
 
     try:
+        _enforce_inference_upload_size(data_file)
         file_content = data_file.read().decode('utf-8')
         file_ext = data_file.name.split('.')[-1].lower()
 
@@ -961,6 +978,7 @@ def run_multi_prediction(request):
 
     try:
         # Parse the uploaded file (once for all models)
+        _enforce_inference_upload_size(data_file)
         file_content = data_file.read().decode('utf-8')
         file_ext = data_file.name.split('.')[-1].lower()
 

@@ -179,9 +179,10 @@ def _record_privacy_spend(training_session) -> None:
     This function never raises — recording failure must not affect training status.
     """
     try:
-        # Experimental sessions run on the small subset without budget accounting.
-        # The use_experiment flag is stored on the session so this check survives
-        # subprocess restarts where the original model_json is unavailable.
+        from trainings.models import TrainingSession
+
+        # Experimental sessions run on the small subset without budget accounting
+        # (they never reserved anything either). Nothing to reconcile.
         if getattr(training_session, 'use_experiment', False):
             logger.info(
                 "[DP] Skipping epsilon budget record for experimental session %s",
@@ -197,23 +198,30 @@ def _record_privacy_spend(training_session) -> None:
             )
             return
 
-        try:
-            policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
-        except DatasetPrivacyPolicy.DoesNotExist:
-            logger.info(
-                "[DP] No DatasetPrivacyPolicy for dataset %s — no spend to record",
-                dataset_id,
-            )
-            return
+        # Exactly-once claim. A session ends via exactly one of complete / fail /
+        # reap, but all three now funnel here; the atomic conditional update ensures
+        # only the first invocation applies spend + releases the reservation. Without
+        # this guard a second call would double-count actual spend AND double-release
+        # the reservation. Applies only to persisted TrainingSession rows (real prod
+        # path); non-persisted stand-ins fall through (no reservation to reconcile).
+        _persisted = isinstance(training_session, TrainingSession) and getattr(training_session, 'pk', None) is not None
+        if _persisted:
+            claimed = TrainingSession.objects.filter(
+                pk=training_session.pk, budget_reconciled=False
+            ).update(budget_reconciled=True)
+            if not claimed:
+                logger.info(
+                    "[DP] Budget already reconciled for session %s — skipping.",
+                    getattr(training_session, 'session_id', '?'),
+                )
+                return
+            training_session.budget_reconciled = True
 
+        # Sum the REAL per-round epsilon (0.0 if the job ran no scored rounds, e.g.
+        # it failed early or was reaped — in which case there is simply no spend to
+        # record; the in-flight admission marker is freed when the session leaves the
+        # STARTING/ACTIVE set, so nothing needs releasing here).
         rounds = list(training_session.rounds.order_by('round_number'))
-        if not rounds:
-            logger.warning(
-                "[DP] No TrainingRound records for session %s — privacy spend not recorded",
-                training_session.session_id,
-            )
-            return
-
         per_round = []
         for r in rounds:
             raw_eps = (r.metrics or {}).get('privacy_epsilon')
@@ -229,52 +237,58 @@ def _record_privacy_spend(training_session) -> None:
                 continue
             if math.isfinite(eps) and eps > 0.0:
                 per_round.append(eps)
-
-        if not per_round:
-            logger.warning(
-                "[DP] No valid privacy_epsilon across %d round(s) of session %s — "
-                "DP may not have been active for this job",
-                len(rounds), training_session.session_id,
-            )
-            return
-
         actual_epsilon = float(sum(per_round))
 
-        policy.record_spent(actual_epsilon)
-        logger.info(
-            "[DP] Recorded ε=%.6f for dataset %s (session %s, composed over %d round(s): %s)",
-            actual_epsilon, dataset_id, training_session.session_id,
-            len(per_round), [round(e, 4) for e in per_round],
-        )
-
-        # Update per-researcher epsilon budget. Delegate to the model's
-        # record_spent() so the overrun-protected conditional update lives in a
-        # single place (parity with DatasetPrivacyPolicy above).
-        try:
-            researcher_id = getattr(training_session, 'user_id', None)
-            if researcher_id is not None:
-                try:
-                    researcher_budget = ResearcherEpsilonBudget.objects.get(
-                        dataset_id=dataset_id,
-                        researcher_id=researcher_id,
-                    )
-                except ResearcherEpsilonBudget.DoesNotExist:
-                    logger.info(
-                        "No ResearcherEpsilonBudget for researcher=%s dataset=%s — "
-                        "researcher spend not recorded",
-                        researcher_id, dataset_id,
-                    )
-                else:
-                    researcher_budget.record_spent(actual_epsilon)
-                    logger.info(
-                        "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
-                        researcher_id, dataset_id, actual_epsilon,
-                    )
-        except Exception as exc:
-            logger.error(
-                "Error updating ResearcherEpsilonBudget (researcher=%s): %s",
-                getattr(training_session, 'user_id', None), exc,
+        # Dataset-level policy counter (audit aggregate). Only a real spend is added.
+        if actual_epsilon > 0.0:
+            try:
+                policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+                policy.record_spent(actual_epsilon)
+                logger.info(
+                    "[DP] Recorded ε=%.6f for dataset %s (session %s, composed over %d round(s): %s)",
+                    actual_epsilon, dataset_id, training_session.session_id,
+                    len(per_round), [round(e, 4) for e in per_round],
+                )
+            except DatasetPrivacyPolicy.DoesNotExist:
+                logger.info(
+                    "[DP] No DatasetPrivacyPolicy for dataset %s — no audit spend recorded",
+                    dataset_id,
+                )
+        else:
+            logger.warning(
+                "[DP] No valid privacy_epsilon for session %s — no spend recorded",
+                training_session.session_id,
             )
+
+        # Per-researcher budget: record the REAL spend (truthful, exactly-once via the
+        # budget_reconciled guard above). Admission (reserve_job_budget) does NOT debit
+        # spent, so this is the sole place the researcher budget grows.
+        if actual_epsilon > 0.0:
+            try:
+                researcher_id = getattr(training_session, 'user_id', None)
+                if researcher_id is not None:
+                    try:
+                        researcher_budget = ResearcherEpsilonBudget.objects.get(
+                            dataset_id=dataset_id,
+                            researcher_id=researcher_id,
+                        )
+                    except ResearcherEpsilonBudget.DoesNotExist:
+                        logger.info(
+                            "No ResearcherEpsilonBudget for researcher=%s dataset=%s — "
+                            "researcher spend not recorded",
+                            researcher_id, dataset_id,
+                        )
+                    else:
+                        researcher_budget.record_spent(actual_epsilon)
+                        logger.info(
+                            "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
+                            researcher_id, dataset_id, actual_epsilon,
+                        )
+            except Exception as exc:
+                logger.error(
+                    "Error updating ResearcherEpsilonBudget (researcher=%s): %s",
+                    getattr(training_session, 'user_id', None), exc,
+                )
 
     except Exception as exc:
         logger.error(

@@ -228,7 +228,7 @@ class APIAuthenticationMiddleware:
                 'status_code': 400
             }
 
-        # NEW SECURE METHOD: Check all active API keys by verifying hash
+        # Check all active API keys by verifying hash.
         # We can't query by plaintext key anymore since we store hashes
         try:
             # This is secure because check_key() uses constant-time comparison

@@ -47,10 +47,16 @@ def _make_session(*, dataset_id, user_id, epsilon, use_experiment=False):
     session.dataset_id = dataset_id
     session.user_id = user_id
     session.session_id = "sess-1"
+    # No reservation for these unit sessions: reconcile(reserved=0, actual) == +actual,
+    # equivalent to the pre-reservation record_spent(actual) these tests assert.
+    session.reserved_epsilon = 0.0
+    session.budget_reconciled = False
     round_mock = MagicMock()
     round_mock.metrics = {'privacy_epsilon': epsilon}
     round_mock.round_number = 1
-    session.rounds.order_by.return_value.first.return_value = round_mock
+    # _record_privacy_spend iterates the queryset (list(...)), so the round(s) must be
+    # yielded by iteration, not via .first().
+    session.rounds.order_by.return_value = [round_mock]
     return session
 
 

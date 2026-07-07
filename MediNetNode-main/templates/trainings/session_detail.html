@@ -1298,8 +1298,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const refreshText = document.getElementById('refreshText');
     const nextRefreshElement = document.getElementById('nextRefresh');
     // pauseBtn removed in dropdown redesign
-    
-    // Initialize refresh control
+
     initializeRefreshControl();
     
     // Modal functionality (zero conflicts)
@@ -1391,8 +1390,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeRefreshControl() {
         // Set up interval buttons - clear all active states first
         const intervalButtons = document.querySelectorAll('.refresh-option');
-        
-        // Clear all active states first
+
         intervalButtons.forEach(btn => {
             btn.classList.remove('active');
         });
@@ -1481,9 +1479,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Clear existing interval
         clearInterval(countdownInterval);
-        
+
         if (pendingInterval === 'manual') {
             currentInterval = 0;
             refreshCountdown = 0;
@@ -1642,7 +1639,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateSessionStatus(data) {
-        // Update progress
         const progressBar = document.getElementById('progressBar');
         const progressPercentage = document.getElementById('progressPercentage');
         const currentRound = document.getElementById('currentRound');
@@ -1657,7 +1653,6 @@ document.addEventListener('DOMContentLoaded', function() {
             currentRound.textContent = data.current_round;
         }
         
-        // Update resources
         const cpuUsage = document.getElementById('cpuUsage');
         const memoryUsage = document.getElementById('memoryUsage');
         

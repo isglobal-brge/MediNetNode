@@ -572,11 +572,9 @@
 {{ class_labels|json_script:"class-labels-data" }}
 <script>
 document.getElementById('exportCsvBtn').addEventListener('click', function() {
-    // Build CSV content
     const predictions = JSON.parse(document.getElementById('predictions-data').textContent);
     const classLabels = JSON.parse(document.getElementById('class-labels-data').textContent);
 
-    // Get class label name
     function getClassName(labelId) {
         if (classLabels && classLabels[String(labelId)]) {
             return classLabels[String(labelId)];
@@ -584,10 +582,8 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
         return 'Class ' + labelId;
     }
 
-    // CSV header
     let csv = 'Row,Predicted Label,Class Name,Confidence (%)';
 
-    // Add probability columns for each class
     if (predictions.length > 0 && predictions[0].probabilities) {
         const classIds = Object.keys(predictions[0].probabilities).sort();
         classIds.forEach(function(classId) {
@@ -596,7 +592,6 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
     }
     csv += '\n';
 
-    // Add data rows
     predictions.forEach(function(pred) {
         let row = [
             pred.row_index,
@@ -611,7 +606,6 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
             row[3] = confidence !== undefined ? confidence.toFixed(2) : '';
         }
 
-        // Add all probability columns
         if (pred.probabilities) {
             const classIds = Object.keys(pred.probabilities).sort();
             classIds.forEach(function(classId) {
@@ -622,12 +616,10 @@ document.getElementById('exportCsvBtn').addEventListener('click', function() {
         csv += row.join(',') + '\n';
     });
 
-    // Create and download file
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
 
-    // Generate filename with model name and timestamp
     const modelName = '{{ model.name|escapejs }}'.replace(/[^a-z0-9]/gi, '_');
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
     const filename = 'predictions_' + modelName + '_' + timestamp + '.csv';

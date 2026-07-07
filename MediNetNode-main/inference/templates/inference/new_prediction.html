@@ -1000,12 +1000,10 @@
     function switchView(view) {
         currentView = view;
 
-        // Update toggle button styles
         document.querySelectorAll('.view-toggle .btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.view === view);
         });
 
-        // Toggle grid/list visibility
         const grids = document.querySelectorAll('.models-grid');
         const lists = document.querySelectorAll('.models-list');
 
@@ -1017,7 +1015,6 @@
             lists.forEach(l => l.classList.add('active'));
         }
 
-        // Save preference
         localStorage.setItem('modelViewPreference', view);
     }
 
@@ -1025,12 +1022,10 @@
     function switchMode(mode) {
         currentMode = mode;
 
-        // Update tab styles
         document.querySelectorAll('.mode-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.mode === mode);
         });
 
-        // Show/hide forms
         const singleForm = document.getElementById('singleModelForm');
         const multiForm = document.getElementById('multiModelForm');
 
@@ -1047,22 +1042,18 @@
     function updateSingleSelection(radio) {
         const modelId = radio.value;
 
-        // Remove selected class from all cards and list items in single form
         document.querySelectorAll('#singleModelForm .model-select-card, #singleModelForm .model-list-item').forEach(el => {
             el.classList.remove('selected');
         });
 
-        // Add selected class to chosen card
         radio.closest('.model-select-card').classList.add('selected');
 
-        // Sync list view selection
         const listRadio = document.querySelector(`#singleModelForm .model-list-item input[value="${modelId}"]`);
         if (listRadio) {
             listRadio.checked = true;
             listRadio.closest('.model-list-item').classList.add('selected');
         }
 
-        // Update footer
         const card = radio.closest('.model-select-card');
         updateSingleFooter(card.dataset.modelName, card.dataset.modelVersion);
     }
@@ -1071,22 +1062,18 @@
     function updateSingleSelectionList(radio) {
         const modelId = radio.value;
 
-        // Remove selected class from all cards and list items in single form
         document.querySelectorAll('#singleModelForm .model-select-card, #singleModelForm .model-list-item').forEach(el => {
             el.classList.remove('selected');
         });
 
-        // Add selected class to chosen list item
         radio.closest('.model-list-item').classList.add('selected');
 
-        // Sync grid view selection
         const gridRadio = document.querySelector(`#singleModelForm .model-select-card input[value="${modelId}"]`);
         if (gridRadio) {
             gridRadio.checked = true;
             gridRadio.closest('.model-select-card').classList.add('selected');
         }
 
-        // Update footer
         const item = radio.closest('.model-list-item');
         updateSingleFooter(item.dataset.modelName, item.dataset.modelVersion);
     }
@@ -1100,7 +1087,6 @@
 
     // ========== MULTI MODEL SELECTION (Grid) ==========
     function updateMultiSelection() {
-        // Sync grid to list
         document.querySelectorAll('#multiModelForm .models-grid input[type="checkbox"]').forEach(cb => {
             const modelId = cb.value;
             const listCb = document.querySelector(`#multiModelForm .models-list input[value="${modelId}"]`);
@@ -1114,7 +1100,6 @@
 
     // ========== MULTI MODEL SELECTION (List) ==========
     function updateMultiSelectionList() {
-        // Sync list to grid
         document.querySelectorAll('#multiModelForm .models-list input[type="checkbox"]').forEach(cb => {
             const modelId = cb.value;
             const gridCb = document.querySelector(`#multiModelForm .models-grid input[value="${modelId}"]`);
@@ -1131,7 +1116,6 @@
         const checkboxes = document.querySelectorAll('#multiModelForm .models-grid input[type="checkbox"]:checked');
         const count = checkboxes.length;
 
-        // Update card styles (both grid and list)
         document.querySelectorAll('#multiModelForm .model-select-card').forEach(card => {
             const checkbox = card.querySelector('input[type="checkbox"]');
             card.classList.toggle('selected', checkbox.checked);
@@ -1142,7 +1126,6 @@
             item.classList.toggle('selected', checkbox.checked);
         });
 
-        // Update counter
         const counter = document.getElementById('selectionCounter');
         const countText = document.getElementById('selectionCountText');
         const multiCount = document.getElementById('multiModelCount');
@@ -1169,19 +1152,16 @@
 
     // ========== INITIALIZATION ==========
     document.addEventListener('DOMContentLoaded', function() {
-        // Restore view preference
         const savedView = localStorage.getItem('modelViewPreference');
         if (savedView && (savedView === 'grid' || savedView === 'list')) {
             switchView(savedView);
         }
 
-        // Initialize single mode selection if preselected
         const checkedRadio = document.querySelector('#singleModelForm .models-grid input[name="model_id"]:checked');
         if (checkedRadio) {
             updateSingleSelection(checkedRadio);
         }
 
-        // Keyboard navigation for all cards and list items
         document.querySelectorAll('.model-select-card, .model-list-item').forEach(el => {
             el.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -1202,7 +1182,6 @@
             el.setAttribute('tabindex', '0');
         });
 
-        // Clear search on escape
         const searchInput = document.querySelector('input[name="q"]');
         if (searchInput) {
             searchInput.addEventListener('keydown', function(e) {

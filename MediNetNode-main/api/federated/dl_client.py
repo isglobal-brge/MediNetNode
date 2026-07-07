@@ -132,27 +132,44 @@ class DLFlowerClient(NumPyClient):
                 safe_flower_keys = {k: v for k, v in config.items() if k in _SAFE_FLOWER_KEYS}
                 complete_config.update(safe_flower_keys)
                         
-            train_results = train(self.net, self.trainloader, complete_config, self.partition_id, self.device)
+            # Pass device by keyword: train()'s 5th positional is `verbose`, so
+            # the previous positional call silently fed the device into `verbose`
+            # and left device='cpu' — training never used the configured device
+            # (and would device-mismatch crash if DEVICE were set to 'cuda').
+            train_results = train(
+                self.net, self.trainloader, complete_config, self.partition_id,
+                device=self.device,
+            )
             self.loss, self.accuracy, self.precision, self.recall, self.f1, self.epsilon, actual_noise = train_results
 
-            # Verify the noise_multiplier Opacus actually used matches the approved
-            # configuration. A mismatch indicates tampering between config validation
-            # and training execution — abort immediately.
-            expected_noise = (
+            # DP integrity guard. The Node only ever CLAMPS the requested noise UP
+            # (never down) — see train_functions — so the noise Opacus actually used
+            # must be >= what the Hub requested. If it is LESS, privacy was weakened
+            # below the approved configuration; abort instead of recording a false ε.
+            # (The previous check read a dead path — 'model.training.dp' — so
+            # expected_noise was always None and the guard never ran. It also compared
+            # for equality, which would misfire on the legitimate clamp-up.)
+            requested_noise = (
                 complete_config.get('model', {})
                 .get('training', {})
-                .get('dp', {})
+                .get('optimizer', {})
+                .get('differential_privacy', {})
                 .get('noise_multiplier')
             )
-            if expected_noise is not None and actual_noise is not None:
-                if abs(actual_noise - expected_noise) > 1e-4:
-                    fail_training_session(
-                        self.training_session,
-                        f"DP parameters tampered: expected noise_multiplier={expected_noise}, "
-                        f"actual={actual_noise}. Training aborted for security.",
-                    )
-                    # Return 1 (not 0) to avoid ZeroDivisionError in Hub aggregation.
-                    return self.get_parameters({}), 1, {}
+            try:
+                requested_noise = float(requested_noise) if requested_noise is not None else None
+            except (TypeError, ValueError):
+                requested_noise = None
+            if (requested_noise is not None and actual_noise is not None
+                    and float(actual_noise) + 1e-4 < requested_noise):
+                fail_training_session(
+                    self.training_session,
+                    f"DP integrity violation: effective noise_multiplier={actual_noise} "
+                    f"is below the requested {requested_noise}; privacy was weakened. "
+                    f"Training aborted for security.",
+                )
+                # Return 1 (not 0) to avoid ZeroDivisionError in Hub aggregation.
+                return self.get_parameters({}), 1, {}
 
             # float("inf") is not JSON-serializable; use -1.0 as sentinel meaning
             # "epsilon measurement failed — treat as unbounded privacy cost".

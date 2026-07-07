@@ -34,12 +34,10 @@ def require_role(*allowed_roles):
         @wraps(view_func)
         @login_required
         def wrapper(request, *args, **kwargs):
-            if request.user.is_superuser:
-                _security_logger.info(
-                    f"SUPERUSER_BYPASS: user={request.user.username} "
-                    f"path={request.path} required_roles={allowed_roles}"
-                )
-                return view_func(request, *args, **kwargs)
+            # H9: Django superusers do NOT bypass RBAC. The 4-role model
+            # (ADMIN/MEMBER/RESEARCHER/AUDITOR) is the single authorization
+            # boundary. The platform admin is created with the ADMIN role
+            # (see core/views/setup.py), so it still passes on that basis.
             if not request.user.role:
                 return _render_access_denied(request)
             if request.user.role.name not in allowed_roles:
@@ -68,8 +66,7 @@ def require_permission(*permissions, domain=None):
         @wraps(view_func)
         @login_required
         def wrapper(request, *args, **kwargs):
-            if request.user.is_superuser:
-                return view_func(request, *args, **kwargs)
+            # H9: no superuser bypass — permissions come only from the role.
             if not request.user.role:
                 return _render_access_denied(request)
             has_permission = any(
@@ -103,8 +100,7 @@ def check_model_access(permission_key):
         @wraps(view_func)
         @login_required
         def wrapper(request, *args, **kwargs):
-            if request.user.is_superuser:
-                return view_func(request, *args, **kwargs)
+            # H9: no superuser bypass — access comes only from the role/permission.
             if not request.user.role:
                 return _render_access_denied(request)
 

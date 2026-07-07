@@ -565,6 +565,37 @@ class ResearcherEpsilonBudget(models.Model):
 
         return True, ""
 
+    def admit(self, estimated_epsilon: float, in_flight_epsilon: float = 0.0):
+        """Admission check for a new job WITHOUT debiting spent (H3).
+
+        Closes the accept-vs-record TOCTOU without changing single-job budget
+        dynamics: it checks the estimated cost against the ACTUAL remaining budget,
+        plus the estimated cost of OTHER jobs currently in flight (STARTING/ACTIVE),
+        so N concurrent start-client requests cannot all pass against the same
+        remaining budget. Crucially it does NOT mutate spent_epsilon — the real
+        leakage is recorded at job end via record_spent — so a finished job frees
+        its in-flight cost and sequential jobs see budget exactly as the old
+        check-then-record flow did.
+
+        Must be called inside a transaction that has select_for_update-locked this
+        row (so the in_flight sum the caller passed is consistent). Returns (ok, reason).
+        """
+        if not math.isfinite(estimated_epsilon) or estimated_epsilon <= 0:
+            return False, "El epsilon estimado no es válido."
+        if (not math.isfinite(self.max_epsilon_per_job)
+                or estimated_epsilon > self.max_epsilon_per_job):
+            return False, (
+                f"El epsilon estimado ({estimated_epsilon:.4f}) supera el "
+                f"máximo por job ({self.max_epsilon_per_job:.4f}) para este researcher."
+            )
+        pending = estimated_epsilon + max(in_flight_epsilon or 0.0, 0.0)
+        if pending > self.remaining_budget:
+            return False, (
+                f"El epsilon estimado ({estimated_epsilon:.4f}) supera el "
+                f"presupuesto restante del researcher ({self.remaining_budget:.4f})."
+            )
+        return True, ""
+
     def record_spent(self, actual_epsilon: float) -> None:
         """Atomically add actual_epsilon to spent_epsilon — truthfully.
 

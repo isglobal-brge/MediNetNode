@@ -231,16 +231,17 @@ class TestDeployedModelManager:
         accessible = DeployedModel.objects.accessible_by_user(auditor_user)
         assert accessible.count() == 0
 
-    def test_superuser_sees_all_models(self):
-        """Superuser should see all models regardless of status."""
+    def test_superuser_without_role_sees_no_models(self):
+        """H9: superuser is not special in the manager either. Without an
+        inference.execute scope (i.e. no role) it sees no models — not even
+        pending/non-public ones."""
         superuser = CustomUser.objects.create_superuser(
             username='superuser_manager_test',
             password='testpass123',
             email='super@test.com'
         )
 
-        # Create a pending model
-        admin_role = Role.objects.get(name='ADMIN')
+        # Create a pending, non-public model that must remain invisible.
         admin_user = CustomUser.objects.get(username='admin_manager_test')
 
         fake_onnx = SimpleUploadedFile(
@@ -263,5 +264,5 @@ class TestDeployedModelManager:
         )
 
         accessible = DeployedModel.objects.accessible_by_user(superuser)
-        # Should see all models including pending and non-public
-        assert accessible.count() >= 4
+        # A bare superuser has no role → no inference.execute scope → nothing.
+        assert accessible.count() == 0

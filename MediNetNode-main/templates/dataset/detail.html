@@ -689,7 +689,6 @@
      console.log('Can edit:', {{ can_edit|yesno:"true,false" }});
      console.log('================================');
      
-     // Initialize JSON editors
      const jsonFields = ['column_info', 'data_types', 'missing_values', 'value_ranges', 'categorical_mappings'];
      jsonFields.forEach(field => {
          const input = document.getElementById('id_' + field);

@@ -157,19 +157,20 @@ class SystemAuditLogsViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, f'/auth/login/?next={self.url}')
 
-    def test_superuser_can_access(self):
-        """Test that superusers can access regardless of role."""
+    def test_superuser_without_role_is_denied(self):
+        """H9: a Django superuser without a role no longer bypasses RBAC.
+        The audit view requires the AUDITOR role, so a bare superuser is
+        denied (403)."""
         superuser = CustomUser.objects.create_superuser(
             username='superuser',
             email='super@test.com',
             password='SuperPass123!'
         )
-        
+
         self.client.force_login(superuser)
         response = self.client.get(self.url)
-        
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'System Audit Logs')
+
+        self.assertEqual(response.status_code, 403)
 
     def test_all_logs_displayed(self):
         """Test that all audit logs are displayed when no filters applied."""

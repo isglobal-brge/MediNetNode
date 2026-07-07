@@ -427,7 +427,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const countdownElement = document.getElementById('countdown');
     const refreshText = document.getElementById('refreshText');
     
-    // Show auto-refresh indicator
     refreshIndicator.style.display = 'block';
     
     function updateCountdown() {
@@ -444,11 +443,9 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshIndicator.classList.add('updating');
         refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Updating...';
         
-        // Fetch updated statistics
         fetch('{% url "trainings:dashboard_stats_api" %}')
             .then(response => response.json())
             .then(data => {
-                // Update statistics
                 document.getElementById('activeCount').textContent = data.active_count;
                 document.getElementById('todayCompleted').textContent = data.today_completed;
                 document.getElementById('successRate').textContent = data.success_rate + '%';

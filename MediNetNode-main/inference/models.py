@@ -20,9 +20,8 @@ class DeployedModelManager(models.Manager):
         Returns:
             QuerySet of DeployedModel instances the user can access
         """
-        if user.is_superuser:
-            return self.get_queryset()
-
+        # H9: no superuser shortcut — access is driven by the role's
+        # inference.execute scope (the ADMIN role carries scope 'ALL').
         scope = user.get_permission_scope('inference.execute')
 
         if scope is None:

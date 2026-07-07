@@ -68,7 +68,9 @@ class TestScopeBasedPermissions:
             role=limited_role
         )
 
-        assert limited_user.has_permission('inference.execute') is True
+        # Fail-closed: a restricted (list) scope without a domain no longer grants
+        # access — the caller must supply a domain to be authorized (hardening).
+        assert limited_user.has_permission('inference.execute') is False
 
         assert limited_user.has_permission('inference.execute', domain='cardiology') is True
         assert limited_user.has_permission('inference.execute', domain='neurology') is True
@@ -98,16 +100,17 @@ class TestScopeBasedPermissions:
         scope = admin_user.get_permission_scope('inference.approve')
         assert scope is None
 
-    def test_superuser_has_all_permissions(self):
-        """Test that superuser bypasses all permission checks."""
+    def test_superuser_without_role_has_no_permissions(self):
+        """H9: a Django superuser is NOT special. Without a role it has no app
+        permissions — authorization comes solely from the assigned role."""
         superuser = CustomUser.objects.create_superuser(
             username='superuser_test',
             password='testpass123',
             email='super@test.com'
         )
 
-        assert superuser.has_permission('any.permission') is True
-        assert superuser.has_permission('inference.execute', domain='any_domain') is True
+        assert superuser.has_permission('any.permission') is False
+        assert superuser.has_permission('inference.execute', domain='any_domain') is False
         assert superuser.get_permission_scope('any.permission') is None
 
     def test_user_without_role_has_no_permissions(self):

@@ -60,11 +60,13 @@ class SecureUploaderBasicTest(TestCase):
 
         self.assertEqual(actual_extensions, expected_extensions)
 
-    def test_no_file_size_limit(self):
-        """Test that there's no file size limit for medical datasets."""
+    def test_file_size_limit_is_bounded(self):
+        """A bounded upload size cap is enforced (was None → OOM risk). Default
+        is generous but finite; configurable via settings.DATASET_MAX_FILE_SIZE."""
         uploader = SecureDatasetUploader(self.user)
 
-        self.assertIsNone(uploader.MAX_FILE_SIZE)
+        self.assertIsNotNone(uploader.MAX_FILE_SIZE)
+        self.assertGreater(uploader.MAX_FILE_SIZE, 0)
 
     def test_filename_sanitization(self):
         """Test filename sanitization for security."""
