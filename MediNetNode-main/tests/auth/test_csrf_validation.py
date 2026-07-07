@@ -37,12 +37,10 @@ class CSRFValidationTests(TestCase):
         
         with patch('auth_system.views.security_logger') as mock_logger:
             response = csrf_failure(request, reason='CSRF token missing')
-            
-            # Check response
+
             self.assertEqual(response.status_code, 403)
             self.assertIn('CSRF verification failed', response.content.decode())
-            
-            # Check security logging
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
             self.assertIn('CSRF_FAILURE from 192.168.1.100', call_args[0][0])
@@ -61,23 +59,27 @@ class CSRFValidationTests(TestCase):
              patch('auth_system.views.get_token', return_value=None):
             
             response = dummy_view(request)
-            
-            # Check response still works
+
             self.assertEqual(response.status_code, 200)
-            
-            # Check security logging for missing token
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
             self.assertIn('CSRF_NO_TOKEN from 192.168.1.100', call_args[0][0])
     
     def test_get_client_ip_with_xff(self):
-        """Test client IP extraction with X-Forwarded-For header"""
+        """X-Forwarded-For is spoof-resistant: ignored from an untrusted source,
+        honored only when REMOTE_ADDR is a configured trusted proxy."""
+        from django.test import override_settings
+
+        # Untrusted source: XFF ignored, REMOTE_ADDR used.
         request = self.factory.get('/test/')
         request.META['HTTP_X_FORWARDED_FOR'] = '203.0.113.1, 203.0.113.2'
         request.META['REMOTE_ADDR'] = '192.168.1.100'
-        
-        ip = get_client_ip(request)
-        self.assertEqual(ip, '203.0.113.1')  # Should get first IP from XFF
+        self.assertEqual(get_client_ip(request), '192.168.1.100')
+
+        # Trusted proxy: first XFF entry is used.
+        with override_settings(TRUSTED_PROXIES=['192.168.1.100']):
+            self.assertEqual(get_client_ip(request), '203.0.113.1')
     
     def test_get_client_ip_without_xff(self):
         """Test client IP extraction without X-Forwarded-For header"""
@@ -93,15 +95,14 @@ class CSRFValidationTests(TestCase):
         # RequestFactory sets REMOTE_ADDR to '127.0.0.1' by default
         # Remove it to test the 'unknown' case
         del request.META['REMOTE_ADDR']
-        
+
         ip = get_client_ip(request)
-        self.assertEqual(ip, 'unknown')  # Should return unknown
+        self.assertEqual(ip, '0.0.0.0')  # Consistent fallback across IP helpers
     
     def test_csrf_settings_configured(self):
         """Test: CSRF settings are properly configured in Django settings"""
         from django.conf import settings
-        
-        # Check CSRF settings exist and are properly configured
+
         # Note: During testing, Django might override DEBUG, so we check the setting exists
         self.assertTrue(hasattr(settings, 'CSRF_COOKIE_SECURE'))
         
@@ -113,8 +114,7 @@ class CSRFValidationTests(TestCase):
         self.assertTrue(getattr(settings, 'CSRF_COOKIE_HTTPONLY', False))
         self.assertEqual(getattr(settings, 'CSRF_COOKIE_SAMESITE', None), 'Lax')
         self.assertEqual(getattr(settings, 'CSRF_FAILURE_VIEW', None), 'auth_system.views.csrf_failure')
-        
-        # Check trusted origins exist
+
         trusted_origins = getattr(settings, 'CSRF_TRUSTED_ORIGINS', [])
         self.assertIsInstance(trusted_origins, list)
         self.assertGreater(len(trusted_origins), 0)

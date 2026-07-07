@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Manage Access - {{ dataset.name }}{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     /* Access Management Specific Styles - Safe Version */
     .access-tabs {
         background: var(--card-bg);
@@ -149,54 +150,66 @@
         flex-wrap: nowrap;  /* Prevent wrapping to new lines */
     }
 
-    /* Permission Cards Inline - Fixed Horizontal Layout */
+    /* Permission Cards Inline - Compact horizontal strip */
     .permission-cards-inline {
-        display: flex !important;
-        flex-direction: row !important;  /* Force horizontal layout */
-        flex-wrap: nowrap !important;  /* Prevent wrapping */
-        gap: 3rem !important;  /* More space between cards */
-        justify-content: left !important;  /* Distribute cards evenly across available space */
-        margin: 0 25rem 0 0rem;  /* More balanced margins */
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
         align-items: center;
-        width: auto;
+        flex: 1;
+        min-width: 0;
     }
 
     .permission-mini-card {
         background: rgba(66, 165, 245, 0.03);
-        border: 1px solid rgba(66, 165, 245, 0.1);
-        border-radius: var(--border-radius-sm);
-        padding: 2rem;  /* More padding for better spacing */
-        display: flex !important;
+        border: 1px solid rgba(66, 165, 245, 0.12);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        display: flex;
         align-items: center;
-        justify-content: space-between;
-        min-width: 400px;  /* Much wider cards for better text spacing */
-        max-width: 450px;
-        width: 400px;  /* Fixed width to ensure consistency */
-        transition: all 0.3s ease;
-        flex-shrink: 0;  /* Prevent shrinking */
-        white-space: nowrap;  /* Prevent text wrapping */
+        gap: 0.5rem;
+        width: 170px;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
     }
 
     .permission-mini-card:hover {
-        background: rgba(66, 165, 245, 0.05);
-        border-color: rgba(66, 165, 245, 0.2);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(66, 165, 245, 0.1);
+        background: rgba(66, 165, 245, 0.07);
+        border-color: rgba(66, 165, 245, 0.25);
+    }
+
+    .permission-mini-card.exp-card {
+        border-color: rgba(34, 197, 94, 0.2);
+        background: rgba(34, 197, 94, 0.03);
+    }
+
+    .permission-mini-card.exp-card:hover {
+        background: rgba(34, 197, 94, 0.07);
+        border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .permission-mini-card.exp-card.disabled {
+        opacity: 0.45;
+        pointer-events: none;
     }
 
     .permission-content {
         display: flex;
         align-items: center;
-        gap: 2rem;  /* More space between icon and text */
+        gap: 0.4rem;
         flex: 1;
-        margin-right: 3rem;  /* Much more space before toggle */
-        min-width: 0;  /* Allow proper flexbox behavior */
+        min-width: 0;
     }
 
     .permission-icon {
         color: var(--primary-color);
-        font-size: 1.2rem;  /* Slightly larger icon */
+        font-size: 0.85rem;
         flex-shrink: 0;
+    }
+
+    .permission-mini-card.exp-card .permission-icon {
+        color: #16a34a;
     }
 
     .permission-details {
@@ -207,16 +220,71 @@
     .permission-title {
         font-weight: 600;
         color: var(--primary-dark);
-        font-size: 1rem;  /* Larger text for better readability */
-        line-height: 1.3;
-        margin-bottom: 0.25rem;
+        font-size: 0.75rem;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
-    .permission-subtitle {
-        font-size: 0.8rem;
-        color: #6c757d;
-        line-height: 1.3;
+    /* Epsilon budget panel */
+    .eps-panel {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        margin-top: 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
     }
+
+    .eps-bar-wrap {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .eps-bar-bg {
+        width: 100%;
+        height: 5px;
+        background: #e2e8f0;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .eps-bar-fill {
+        height: 5px;
+        border-radius: 3px;
+        transition: width 0.4s ease;
+    }
+
+    .eps-bar-fill.green  { background: #22c55e; }
+    .eps-bar-fill.orange { background: #f59e0b; }
+    .eps-bar-fill.red    { background: #ef4444; }
+
+    .eps-label {
+        font-size: 0.7rem;
+        color: #92400e;
+        margin-top: 2px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .btn-reset-budget {
+        font-size: 0.7rem;
+        padding: 3px 10px;
+        background: #fff;
+        border: 1px solid #fca5a5;
+        color: #dc2626;
+        border-radius: 5px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.2s;
+    }
+
+    .btn-reset-budget:hover { background: #fef2f2; }
 
     /* Single Action Button */
     .action-button-single {
@@ -503,47 +571,9 @@
     }
 
     /* Responsive Styles for Tablets and Smaller Screens */
-    @media (max-width: 1400px) {
-        .permission-cards-inline {
-            gap: 1.5rem !important;
-            margin: 0 10rem 0 0 !important;
-        }
-
-        .permission-mini-card {
-            min-width: 300px;
-            width: 300px;
-            padding: 1.5rem;
-        }
-
-        .permission-content {
-            gap: 1.5rem;
-            margin-right: 2rem;
-        }
-    }
-
     @media (max-width: 1200px) {
-        .permission-cards-inline {
-            gap: 1rem !important;
-            margin: 0 5rem 0 0 !important;
-        }
-
         .permission-mini-card {
-            min-width: 250px;
-            width: 250px;
-            padding: 1.25rem;
-        }
-
-        .permission-content {
-            gap: 1rem;
-            margin-right: 1.5rem;
-        }
-
-        .permission-title {
-            font-size: 0.9rem;
-        }
-
-        .permission-subtitle {
-            font-size: 0.75rem;
+            width: 140px;
         }
     }
 
@@ -572,33 +602,13 @@
         }
 
         .permission-cards-inline {
-            flex-direction: column !important;
-            gap: 0.75rem !important;
-            margin: 0 !important;
-            width: 100%;
+            flex-wrap: wrap;
+            gap: 0.4rem;
         }
 
         .permission-mini-card {
-            min-width: 100%;
-            width: 100%;
-            padding: 1rem;
-        }
-
-        .permission-content {
-            gap: 1rem;
-            margin-right: 1rem;
-        }
-
-        .permission-icon {
-            font-size: 1.1rem;
-        }
-
-        .permission-title {
-            font-size: 0.85rem;
-        }
-
-        .permission-subtitle {
-            font-size: 0.7rem;
+            width: 130px;
+            padding: 0.4rem 0.6rem;
         }
 
         .action-button-single {
@@ -647,6 +657,13 @@
             width: 100%;
         }
     }
+
+    /* CSP-safe utility classes */
+    .user-avatar-sm       { width: 40px; height: 40px; font-size: 1rem; }
+    .permission-card-exp  { border-color: rgba(34,197,94,.2) !important; background: rgba(34,197,94,.02) !important; }
+    .permission-icon-exp  { background: linear-gradient(135deg,#22c55e,#16a34a) !important; }
+    .form-m0              { margin: 0; }
+    .form-d-inline        { display: inline; }
 
     @media (max-width: 576px) {
         .access-tabs .user-avatar {
@@ -787,19 +804,18 @@
                                 </div>
                             </div>
 
-                            <!-- Permission Cards - Right Side (Yellow Line Area) -->
+                            <!-- Permission Cards - compact inline strip -->
                             <div class="permission-cards-inline">
                                 <form method="post" class="permission-form-inline" id="permission-form-{{ item.user.id }}">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="update_permissions">
                                     <input type="hidden" name="user_id" value="{{ item.user.id }}">
-                                    
+
                                     <div class="permission-mini-card">
                                         <div class="permission-content">
                                             <i class="bi bi-cpu permission-icon"></i>
                                             <div class="permission-details">
                                                 <div class="permission-title">Training</div>
-                                                <div class="permission-subtitle">Federated learning models</div>
                                             </div>
                                         </div>
                                         <label class="custom-switch">
@@ -807,17 +823,31 @@
                                             <span class="switch-slider"></span>
                                         </label>
                                     </div>
-                                    
+
                                     <div class="permission-mini-card">
                                         <div class="permission-content">
                                             <i class="bi bi-info-circle permission-icon"></i>
                                             <div class="permission-details">
                                                 <div class="permission-title">Metadata</div>
-                                                <div class="permission-subtitle">Dataset statistics</div>
                                             </div>
                                         </div>
                                         <label class="custom-switch">
                                             <input type="checkbox" name="can_view_metadata" {% if item.access.can_view_metadata %}checked{% endif %}>
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+
+                                    <div class="permission-mini-card exp-card{% if not dataset.experiment_file_path %} disabled{% endif %}">
+                                        <div class="permission-content">
+                                            <i class="bi bi-flask permission-icon"></i>
+                                            <div class="permission-details">
+                                                <div class="permission-title">Subset exp.</div>
+                                            </div>
+                                        </div>
+                                        <label class="custom-switch">
+                                            <input type="checkbox" name="can_use_experiment"
+                                                {% if item.access.can_use_experiment %}checked{% endif %}
+                                                {% if not dataset.experiment_file_path %}disabled{% endif %}>
                                             <span class="switch-slider"></span>
                                         </label>
                                     </div>
@@ -826,11 +856,35 @@
 
                             <!-- Action Button - Far Right -->
                             <div class="action-button-single">
-                                <button type="button" class="btn-revoke-only" onclick="revokeAccess('{{ item.user.id }}', '{{ item.user.username }}')">
-                                    <i class="bi bi-trash me-2"></i>Revoke Access
+                                <button type="button" class="btn-revoke-only revoke-btn" data-user-id="{{ item.user.id }}" data-username="{{ item.user.username }}">
+                                    <i class="bi bi-trash me-2"></i>Revoke
                                 </button>
                             </div>
                         </div>
+
+                        {% if item.budget %}
+                        {% with spent=item.budget.spent_epsilon lifetime=item.budget.lifetime_budget %}
+                        {% widthratio spent lifetime 100 as pct %}
+                        <div class="eps-panel">
+                            <div class="eps-bar-wrap">
+                                <div class="eps-bar-bg">
+                                    <div class="eps-bar-fill {% if pct|add:0 >= 85 %}red{% elif pct|add:0 >= 60 %}orange{% else %}green{% endif %}"
+                                         data-pct="{{ pct }}"></div>
+                                </div>
+                                <div class="eps-label">
+                                    <span>ε gastado: {{ spent|floatformat:2 }}</span>
+                                    <span>Límite: {{ lifetime|floatformat:2 }} · máx/job {{ item.budget.max_epsilon_per_job|floatformat:2 }}</span>
+                                </div>
+                            </div>
+                            <form method="post" class="form-m0">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="reset_budget">
+                                <input type="hidden" name="user_id" value="{{ item.user.id }}">
+                                <button type="submit" class="btn-reset-budget">↺ Reset ε</button>
+                            </form>
+                        </div>
+                        {% endwith %}
+                        {% endif %}
                     </div>
                     {% endfor %}
                 {% else %}
@@ -860,7 +914,7 @@
                         <!-- User Options -->
                         <div id="userOptions">
                             <!-- Search prompt message (hidden by default) -->
-                            <div id="searchPrompt" class="text-center py-4 text-muted" style="display: none;">
+                            <div id="searchPrompt" class="text-center py-4 text-muted d-none">
                                 <i class="bi bi-search fs-2 mb-2 opacity-50"></i>
                                 <p class="mb-0">No users found matching your search...</p>
                             </div>
@@ -868,7 +922,7 @@
                             {% for user in available_users %}
                             <div class="user-option" data-user-id="{{ user.id }}" data-search="{{ user.username|lower }} {{ user.get_full_name|lower }} {{ user.email|lower }}">
                                 <div class="d-flex align-items-center">
-                                    <div class="user-avatar me-3" style="width: 40px; height: 40px; font-size: 1rem;">
+                                    <div class="user-avatar user-avatar-sm me-3">
                                         {{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}
                                     </div>
                                     <div class="flex-grow-1">
@@ -937,10 +991,32 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                {% if dataset.experiment_file_path %}
+                                <div class="col-12">
+                                    <div class="permission-card permission-card-exp">
+                                        <div class="permission-header">
+                                            <div class="permission-icon permission-icon-exp">
+                                                <i class="bi bi-flask"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="permission-title">Subset experimental</h6>
+                                                <p class="permission-description">
+                                                    Allow user to train on the experimental subset — does not consume ε budget
+                                                </p>
+                                            </div>
+                                            <label class="custom-switch">
+                                                <input type="checkbox" name="can_use_experiment">
+                                                <span class="switch-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
                             
                             <div class="d-flex justify-content-end gap-2 mt-4">
-                                <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                                <button type="button" class="btn btn-secondary" id="cancelGrantBtn">
                                     <i class="bi bi-x me-1"></i>Cancel
                                 </button>
                                 <button type="submit" class="grant-btn">
@@ -975,7 +1051,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="post" style="display: inline;">
+                <form method="post" class="form-d-inline">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="revoke_access">
                     <input type="hidden" name="user_id" id="revokeUserId">
@@ -988,122 +1064,92 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
-    const userSearch = document.getElementById('userSearch');
-    const userOptions = document.querySelectorAll('.user-option');
+    const userSearch    = document.getElementById('userSearch');
+    const userOptions   = document.querySelectorAll('.user-option');
     const permissionForm = document.getElementById('permissionForm');
     const selectedUserId = document.getElementById('selectedUserId');
-    
-    // User search functionality
+    const searchPrompt  = document.getElementById('searchPrompt');
+
+    // Set eps-bar widths from data-pct attributes (avoids inline style CSP violation)
+    document.querySelectorAll('.eps-bar-fill[data-pct]').forEach(function(bar) {
+        bar.style.width = bar.dataset.pct + '%';
+    });
+
+    // User search
     if (userSearch) {
-        const searchPrompt = document.getElementById('searchPrompt');
-
         userSearch.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            let visibleCount = 0;
-
-            userOptions.forEach(option => {
-                const searchData = option.dataset.search;
-                // Show all users when search is empty, otherwise filter
-                if (searchTerm === '' || searchData.includes(searchTerm)) {
-                    option.style.display = 'block';
-                    visibleCount++;
-                } else {
-                    option.style.display = 'none';
-                }
+            const term = this.value.toLowerCase().trim();
+            let visible = 0;
+            userOptions.forEach(function(opt) {
+                const match = term === '' || opt.dataset.search.includes(term);
+                opt.classList.toggle('d-none', !match);
+                if (match) visible++;
             });
-
-            // Show "no results" message only when searching and no results found
             if (searchPrompt) {
-                if (searchTerm !== '' && visibleCount === 0) {
-                    searchPrompt.style.display = 'block';
-                } else {
-                    searchPrompt.style.display = 'none';
-                }
+                searchPrompt.classList.toggle('d-none', !(term !== '' && visible === 0));
             }
         });
     }
-    
-    // User selection
-    userOptions.forEach(option => {
+
+    // User selection → show permission form
+    userOptions.forEach(function(option) {
         option.addEventListener('click', function() {
-            console.log('User selected:', this.dataset.userId);
-            
-            // Remove selection from others
-            userOptions.forEach(opt => opt.classList.remove('selected'));
-            
-            // Add selection to clicked option
+            userOptions.forEach(function(o) { o.classList.remove('selected'); });
             this.classList.add('selected');
-            
-            // Show permission form
             if (permissionForm) {
                 permissionForm.classList.add('show');
                 selectedUserId.value = this.dataset.userId;
-                console.log('Selected user ID set to:', selectedUserId.value);
             }
         });
     });
-    
-    // Auto-submit permission updates with compact buttons
-    document.querySelectorAll('.permission-form-inline input[type="checkbox"]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            // Small delay to show the switch animation
-            setTimeout(() => {
-                this.closest('form').submit();
-            }, 200);
+
+    // Auto-submit on toggle change
+    document.querySelectorAll('.permission-form-inline input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            setTimeout(() => { this.closest('form').submit(); }, 200);
         });
     });
-    
-    // No need for update button clicks since toggles auto-submit
-    
-    // Grant access form validation and submission
-    const grantForm = document.getElementById('permissionForm');
-    if (grantForm) {
-        grantForm.addEventListener('submit', function(e) {
-            console.log('Form submission triggered');
-            const userIdInput = document.getElementById('selectedUserId');
-            console.log('Selected user ID:', userIdInput.value);
-            
-            // Validate that a user is selected
-            if (!userIdInput.value) {
+
+    // Grant form validation
+    if (permissionForm) {
+        permissionForm.addEventListener('submit', function(e) {
+            if (!selectedUserId.value) {
                 e.preventDefault();
                 alert('Please select a user first');
-                return false;
+                return;
             }
-            
-            // Log form data for debugging
-            const formData = new FormData(this);
-            console.log('Form data:', Object.fromEntries(formData));
-            
-            // Disable submit button to prevent double submission
-            const submitBtn = this.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Processing...';
+            const btn = this.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Processing…';
             }
         });
     }
-});
 
-function resetForm() {
-    document.querySelectorAll('.user-option').forEach(opt => {
-        opt.classList.remove('selected');
-        opt.style.display = 'block'; // Show all users when resetting
+    // Cancel / reset form
+    const cancelBtn = document.getElementById('cancelGrantBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            userOptions.forEach(function(opt) {
+                opt.classList.remove('selected', 'd-none');
+            });
+            if (permissionForm) permissionForm.classList.remove('show');
+            if (userSearch) userSearch.value = '';
+            if (selectedUserId) selectedUserId.value = '';
+            if (searchPrompt) searchPrompt.classList.add('d-none');
+        });
+    }
+
+    // Revoke buttons
+    document.querySelectorAll('.revoke-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('revokeUserId').value = this.dataset.userId;
+            document.getElementById('revokeUsername').textContent = this.dataset.username;
+            new bootstrap.Modal(document.getElementById('revokeModal')).show();
+        });
     });
-    document.getElementById('permissionForm').classList.remove('show');
-    document.getElementById('userSearch').value = '';
-    document.getElementById('selectedUserId').value = '';
-
-    // Hide search prompt when resetting
-    const searchPrompt = document.getElementById('searchPrompt');
-    if (searchPrompt) searchPrompt.style.display = 'none';
-}
-
-function revokeAccess(userId, username) {
-    document.getElementById('revokeUserId').value = userId;
-    document.getElementById('revokeUsername').textContent = username;
-    new bootstrap.Modal(document.getElementById('revokeModal')).show();
-}
+});
 </script>
 {% endblock %}

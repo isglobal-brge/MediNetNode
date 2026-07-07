@@ -188,7 +188,6 @@ class TestClientSideSecurityValidation:
         """Test client accepts epsilon in valid range."""
         X_train, y_train, X_val, y_val, config = base_config
 
-        # Test boundary values
         for epsilon in [0.1, 1.0, 3.0, 5.0]:
             config['training']['epsilon_total'] = epsilon
             algorithm = FedDPRandomForestAlgorithm(X_train, y_train, config, X_val, y_val)
@@ -409,7 +408,6 @@ class TestFedDPRandomForestSerialization:
             'max': X_train.max(axis=0).tolist()
         }
 
-        # Create new algorithm and set parameters
         config = {
             'training': {
                 'ml_method': 'dp_random_forest',
@@ -433,13 +431,10 @@ class TestFedDPRandomForestSerialization:
 
         original_predictions = algorithm.predict(X_train)
 
-        # Serialize
         serialized = algorithm._serialize_trees(algorithm.trees)
 
-        # Deserialize
         deserialized_trees = algorithm._deserialize_trees(serialized[0])
 
-        # Reconstruct algorithm with deserialized trees
         algorithm.trees = deserialized_trees
         new_predictions = algorithm.predict(X_train)
 

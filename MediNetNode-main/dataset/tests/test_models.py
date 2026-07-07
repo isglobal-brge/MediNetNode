@@ -18,7 +18,6 @@ class DatasetModelTest(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        # Create test users in default database
         self.admin_user = User.objects.db_manager('default').create_user(
             username='admin_test',
             email='admin@test.com',
@@ -29,15 +28,14 @@ class DatasetModelTest(TestCase):
             email='researcher@test.com',
             password='testpass123'
         )
-        
+
         # Also create users in datasets_db for FK relationships
         self.admin_user_datasets_db = User.objects.db_manager('datasets_db').create_user(
             username='admin_test_datasets',
             email='admin@test_datasets.com',
             password='testpass123'
         )
-        
-        # Create a temporary file for testing
+
         self.temp_file = tempfile.NamedTemporaryFile(
             mode='w', 
             suffix='.csv', 
@@ -50,7 +48,6 @@ class DatasetModelTest(TestCase):
 
     def tearDown(self):
         """Clean up test data."""
-        # Remove temporary file
         if os.path.exists(self.test_file_path):
             os.unlink(self.test_file_path)
 
@@ -69,25 +66,23 @@ class DatasetModelTest(TestCase):
             'columns_count': 3,
             'rows_count': 2,
             'file_size': os.path.getsize(self.test_file_path),
-            'checksum_md5': self._calculate_test_file_checksum()
+            'checksum_sha256': self._calculate_test_file_checksum()
         }
         
         # Use bulk_create to avoid FK validation
         datasets = Dataset.objects.using('datasets_db').bulk_create([Dataset(**dataset_data)])
         dataset = datasets[0]
-        
-        # Verify dataset was created
+
         self.assertIsNotNone(dataset.pk)
         self.assertEqual(dataset.name, 'Test Cardiology Dataset')
         self.assertEqual(dataset.medical_domain, 'cardiology')
         self.assertEqual(dataset.uploaded_by_id, self.admin_user_datasets_db.id)
-        
-        # Verify it exists in the database
+
         retrieved_dataset = Dataset.objects.using('datasets_db').get(pk=dataset.pk)
         self.assertEqual(retrieved_dataset.name, 'Test Cardiology Dataset')
 
-    def test_checksum_md5_calculated_automatically(self):
-        """Test that MD5 checksum is calculated automatically."""
+    def test_checksum_sha256_calculated_automatically(self):
+        """Test that the SHA-256 checksum is calculated automatically on save."""
         dataset = Dataset.objects.using('datasets_db').create(
             name='Test Checksum Dataset',
             description='Test dataset for checksum validation',
@@ -98,20 +93,17 @@ class DatasetModelTest(TestCase):
             data_type='tabular',
             file_format='csv'
         )
-        
-        # Verify checksum was calculated
-        self.assertIsNotNone(dataset.checksum_md5)
-        self.assertEqual(len(dataset.checksum_md5), 32)  # MD5 is 32 characters
-        
-        # Verify checksum is correct
+
+        self.assertIsNotNone(dataset.checksum_sha256)
+        self.assertEqual(len(dataset.checksum_sha256), 64)  # SHA-256 is 64 hex chars
+
         expected_checksum = self._calculate_test_file_checksum()
-        self.assertEqual(dataset.checksum_md5, expected_checksum)
+        self.assertEqual(dataset.checksum_sha256, expected_checksum)
 
     def test_file_size_calculated_automatically(self):
         """Test that file size is calculated automatically."""
         dataset = self._create_test_dataset('File Size')
-        
-        # Verify file size was calculated
+
         expected_size = os.path.getsize(self.test_file_path)
         self.assertEqual(dataset.file_size, expected_size)
 
@@ -164,14 +156,12 @@ class DatasetModelTest(TestCase):
     def test_update_access_count(self):
         """Test access count update functionality."""
         dataset = self._create_test_dataset('Access Count')
-        
+
         initial_count = dataset.access_count
         self.assertEqual(initial_count, 0)
-        
-        # Update access count
+
         dataset.update_access_count()
-        
-        # Verify count increased and last_accessed was set
+
         dataset.refresh_from_db()
         self.assertEqual(dataset.access_count, 1)
         self.assertIsNotNone(dataset.last_accessed)
@@ -181,7 +171,7 @@ class DatasetModelTest(TestCase):
         dataset = self._create_test_dataset('File Size Display')
         
         size_display = dataset.get_file_size_display()
-        self.assertIn('B', size_display)  # Should show bytes for small file
+        self.assertIn('B', size_display)
 
     def _create_test_dataset(self, name_suffix="", **kwargs):
         """Helper method to create a test dataset."""
@@ -198,8 +188,8 @@ class DatasetModelTest(TestCase):
         return Dataset.objects.using('datasets_db').create(**defaults)
 
     def _calculate_test_file_checksum(self):
-        """Helper method to calculate the expected checksum."""
-        hash_md5 = hashlib.md5()
+        """Helper method to calculate the expected SHA-256 checksum."""
+        hash_md5 = hashlib.sha256()
         with open(self.test_file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)
@@ -229,7 +219,7 @@ class DatasetAccessModelTest(TestCase):
             email='other@access.com',
             password='testpass123'
         )
-        
+
         # Also create users in datasets_db for FK relationships
         self.admin_user_datasets = User.objects.db_manager('datasets_db').create_user(
             username='admin_access_datasets',
@@ -246,16 +236,15 @@ class DatasetAccessModelTest(TestCase):
             email='other@datasets.com',
             password='testpass123'
         )
-        
-        # Create temporary file
+
         self.temp_file = tempfile.NamedTemporaryFile(
-            mode='w', 
-            suffix='.csv', 
+            mode='w',
+            suffix='.csv',
             delete=False
         )
         self.temp_file.write("name,age\nJohn,30")
         self.temp_file.close()
-        
+
         # Create test dataset in datasets_db using datasets_db user
         self.dataset = Dataset.objects.using('datasets_db').create(
             name='Test Access Dataset',
@@ -291,14 +280,12 @@ class DatasetAccessModelTest(TestCase):
 
     def test_unique_together_constraint(self):
         """Test unique_together constraint for dataset and user."""
-        # Create first access
         DatasetAccess.objects.using('datasets_db').create(
             dataset_id=self.dataset.id,
             user_id=self.researcher_user_datasets.id,
             assigned_by_id=self.admin_user_datasets.id
         )
-        
-        # Try to create duplicate access - should raise IntegrityError
+
         with self.assertRaises(IntegrityError):
             DatasetAccess.objects.using('datasets_db').create(
                 dataset_id=self.dataset.id,
@@ -313,7 +300,7 @@ class DatasetAccessModelTest(TestCase):
             user_id=self.researcher_user_datasets.id,
             assigned_by_id=self.admin_user_datasets.id
         )
-        
+
         access2 = DatasetAccess.objects.using('datasets_db').create(
             dataset_id=self.dataset.id,
             user_id=self.other_user_datasets.id,  # Different user
@@ -330,21 +317,18 @@ class DatasetAccessModelTest(TestCase):
             user_id=self.researcher_user_datasets.id,
             assigned_by_id=self.admin_user_datasets.id
         )
-        
-        # Default values should be True
+
         self.assertTrue(access.can_train)
         self.assertTrue(access.can_view_metadata)
 
     def test_string_representation(self):
         """Test string representation of DatasetAccess."""
-        # Need to access the related user object for string representation
-        # This test may need the objects to be loaded from their respective databases
         access = DatasetAccess.objects.using('datasets_db').create(
             dataset_id=self.dataset.id,
             user_id=self.researcher_user_datasets.id,
             assigned_by_id=self.admin_user_datasets.id
         )
-        
+
         # For now, just test that str() doesn't crash
         str_repr = str(access)
         self.assertIsInstance(str_repr, str)
@@ -369,16 +353,15 @@ class DatasetMetadataModelTest(TestCase):
             email='admin@metadata_datasets.com',
             password='testpass123'
         )
-        
-        # Create temporary file
+
         self.temp_file = tempfile.NamedTemporaryFile(
-            mode='w', 
-            suffix='.csv', 
+            mode='w',
+            suffix='.csv',
             delete=False
         )
         self.temp_file.write("name,age,score\nJohn,30,85\nJane,25,\nBob,35,92")
         self.temp_file.close()
-        
+
         # Create test dataset using datasets_db user
         self.dataset = Dataset.objects.using('datasets_db').create(
             name='Test Metadata Dataset',
@@ -413,13 +396,11 @@ class DatasetMetadataModelTest(TestCase):
 
     def test_onetoone_relationship(self):
         """Test OneToOne relationship constraint."""
-        # Create first metadata
         metadata1 = DatasetMetadata.objects.using('datasets_db').create(
             dataset_id=self.dataset.id,
             statistical_summary={'test': 'data'}
         )
-        
-        # Try to create another metadata for same dataset
+
         with self.assertRaises(IntegrityError):
             DatasetMetadata.objects.using('datasets_db').create(
                 dataset_id=self.dataset.id,
@@ -451,8 +432,7 @@ class DatasetMetadataModelTest(TestCase):
         )
         
         quality_score = metadata.calculate_quality_score()
-        
-        # Should be > 0 and <= 1.0
+
         self.assertGreater(quality_score, 0)
         self.assertLessEqual(quality_score, 1.0)
 
@@ -462,8 +442,7 @@ class DatasetMetadataModelTest(TestCase):
             dataset_id=self.dataset.id,
             missing_values={'name': 0, 'age': 0, 'score': 1}
         )
-        
-        # Should have auto-calculated completeness and quality score
+
         self.assertIsNotNone(metadata.completeness_percentage)
         self.assertIsNotNone(metadata.quality_score)
         self.assertGreater(metadata.completeness_percentage, 0)
@@ -486,8 +465,7 @@ class DatasetMetadataModelTest(TestCase):
             dataset_id=self.dataset.id,
             statistical_summary={'test': 'data'}
         )
-        
-        # Verify metadata exists with correct dataset ID
+
         retrieved_metadata = DatasetMetadata.objects.using('datasets_db').get(dataset_id=self.dataset.id)
         self.assertEqual(retrieved_metadata.dataset_id, self.dataset.id)
         self.assertEqual(retrieved_metadata.statistical_summary['test'], 'data')
@@ -512,16 +490,13 @@ class DatabaseRoutingTest(TestCase):
         # but we can also test the router directly
         
         router = DatabaseRouter()
-        
-        # Test Dataset model routing
+
         self.assertEqual(router.db_for_read(Dataset), 'datasets_db')
         self.assertEqual(router.db_for_write(Dataset), 'datasets_db')
-        
-        # Test DatasetAccess model routing
+
         self.assertEqual(router.db_for_read(DatasetAccess), 'datasets_db')
         self.assertEqual(router.db_for_write(DatasetAccess), 'datasets_db')
-        
-        # Test DatasetMetadata model routing
+
         self.assertEqual(router.db_for_read(DatasetMetadata), 'datasets_db')
         self.assertEqual(router.db_for_write(DatasetMetadata), 'datasets_db')
 
@@ -529,8 +504,7 @@ class DatabaseRoutingTest(TestCase):
         """Test that User models still use default database."""
         
         router = DatabaseRouter()
-        
-        # Test User model routing (should be default)
+
         self.assertEqual(router.db_for_read(User), 'default')
         self.assertEqual(router.db_for_write(User), 'default')
 
@@ -538,12 +512,11 @@ class DatabaseRoutingTest(TestCase):
         """Test migration routing."""
         
         router = DatabaseRouter()
-        
-        # Test that dataset app migrations go to datasets_db
+
         self.assertTrue(router.allow_migrate('datasets_db', 'dataset'))
         self.assertFalse(router.allow_migrate('default', 'dataset'))
-        
+
         # Test that users app migrations go to both databases in test environment
         # (This is needed for FK relationships to work in tests)
         self.assertTrue(router.allow_migrate('default', 'users'))
-        self.assertTrue(router.allow_migrate('datasets_db', 'users'))  # Changed from False to True
+        self.assertTrue(router.allow_migrate('datasets_db', 'users'))

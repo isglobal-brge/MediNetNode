@@ -18,11 +18,10 @@ class ResearcherWebBlockingTests(TestCase):
 
     def setUp(self):
         """Set up test users and roles."""
-        # Get roles (already created by conftest.py session fixture)
+        # Roles already created by conftest.py session fixture
         self.admin_role = Role.objects.get(name='ADMIN')
         self.researcher_role = Role.objects.get(name='RESEARCHER')
 
-        # Create users
         self.admin_user = User.objects.create_user(
             username='admin_test',
             password='AdminPass123!',
@@ -43,39 +42,34 @@ class ResearcherWebBlockingTests(TestCase):
         """Test that RESEARCHER cannot access admin dashboard."""
         self.client.login(username='researcher_test', password='ResearcherPass123!')
         response = self.client.get(reverse('admin_dashboard'))
-        
-        # Should redirect to researcher info page
+
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-    
+
     def test_researcher_blocked_from_user_list(self):
         """Test that RESEARCHER cannot access user list."""
         self.client.login(username='researcher_test', password='ResearcherPass123!')
         response = self.client.get(reverse('user_list'))
-        
-        # Should redirect to researcher info page
+
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-    
+
     def test_researcher_blocked_from_dataset_views(self):
         """Test that RESEARCHER cannot access any dataset web views."""
         self.client.login(username='researcher_test', password='ResearcherPass123!')
-        
-        # Test dataset list
+
         response = self.client.get(reverse('dataset:list'))
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-        
-        # Test dataset dashboard  
+
         response = self.client.get(reverse('dataset:dashboard'))
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-        
-        # Test dataset upload
+
         response = self.client.get(reverse('dataset:upload'))
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-    
+
     def test_researcher_can_access_researcher_info_page(self):
         """Test that RESEARCHER can access their info page."""
         self.client.login(username='researcher_test', password='ResearcherPass123!')
@@ -113,16 +107,13 @@ class ResearcherWebBlockingTests(TestCase):
     def test_admin_can_access_all_views(self):
         """Control test: verify admin can still access everything."""
         self.client.login(username='admin_test', password='AdminPass123!')
-        
-        # Admin should access admin dashboard
+
         response = self.client.get(reverse('admin_dashboard'))
         self.assertEqual(response.status_code, 200)
-        
-        # Admin should access user list
+
         response = self.client.get(reverse('user_list'))
         self.assertEqual(response.status_code, 200)
-        
-        # Admin should access dataset dashboard
+
         response = self.client.get(reverse('dataset:dashboard'))
         self.assertEqual(response.status_code, 200)
     
@@ -142,18 +133,17 @@ class ResearcherWebBlockingTests(TestCase):
     def test_researcher_cannot_post_to_any_form(self):
         """Test that RESEARCHER cannot POST to any web forms."""
         self.client.login(username='researcher_test', password='ResearcherPass123!')
-        
-        # Try to POST to user creation form
+
         response = self.client.post(reverse('create_user'), {
             'username': 'hacker_attempt',
             'email': 'hack@test.com',
             'password1': 'HackPass123!',
             'password2': 'HackPass123!'
         })
-        
+
         # Should be redirected, not processed
         self.assertEqual(response.status_code, 302)
         self.assertIn('/info/researcher/', response.url)
-        
-        # Verify user was not created
+
+        # Verify the user was not created
         self.assertFalse(User.objects.filter(username='hacker_attempt').exists())

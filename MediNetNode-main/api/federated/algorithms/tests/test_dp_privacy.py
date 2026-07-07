@@ -34,12 +34,10 @@ class TestDifferentialPrivacyGuarantees:
         # Dataset 2: 11 samples class 0, 5 samples class 1 (one record added)
         counts2 = np.array([11, 5])
 
-        # Run mechanism multiple times to estimate probabilities
         n_trials = 10000
         results1 = [permute_and_flip(counts1, epsilon) for _ in range(n_trials)]
         results2 = [permute_and_flip(counts2, epsilon) for _ in range(n_trials)]
 
-        # Estimate probabilities
         prob1_class0 = sum(1 for r in results1 if r == 0) / n_trials
         prob2_class0 = sum(1 for r in results2 if r == 0) / n_trials
 
@@ -74,7 +72,8 @@ class TestDifferentialPrivacyGuarantees:
                 'n_trees_per_client': n_trees,
                 'max_depth': 5,
                 'epsilon_total': epsilon_total,
-                'feature_bounds': feature_bounds
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 
@@ -115,7 +114,6 @@ class TestDifferentialPrivacyGuarantees:
 
         epsilon = 1.0
 
-        # Train tree on dataset 1
         tree1 = SecureDPTree(
             max_depth=5,
             feature_bounds=feature_bounds,
@@ -123,7 +121,6 @@ class TestDifferentialPrivacyGuarantees:
         )
         tree1.fit(X1, y1)
 
-        # Train tree on dataset 2
         tree2 = SecureDPTree(
             max_depth=5,
             feature_bounds=feature_bounds,
@@ -131,7 +128,6 @@ class TestDifferentialPrivacyGuarantees:
         )
         tree2.fit(X2, y2)
 
-        # Test on common samples
         X_test = X2[:20]
         pred1 = tree1.predict(X_test)
         pred2 = tree2.predict(X_test)
@@ -162,6 +158,10 @@ class TestPrivacyBudgetManagement:
                 'max_depth': 5,
                 'epsilon_total': epsilon_total,
                 'feature_bounds': {
+                    'min': X.min(axis=0).tolist(),
+                    'max': X.max(axis=0).tolist()
+                },
+                'global_feature_bounds': {
                     'min': X.min(axis=0).tolist(),
                     'max': X.max(axis=0).tolist()
                 }
@@ -195,6 +195,10 @@ class TestPrivacyBudgetManagement:
                 'max_depth': 5,
                 'epsilon_total': epsilon_per_round,
                 'feature_bounds': {
+                    'min': X.min(axis=0).tolist(),
+                    'max': X.max(axis=0).tolist()
+                },
+                'global_feature_bounds': {
                     'min': X.min(axis=0).tolist(),
                     'max': X.max(axis=0).tolist()
                 }
@@ -235,11 +239,9 @@ class TestPermuteAndFlipMechanism:
         expected_scores = np.exp(epsilon * counts / 2.0)
         expected_probs = expected_scores / expected_scores.sum()
 
-        # Run mechanism many times
         n_trials = 10000
         results = [permute_and_flip(counts, epsilon) for _ in range(n_trials)]
 
-        # Empirical probabilities
         empirical_prob_0 = sum(1 for r in results if r == 0) / n_trials
         empirical_prob_1 = sum(1 for r in results if r == 1) / n_trials
 
@@ -337,12 +339,10 @@ class TestSensitivityBounds:
         )
         tree_modified.fit(X, y_modified)
 
-        # Predictions on test set
         X_test = X[:10]
         pred1 = tree.predict(X_test)
         pred2 = tree_modified.predict(X_test)
 
-        # Measure difference
         diff_count = np.sum(pred1 != pred2)
 
         # With ε-DP, changes should be bounded
@@ -370,7 +370,6 @@ class TestPhase1Phase2Privacy:
             'max': [15, 15, 15]
         }
 
-        # Build trees
         tree1 = SecureDPTree(max_depth=5, feature_bounds=feature_bounds, epsilon=1.0)
         tree1.fit(X1, y1)
 
@@ -435,7 +434,8 @@ class TestPrivacyUtilityTradeoff:
                 'n_trees_per_client': 10,
                 'max_depth': 8,
                 'epsilon_total': 0.1,
-                'feature_bounds': feature_bounds
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 
@@ -445,8 +445,9 @@ class TestPrivacyUtilityTradeoff:
                 'ml_method': 'dp_random_forest',
                 'n_trees_per_client': 10,
                 'max_depth': 8,
-                'epsilon_total': 10.0,
-                'feature_bounds': feature_bounds
+                'epsilon_total': 5.0,
+                'feature_bounds': feature_bounds,
+                'global_feature_bounds': feature_bounds
             }
         }
 

@@ -16,12 +16,10 @@ class SystemAuditLogsViewTests(TestCase):
 
     def setUp(self):
         """Set up test users with different roles."""
-        # Create roles
         self.admin_role = Role.objects.get(name='ADMIN')
         self.auditor_role = Role.objects.get(name='AUDITOR')
         self.researcher_role = Role.objects.get(name='RESEARCHER')
 
-        # Create users
         self.admin_user = CustomUser.objects.create_user(
             username='admin_user',
             email='admin@test.com',
@@ -58,7 +56,6 @@ class SystemAuditLogsViewTests(TestCase):
             last_name='User'
         )
 
-        # Create sample audit logs
         self.create_sample_audit_logs()
         
         self.client = Client()
@@ -67,10 +64,9 @@ class SystemAuditLogsViewTests(TestCase):
     def create_sample_audit_logs(self):
         """Create sample audit logs for testing."""
         base_time = timezone.now() - timedelta(days=5)
-        
-        # Create logs for different users and actions
+
         self.audit_logs = []
-        
+
         # Admin user logs
         self.audit_logs.append(AuditLog.objects.create(
             user=self.admin_user,
@@ -145,7 +141,8 @@ class SystemAuditLogsViewTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 302)  # Redirected to researcher info page
-        
+
+
     def test_no_role_user_cannot_access(self):
         """Test that users without roles cannot access system audit logs."""
         self.client.force_login(self.no_role_user)
@@ -160,19 +157,20 @@ class SystemAuditLogsViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, f'/auth/login/?next={self.url}')
 
-    def test_superuser_can_access(self):
-        """Test that superusers can access regardless of role."""
+    def test_superuser_without_role_is_denied(self):
+        """H9: a Django superuser without a role no longer bypasses RBAC.
+        The audit view requires the AUDITOR role, so a bare superuser is
+        denied (403)."""
         superuser = CustomUser.objects.create_superuser(
             username='superuser',
             email='super@test.com',
             password='SuperPass123!'
         )
-        
+
         self.client.force_login(superuser)
         response = self.client.get(self.url)
-        
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'System Audit Logs')
+
+        self.assertEqual(response.status_code, 403)
 
     def test_all_logs_displayed(self):
         """Test that all audit logs are displayed when no filters applied."""
@@ -180,8 +178,7 @@ class SystemAuditLogsViewTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 200)
-        
-        # Check that all our test logs are in the response
+
         for log in self.audit_logs:
             if log.user:
                 self.assertContains(response, log.user.username)
@@ -192,42 +189,34 @@ class SystemAuditLogsViewTests(TestCase):
     def test_filter_by_user_id(self):
         """Test filtering by user ID (when clicking from user detail page)."""
         self.client.force_login(self.admin_user)
-        
-        # Filter by admin user ID
+
         response = self.client.get(self.url, {'user': str(self.admin_user.id)})
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should contain admin user logs
+
         self.assertContains(response, 'USER_CREATE')
         self.assertContains(response, 'USER_DELETE')
-        
-        # Check that only admin user logs are displayed
+
         page_obj = response.context['page_obj']
         displayed_logs = page_obj.object_list
-        
-        # All displayed logs should belong to admin user
+
         for log in displayed_logs:
             self.assertEqual(log.user, self.admin_user)
 
     def test_filter_by_username(self):
         """Test filtering by username (text search)."""
         self.client.force_login(self.admin_user)
-        
-        # Filter by username substring
+
         response = self.client.get(self.url, {'user': 'auditor'})
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should contain auditor user logs
+
         self.assertContains(response, 'USER_VIEW')
         self.assertContains(response, self.auditor_user.username)
-        
-        # Check that only auditor user logs are displayed
+
         page_obj = response.context['page_obj']
         displayed_logs = page_obj.object_list
-        
-        # All displayed logs should belong to users with 'auditor' in username
+
         for log in displayed_logs:
             if log.user:
                 self.assertIn('auditor', log.user.username.lower())
@@ -235,39 +224,31 @@ class SystemAuditLogsViewTests(TestCase):
     def test_filter_by_action(self):
         """Test filtering by action type."""
         self.client.force_login(self.admin_user)
-        
-        # Filter by USER_CREATE action
+
         response = self.client.get(self.url, {'action': 'USER_CREATE'})
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should contain USER_CREATE logs in the table rows
+
         self.assertContains(response, 'USER_CREATE')
-        
-        # Check that the logs displayed are filtered correctly
+
         page_obj = response.context['page_obj']
         displayed_actions = [log.action for log in page_obj.object_list]
-        
-        # All displayed logs should be USER_CREATE
+
         self.assertTrue(all(action == 'USER_CREATE' for action in displayed_actions))
-        
-        # Should not contain other actions in the actual log entries
+
         self.assertNotIn('USER_DELETE', displayed_actions)
         self.assertNotIn('LOGIN_FAIL', displayed_actions)
 
     def test_filter_by_success_status(self):
         """Test filtering by success/failure status."""
         self.client.force_login(self.admin_user)
-        
-        # Filter by successful actions
+
         response = self.client.get(self.url, {'success': 'true'})
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should show success indicators
+
         self.assertContains(response, 'Success')
-        
-        # Test failed actions
+
         response = self.client.get(self.url, {'success': 'false'})
         
         self.assertEqual(response.status_code, 200)
@@ -277,18 +258,17 @@ class SystemAuditLogsViewTests(TestCase):
     def test_filter_by_date_range(self):
         """Test filtering by date range."""
         self.client.force_login(self.admin_user)
-        
-        # Get tomorrow's date (no logs should exist)
+
+        # Tomorrow's date — no logs should exist for it
         tomorrow = (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-        
+
         response = self.client.get(self.url, {
             'date_from': tomorrow,
             'date_to': tomorrow
         })
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should show no logs in the table
+
         page_obj = response.context['page_obj']
         self.assertEqual(len(page_obj.object_list), 0)
 
@@ -303,15 +283,13 @@ class SystemAuditLogsViewTests(TestCase):
         })
         
         self.assertEqual(response.status_code, 200)
-        
-        # Should contain only matching logs
+
         self.assertContains(response, 'USER_CREATE')
         self.assertContains(response, self.admin_user.username)
-        
-        # Check that all displayed logs match the filters
+
         page_obj = response.context['page_obj']
         displayed_logs = page_obj.object_list
-        
+
         for log in displayed_logs:
             self.assertEqual(log.user, self.admin_user)
             self.assertEqual(log.action, 'USER_CREATE')
@@ -325,17 +303,15 @@ class SystemAuditLogsViewTests(TestCase):
             'date_from': 'invalid-date',
             'date_to': 'also-invalid'
         })
-        
-        # Should not crash, should show all logs (invalid dates ignored)
+
+        # Should not crash; invalid dates are ignored so all logs remain
         self.assertEqual(response.status_code, 200)
-        
-        # Check that we still have logs (since invalid dates are ignored)
+
         page_obj = response.context['page_obj']
         self.assertGreater(len(page_obj.object_list), 0)
 
     def test_pagination_works(self):
         """Test that pagination works correctly."""
-        # Create many audit logs to test pagination
         for i in range(150):
             AuditLog.objects.create(
                 user=self.admin_user,
@@ -349,11 +325,10 @@ class SystemAuditLogsViewTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 200)
-        
-        # Check pagination context
+
         self.assertTrue('page_obj' in response.context)
         page_obj = response.context['page_obj']
-        
+
         # Should be paginated (100 per page by default)
         self.assertTrue(page_obj.has_next())
         self.assertEqual(len(page_obj.object_list), 100)
@@ -364,8 +339,7 @@ class SystemAuditLogsViewTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 200)
-        
-        # Check required context variables
+
         context = response.context
         self.assertIn('page_obj', context)
         self.assertIn('available_actions', context)
@@ -381,8 +355,7 @@ class SystemAuditLogsViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         
         available_actions = response.context['available_actions']
-        
-        # Should contain actions from our test data
+
         expected_actions = {'USER_CREATE', 'USER_DELETE', 'USER_VIEW', 'LOGIN_FAIL', 'SYSTEM_STARTUP'}
         self.assertTrue(expected_actions.issubset(set(available_actions)))
 
@@ -393,28 +366,24 @@ class SystemAuditLogsViewTests(TestCase):
         response = self.client.get(self.url, {'user': 'admin'})
         
         self.assertEqual(response.status_code, 200)
-        
-        # Should show filtered status (template shows "filtered")
+
         self.assertContains(response, 'filtered')
-        self.assertContains(response, 'Clear Filters')  # Button should be present
+        self.assertContains(response, 'Clear Filters')
 
     def test_clear_filters_works(self):
         """Test that clear filters functionality works."""
         self.client.force_login(self.admin_user)
-        
-        # First apply some filters
+
         response = self.client.get(self.url, {'user': 'admin', 'action': 'USER_CREATE'})
         self.assertEqual(response.status_code, 200)
-        
-        # Then clear them by visiting the base URL
+
+        # Clear filters by visiting the base URL
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        
-        # Should show all logs again
+
         page_obj = response.context['page_obj']
         all_actions = [log.action for log in page_obj.object_list]
-        
-        # Should contain various actions from our test data
+
         self.assertIn('USER_CREATE', all_actions)
         self.assertIn('USER_VIEW', all_actions)
         self.assertIn('LOGIN_FAIL', all_actions)
@@ -423,17 +392,15 @@ class SystemAuditLogsViewTests(TestCase):
         """Test that clicking from user detail page works correctly."""
         # This simulates the link from user_detail.html template
         self.client.force_login(self.admin_user)
-        
+
         # URL with user ID as parameter (simulating the template link)
         user_logs_url = f"{self.url}?user={self.admin_user.id}"
         response = self.client.get(user_logs_url)
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Should show only logs for that specific user
+
         logs_for_user = AuditLog.objects.filter(user=self.admin_user).count()
         self.assertGreater(logs_for_user, 0)
-        
-        # Check that the filtered count matches
+
         displayed_count = response.context['page_obj'].paginator.count
         self.assertEqual(displayed_count, logs_for_user)

@@ -17,7 +17,6 @@ from .base import FederatedMLAlgorithm
 from .fedsvm import FedSVMAlgorithm
 from .feddprf import FedDPRandomForestAlgorithm
 
-# [INIT] ALGORITHM REGISTRY: Maps algorithm names to implementation classes
 ALGORITHM_REGISTRY: Dict[str, Type[FederatedMLAlgorithm]] = {
     'fedsvm': FedSVMAlgorithm,
     'fed_svm': FedSVMAlgorithm,

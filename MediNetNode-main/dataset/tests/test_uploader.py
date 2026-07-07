@@ -25,53 +25,47 @@ class SecureDatasetUploaderTest(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        # Create test user
         self.user = User.objects.db_manager('default').create_user(
             username='test_uploader',
             email='uploader@test.com',
             password='testpass123'
         )
-        
+
         # Also create user in datasets_db for FK relationships
         self.user_datasets_db = User.objects.db_manager('datasets_db').create_user(
             username='test_uploader_datasets',
             email='uploader@datasets.com',
             password='testpass123'
         )
-        
-        # Create uploader instance
+
         self.uploader = SecureDatasetUploader(self.user)
-        
+
     def test_csv_file_validation_success(self):
         """Test successful CSV file validation."""
-        # Create temporary CSV file
         csv_content = "name,age,condition\nJohn,30,healthy\nJane,25,sick"
         temp_file = self._create_temp_file(csv_content, '.csv')
-        
+
         try:
-            # Should not raise exception
             self.uploader._validate_file(temp_file.name)
         finally:
             os.unlink(temp_file.name)
-    
+
     def test_empty_file_validation_fails(self):
         """Test that empty files are rejected."""
-        # Create empty file
         temp_file = self._create_temp_file('', '.csv')
-        
+
         try:
             with self.assertRaises(SecurityValidationError) as context:
                 self.uploader._validate_file(temp_file.name)
-            
+
             self.assertIn("File is empty", str(context.exception))
         finally:
             os.unlink(temp_file.name)
-    
+
     def test_invalid_extension_fails(self):
         """Test that invalid file extensions are rejected."""
-        # Create file with invalid extension
         temp_file = self._create_temp_file('test content', '.txt')
-        
+
         try:
             with self.assertRaises(SecurityValidationError) as context:
                 self.uploader._validate_file(temp_file.name)
@@ -96,15 +90,13 @@ class SecureDatasetUploaderTest(TestCase):
                 'column_info': {'age': {'type': 'numeric', 'unique_count': 6}}
             }):
                 metadata = self.uploader._extract_csv_metadata(temp_file.name)
-                
-                # Verify basic structure
+
                 self.assertEqual(metadata['file_type'], 'csv')
                 self.assertEqual(metadata['rows'], 6)
                 self.assertEqual(metadata['columns'], 3)
                 self.assertTrue(metadata['nulls_verified_zero'])
                 self.assertTrue(metadata['k_anonymity_compliant'])
-                
-                # Verify column info
+
                 self.assertIn('column_info', metadata)
                 self.assertIn('age', metadata['column_info'])
                 self.assertEqual(metadata['column_info']['age']['type'], 'numeric')
@@ -192,39 +184,33 @@ class SecureDatasetUploaderTest(TestCase):
             os.unlink(temp_file.name)
     
     def test_checksum_calculation(self):
-        """Test MD5 and SHA256 checksum calculation."""
+        """Test SHA-256 checksum calculation."""
         content = "test content for checksum"
         temp_file = self._create_temp_file(content, '.csv')
-        
+
         try:
-            md5_hash, sha256_hash = self.uploader._calculate_checksums(temp_file.name)
-            
-            # Verify checksums are correct length
-            self.assertEqual(len(md5_hash), 32)  # MD5 is 32 hex chars
+            sha256_hash = self.uploader._calculate_checksum(temp_file.name)
+
             self.assertEqual(len(sha256_hash), 64)  # SHA256 is 64 hex chars
-            
-            # Verify checksums are correct
-            expected_md5 = hashlib.md5(content.encode()).hexdigest()
+
             expected_sha256 = hashlib.sha256(content.encode()).hexdigest()
-            
-            self.assertEqual(md5_hash, expected_md5)
             self.assertEqual(sha256_hash, expected_sha256)
-            
+
         finally:
             os.unlink(temp_file.name)
-    
+
     def test_filename_sanitization(self):
         """Test filename sanitization."""
         dangerous_filename = "../../etc/passwd<script>alert('xss')</script>.csv"
         safe_filename = self.uploader._sanitize_filename(dangerous_filename)
-        
+
         # Should not contain dangerous characters
         self.assertNotIn('..', safe_filename)
         self.assertNotIn('<', safe_filename)
         self.assertNotIn('>', safe_filename)
         self.assertNotIn('/', safe_filename)
         self.assertNotIn('\\', safe_filename)
-        
+
         # Should still have .csv extension
         self.assertTrue(safe_filename.endswith('.csv'))
     
@@ -264,12 +250,10 @@ class SecureDatasetUploaderTest(TestCase):
             progress_updates.append((status, message))
         
         uploader = SecureDatasetUploader(self.user, test_callback)
-        
-        # Trigger some progress updates
+
         uploader._update_progress("validating", "Validating file...")
         uploader._update_progress("completed", "Upload completed!")
-        
-        # Verify callbacks were called
+
         self.assertEqual(len(progress_updates), 2)
         self.assertEqual(progress_updates[0], ("validating", "Validating file..."))
         self.assertEqual(progress_updates[1], ("completed", "Upload completed!"))
@@ -307,7 +291,6 @@ class DatasetUploadIntegrationTest(TransactionTestCase):
     
     def test_successful_csv_upload(self):
         """Test complete CSV upload process."""
-        # Create valid CSV file
         csv_content = "age,score,category,treatment\n25,85,A,med1\n30,90,B,med2\n35,88,A,med1\n28,92,B,med2\n32,87,A,med3\n40,89,C,med1"
         temp_file = tempfile.NamedTemporaryFile(
             mode='w',
@@ -341,33 +324,27 @@ class DatasetUploadIntegrationTest(TransactionTestCase):
                     data_type='tabular'
                 )
                 
-                # Verify dataset was created
                 self.assertIsNotNone(dataset.id)
                 self.assertEqual(dataset.name, 'Test Medical Dataset')
                 self.assertEqual(dataset.medical_domain, 'general')
                 self.assertEqual(dataset.uploaded_by_id, self.user_datasets_db.id)
                 self.assertTrue(dataset.is_active)
-                
-                # Verify checksum was calculated
-                self.assertIsNotNone(dataset.checksum_md5)
-                self.assertEqual(len(dataset.checksum_md5), 32)
-                
-                # Verify upload info
+
+                self.assertIsNotNone(dataset.checksum_sha256)
+                self.assertEqual(len(dataset.checksum_sha256), 64)
+
                 self.assertIn('phi_columns_removed', upload_info)
                 self.assertIn('original_columns', upload_info)
                 self.assertIn('final_columns', upload_info)
-                
-                # Verify metadata was created
+
                 metadata = DatasetMetadata.objects.using('datasets_db').get(dataset=dataset)
                 self.assertIsNotNone(metadata)
                 self.assertEqual(metadata.completeness_percentage, 100.0)
                 self.assertEqual(metadata.quality_score, 1.0)
-                
-                # Verify file was stored
+
                 self.assertTrue(os.path.exists(dataset.file_path))
-            
+
         finally:
-            # Cleanup
             try:
                 os.unlink(temp_file.name)
             except FileNotFoundError:

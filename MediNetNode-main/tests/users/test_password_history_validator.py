@@ -27,11 +27,10 @@ class PasswordHistoryValidatorTests(TestCase):
     
     def test_password_history_validator_prevents_reuse(self):
         """Test: Password history validator prevents reuse of recent passwords"""
-        # Change password to create history
         self.user.set_password('SecondPass123!')
         self.user.save()
-        
-        # Try to reuse initial password - should fail
+
+        # Reusing the initial password should fail
         with self.assertRaises(ValidationError) as context:
             self.validator.validate('InitialPass123!', self.user)
         
@@ -39,7 +38,6 @@ class PasswordHistoryValidatorTests(TestCase):
     
     def test_password_history_validator_allows_new_password(self):
         """Test: Password history validator allows completely new passwords"""
-        # This should not raise an exception
         try:
             self.validator.validate('CompletelyNewPass123!', self.user)
         except ValidationError:
@@ -47,13 +45,12 @@ class PasswordHistoryValidatorTests(TestCase):
     
     def test_password_history_validator_skips_users_without_history(self):
         """Test: Password history validator skips users without history support"""
-        # Create a mock user object without check_password_history method
+        # Mock user lacking check_password_history method
         class MockUser:
             pass
-        
+
         mock_user = MockUser()
-        
-        # Should not raise an exception for users without history support
+
         try:
             self.validator.validate('AnyPassword123!', mock_user)
         except ValidationError:
@@ -61,7 +58,6 @@ class PasswordHistoryValidatorTests(TestCase):
     
     def test_password_history_validator_with_none_user(self):
         """Test: Password history validator handles None user gracefully"""
-        # Should not raise an exception for None user
         try:
             self.validator.validate('AnyPassword123!', None)
         except ValidationError:
@@ -80,12 +76,11 @@ class PasswordHistoryValidatorTests(TestCase):
         for pwd in passwords:
             self.user.set_password(pwd)
             self.user.save()
-        
-        # Try to reuse an old password through Django's validation system
+
+        # Reuse an old password through Django's validation system
         with self.assertRaises(ValidationError) as context:
             validate_password('FirstPass123!', self.user)
-        
-        # Should contain our custom error message
+
         error_messages = [str(error) for error in context.exception.error_list]
         self.assertTrue(any('últimas 5 contraseñas' in msg for msg in error_messages))
     

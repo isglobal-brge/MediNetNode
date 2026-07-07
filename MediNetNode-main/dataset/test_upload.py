@@ -11,11 +11,9 @@ from pathlib import Path
 project_dir = Path(__file__).parent
 sys.path.insert(0, str(project_dir))
 
-# Set up Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings')
 django.setup()
 
-# Now import Django models
 from django.contrib.auth import get_user_model
 from dataset.uploader import SecureDatasetUploader
 from dataset.models import Dataset
@@ -27,7 +25,6 @@ def test_dataset_upload():
     print("Testing dataset upload functionality...")
     
     try:
-        # Get or create a test user
         test_user, created = User.objects.get_or_create(
             username='testuser',
             defaults={
@@ -40,8 +37,7 @@ def test_dataset_upload():
             test_user.save()
         
         print(f"Using test user: {test_user.username}")
-        
-        # Path to the CSV file
+
         csv_path = "C:\\Users\\fraud\\Desktop\\Projects\\MediNetClient\\test_heart_failure.csv"
         
         if not os.path.exists(csv_path):
@@ -49,10 +45,9 @@ def test_dataset_upload():
             return False
             
         print(f"[OK] CSV file found: {csv_path}")
-        
-        # Create uploader
+
         uploader = SecureDatasetUploader(test_user)
-        
+
         # Test upload with timestamp to ensure unique name
         import datetime
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -73,7 +68,6 @@ def test_dataset_upload():
         print(f"   Rows: {dataset.rows_count}")
         print(f"   Columns: {dataset.columns_count}")
         
-        # Check if dataset is in database
         saved_dataset = Dataset.objects.using('datasets_db').get(id=dataset.id)
         print(f"[SUCCESS] Dataset verified in database: {saved_dataset.name}")
         

@@ -7,19 +7,20 @@ from typing import Tuple, Optional, Union
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
 from datasets.utils.logging import disable_progress_bar
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 disable_progress_bar()
 
-def load_data_from_django(dataset_id: int) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def load_data_from_django(dataset_id: int, use_experiment: bool = False) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """
     Load data from Django dataset system.
-    
+
     Args:
         dataset_id: ID of dataset in Django system
-        
+        use_experiment: If True, use experiment_file_path instead of file_path
+
     Returns:
         Tuple of (data_df, target_column) or (None, None) if error
     """
@@ -28,14 +29,14 @@ def load_data_from_django(dataset_id: int) -> Tuple[Optional[pd.DataFrame], Opti
         import os
         import sys
         import django
-        
+
         # Setup Django environment (safe initialization)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         if project_root not in sys.path:
             sys.path.append(project_root)
-        
+
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings')
-        
+
         # Safe Django setup - avoid multiple initialization
         try:
             if not django.apps.apps.ready:
@@ -43,36 +44,40 @@ def load_data_from_django(dataset_id: int) -> Tuple[Optional[pd.DataFrame], Opti
         except RuntimeError as e:
             if "Django is already configured" not in str(e):
                 raise
-            
+
         from dataset.models import Dataset
-        
+
         print(f"[SEARCH] Fetching dataset {dataset_id} from Django...")
-        
-        # Get dataset from Django
+
         try:
             dataset = Dataset.objects.using('datasets_db').get(id=dataset_id)
             print(f"[OK] Dataset found: {dataset.name}")
         except Dataset.DoesNotExist:
             print(f"[ERROR] Dataset {dataset_id} not found in Django system")
             return None, None
-            
-        # Get file path
-        if not dataset.file_path or not os.path.exists(dataset.file_path):
-            print(f"[ERROR] Dataset file not found: {dataset.file_path}")
+
+        # Resolve which file path to use
+        file_path = dataset.file_path
+        if use_experiment and dataset.experiment_file_path and os.path.exists(dataset.experiment_file_path):
+            file_path = dataset.experiment_file_path
+            print(f"[EXP] Using experimental subset: {file_path}")
+        elif use_experiment:
+            print(f"[EXP] use_experiment=True but no experiment file available — falling back to production file")
+
+        if not file_path or not os.path.exists(file_path):
+            print(f"[ERROR] Dataset file not found: {file_path}")
             return None, None
-            
-        print(f"📂 Loading data from: {dataset.file_path}")
-        
-        # Load CSV data
-        data_df = pd.read_csv(dataset.file_path)
+
+        print(f"Loading data from: {file_path}")
+
+        data_df = pd.read_csv(file_path)
         
         if data_df.empty:
-            print(f"[ERROR] Dataset file is empty: {dataset.file_path}")
+            print(f"[ERROR] Dataset file is empty: {file_path}")
             return None, None
             
         print(f"[OK] Data loaded: {len(data_df)} rows, {len(data_df.columns)} columns")
         
-        # Get target column from dataset metadata
         target_column = None
         if dataset.target_column:
             try:
@@ -123,27 +128,43 @@ class SQLiteDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.X[idx], self.y[idx]
 
-def prepare_dataset(data_df: pd.DataFrame, target_column: str) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_dataset(
+    data_df: pd.DataFrame,
+    target_column: str,
+    scaler: Optional[StandardScaler] = None,
+    label_encoder: Optional[LabelEncoder] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Prepare dataset from a pandas DataFrame
-    
+    Prepare dataset from a pandas DataFrame.
+
     Args:
-        data_df: DataFrame with all data
-        target_column: Name of the target column
-        
+        data_df: DataFrame with all data.
+        target_column: Name of the target column.
+        scaler: A *fitted* StandardScaler to apply to features.  When provided
+            the scaler is applied with ``transform()`` (not ``fit_transform``).
+            Pass ``None`` to skip normalisation (not recommended for clinical data).
+        label_encoder: A *fitted* LabelEncoder for string targets.  When provided
+            ``transform()`` is used instead of ``fit_transform`` so that the same
+            mapping is applied consistently across train and val splits.
+
     Returns:
         Tuple of (features_tensor, targets_tensor)
     """
-    X_tensor = np.vstack(data_df.drop(columns=[target_column]).values).astype(np.float32)
-    X_tensor = torch.from_numpy(X_tensor)
+    X_raw = np.vstack(data_df.drop(columns=[target_column]).values).astype(np.float32)
+
+    if scaler is not None:
+        X_raw = scaler.transform(X_raw).astype(np.float32)
+
+    X_tensor = torch.from_numpy(X_raw)
 
     if pd.api.types.is_string_dtype(data_df[target_column]):
-        # Codificacio per strings
-        le = LabelEncoder()
-        y_encoded = le.fit_transform(data_df[target_column].values)
+        if label_encoder is not None:
+            y_encoded = label_encoder.transform(data_df[target_column].values)
+        else:
+            label_encoder = LabelEncoder()
+            y_encoded = label_encoder.fit_transform(data_df[target_column].values)
         y_tensor = torch.from_numpy(y_encoded).long()
     else:
-        # Conversio directa per números
         y_tensor = torch.from_numpy(data_df[target_column].values.astype(np.float32))
 
     return X_tensor, y_tensor
@@ -152,7 +173,8 @@ def prepare_dataset(data_df: pd.DataFrame, target_column: str) -> Tuple[torch.Te
 def load_ml_data(
     dataset_id: int,
     val_size: float = 0.2,
-    random_state: int = 42
+    random_state: int = 42,
+    use_experiment: bool = False,
 ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]:
     """
     Load data as NumPy arrays for ML algorithms (SVM, Random Forest, etc.).
@@ -180,7 +202,6 @@ def load_ml_data(
         >>> print(X_val.shape, y_val.shape)
         (200, 30) (200,)
     """
-    # Input validation
     if not isinstance(dataset_id, int) or dataset_id <= 0:
         raise ValueError(f"dataset_id must be positive integer, got: {dataset_id}")
     if not 0.0 <= val_size <= 1.0:
@@ -194,8 +215,7 @@ def load_ml_data(
     print(f"   Random state: {random_state}")
 
     try:
-        # Load dataset from Django system
-        data_df, target_column = load_data_from_django(dataset_id)
+        data_df, target_column = load_data_from_django(dataset_id, use_experiment=use_experiment)
 
         if data_df is None or target_column is None:
             error_msg = f"Failed to load dataset {dataset_id} from Django system"
@@ -207,8 +227,7 @@ def load_ml_data(
         print(f"   Columns: {len(data_df.columns)}")
         print(f"   Target column: {target_column}")
 
-        # Split data into train and validation sets
-        print(f"\n🔀 Splitting data...")
+        print(f"\nSplitting data...")
         train_df, val_df = train_test_split(
             data_df,
             test_size=val_size,
@@ -222,11 +241,13 @@ def load_ml_data(
         # Convert to NumPy arrays (NO PyTorch tensors for ML)
         print(f"\n[CONFIG] Converting to NumPy arrays...")
 
-        # Training data
-        X_train = train_df.drop(columns=[target_column]).values.astype(np.float64)
+        feature_cols = [c for c in data_df.columns if c != target_column]
+
+        X_train = train_df[feature_cols].values.astype(np.float64)
         y_train = train_df[target_column].values
 
         # Handle categorical target (encode to integers)
+        le: Optional[LabelEncoder] = None
         if pd.api.types.is_string_dtype(y_train) or pd.api.types.is_categorical_dtype(y_train):
             le = LabelEncoder()
             y_train = le.fit_transform(y_train)
@@ -234,13 +255,17 @@ def load_ml_data(
         else:
             y_train = y_train.astype(np.int64)
 
-        # Validation data
-        X_val = val_df.drop(columns=[target_column]).values.astype(np.float64)
+        # Fit StandardScaler on training features, apply to val.
+        ml_scaler = StandardScaler()
+        X_train = ml_scaler.fit_transform(X_train)
+        print(f"   StandardScaler fitted on {len(train_df)} training samples")
+
+        X_val = val_df[feature_cols].values.astype(np.float64)
+        X_val = ml_scaler.transform(X_val)
         y_val = val_df[target_column].values
 
         if pd.api.types.is_string_dtype(y_val) or pd.api.types.is_categorical_dtype(y_val):
-            # Use same encoder as training
-            if 'le' in locals():
+            if le is not None:
                 y_val = le.transform(y_val)
             else:
                 le = LabelEncoder()
@@ -276,7 +301,8 @@ def create_train_val_loaders(
     dataset_id: int,
     val_size: float = 0.2,
     batch_size: int = 32,
-    random_state: int = 42
+    random_state: int = 42,
+    use_experiment: bool = False,
 ) -> Tuple[Optional[DataLoader], Optional[DataLoader]]:
     """
     Create train and validation dataloaders from Django dataset system.
@@ -294,49 +320,68 @@ def create_train_val_loaders(
         ValueError: If parameters are invalid
         RuntimeError: If dataset loading fails
     """
-    # Input validation
     if not isinstance(dataset_id, int) or dataset_id <= 0:
         raise ValueError(f"dataset_id must be positive integer, got: {dataset_id}")
     if not 0.0 <= val_size <= 1.0:
         raise ValueError(f"val_size must be between 0.0 and 1.0, got: {val_size}")
     if not isinstance(batch_size, int) or batch_size <= 0:
         raise ValueError(f"batch_size must be positive integer, got: {batch_size}")
-    
+
     print(f"[SEARCH] Loading dataset {dataset_id} from Django system...")
-    
+
     try:
-        # Load dataset from Django system
-        data_df, target_column = load_data_from_django(dataset_id)
-        
+        data_df, target_column = load_data_from_django(dataset_id, use_experiment=use_experiment)
+
         if data_df is None or target_column is None:
             error_msg = f"Failed to load dataset {dataset_id} from Django system"
             print(f"[ERROR] {error_msg}")
             raise RuntimeError(error_msg)
-            
+
         print(f"[OK] Dataset loaded: {len(data_df)} rows, target column: {target_column}")
         
-        # Split data into train and validation sets
-        print(f"🔀 Splitting data: {1-val_size:.1%} train, {val_size:.1%} validation...")
-        train_df, val_df = train_test_split(data_df, test_size=val_size, random_state=random_state)
-        
+        # Split data into train and validation sets — use stratify to preserve
+        # class balance across splits (critical for imbalanced clinical datasets).
+        print(f"Splitting data: {1-val_size:.1%} train, {val_size:.1%} validation...")
+        try:
+            stratify_col = data_df[target_column] if data_df[target_column].nunique() > 1 else None
+            train_df, val_df = train_test_split(
+                data_df, test_size=val_size, random_state=random_state, stratify=stratify_col
+            )
+        except ValueError:
+            # Stratification can fail for very small datasets — fall back gracefully
+            print("[WARNING] Stratified split failed — falling back to random split")
+            train_df, val_df = train_test_split(data_df, test_size=val_size, random_state=random_state)
+
         print(f"[INFO] Train set: {len(train_df)} samples, Val set: {len(val_df)} samples")
-        print(f"Type of train_df: {type(train_df)}")
-        # Prepare tensors
+
+        # Fit StandardScaler on train features only, then apply to val.
+        # Clinical tabular data (age, lab values, vitals) has wildly different
+        # scales — without normalisation gradient updates are dominated by the
+        # largest-magnitude features regardless of their importance.
+        feature_cols = [c for c in data_df.columns if c != target_column]
+        scaler = StandardScaler()
+        scaler.fit(train_df[feature_cols].values.astype(np.float32))
+        print(f"[NORM] StandardScaler fitted on {len(train_df)} training samples ({len(feature_cols)} features)")
+
+        # Build a shared LabelEncoder for string targets so val uses the same mapping
+        label_encoder: Optional[LabelEncoder] = None
+        if pd.api.types.is_string_dtype(data_df[target_column]):
+            label_encoder = LabelEncoder()
+            label_encoder.fit(data_df[target_column].values)
+
         print("[CONFIG] Converting to PyTorch tensors...")
-        X_train, y_train = prepare_dataset(train_df, target_column)
-        X_val, y_val = prepare_dataset(val_df, target_column)
-        
+        X_train, y_train = prepare_dataset(train_df, target_column, scaler=scaler, label_encoder=label_encoder)
+        X_val, y_val = prepare_dataset(val_df, target_column, scaler=scaler, label_encoder=label_encoder)
+
         print(f"[INIT] Tensor shapes - Train: X{X_train.shape}, y{y_train.shape} | Val: X{X_val.shape}, y{y_val.shape}")
-        
-        # Create datasets
+
         train_dataset = SQLiteDataset(X_train, y_train)
         val_dataset = SQLiteDataset(X_val, y_val)
-        
-        # Create dataloaders
+
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        print(f"🚀 DataLoaders created successfully with batch_size={batch_size}")
+        print(f"DataLoaders created successfully with batch_size={batch_size}")
         return train_loader, val_loader
         
     except (ValueError, RuntimeError):

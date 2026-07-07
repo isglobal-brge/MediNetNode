@@ -60,10 +60,8 @@ class InitialSetupSecurityTests(TestCase):
         """
         CRITICAL SECURITY: Setup must be permanently blocked after creating user
         """
-        # Create a user
         User.objects.create_user(username='existing', password='SecurePass123!')
 
-        # Try to access setup
         response = self.client.get(self.setup_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data['code'], 'SETUP_ALREADY_COMPLETED')
@@ -94,7 +92,6 @@ class InitialSetupSecurityTests(TestCase):
         """
         SECURITY: Blocked if SystemConfiguration exists (even without users)
         """
-        # Create system configuration without user
         SystemConfiguration.objects.create(
             center_id='existing',
             center_display_name='Existing Center'
@@ -193,7 +190,6 @@ class InitialSetupSecurityTests(TestCase):
         ]
 
         for strong_pass in strong_passwords:
-            # Clean up before each test
             User.objects.all().delete()
             SystemConfiguration.objects.all().delete()
 
@@ -255,7 +251,6 @@ class InitialSetupSecurityTests(TestCase):
         ]
 
         for i, valid_id in enumerate(valid_ids):
-            # Clean previous users and config
             User.objects.all().delete()
             SystemConfiguration.objects.all().delete()
 
@@ -403,7 +398,6 @@ class InitialSetupSecurityTests(TestCase):
         response = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Verify user created
         self.assertTrue(User.objects.filter(username='admin_test').exists())
         user = User.objects.get(username='admin_test')
         self.assertTrue(user.is_superuser)
@@ -416,12 +410,10 @@ class InitialSetupSecurityTests(TestCase):
         response = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Verify user has ADMIN role
         user = User.objects.get(username='admin_test')
         self.assertIsNotNone(user.role)
         self.assertEqual(user.role.name, 'ADMIN')
 
-        # Verify role has all permissions
         self.assertTrue(user.role.permissions.get('user.create'))
         self.assertTrue(user.role.permissions.get('user.view'))
         self.assertTrue(user.role.permissions.get('system.admin'))
@@ -433,7 +425,6 @@ class InitialSetupSecurityTests(TestCase):
         response = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Verify configuration created
         self.assertTrue(SystemConfiguration.objects.exists())
         config = SystemConfiguration.objects.first()
         self.assertEqual(config.center_id, 'test-center')
@@ -446,7 +437,6 @@ class InitialSetupSecurityTests(TestCase):
         response = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Verify no credentials_file in response
         self.assertNotIn('credentials_file', response.data)
 
         # Verify password is NOT in response
@@ -459,16 +449,15 @@ class InitialSetupSecurityTests(TestCase):
         response = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Retrieve user from database
         user = User.objects.get(username='admin_test')
 
-        # Verify password is hashed (not plaintext)
         self.assertNotEqual(user.password, self.valid_payload['password'])
 
-        # Verify password hash format (Django uses pbkdf2_sha256 by default)
-        self.assertTrue(user.password.startswith('pbkdf2_sha256$'))
+        # Verify password is stored in Django's hashed format (algorithm-agnostic:
+        # the active hasher differs between prod and the fast test hasher).
+        self.assertIn('$', user.password)
+        self.assertTrue(user.has_usable_password())
 
-        # Verify password can be validated
         self.assertTrue(user.check_password(self.valid_payload['password']))
 
     # 5. STATE AND FLOW TESTS
@@ -477,18 +466,15 @@ class InitialSetupSecurityTests(TestCase):
         """
         SECURITY: Setup cannot be executed twice
         """
-        # First execution
         response1 = self.client.post(self.setup_url, self.valid_payload)
         self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
 
-        # Second execution should fail
         payload2 = self.valid_payload.copy()
         payload2['username'] = 'another_admin'
 
         response2 = self.client.post(self.setup_url, payload2)
         self.assertEqual(response2.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Only one user should exist
         self.assertEqual(User.objects.count(), 1)
 
     def test_get_endpoint_provides_port(self):
@@ -582,13 +568,11 @@ class SystemConfigurationModelTests(TestCase):
         """
         from django.core.exceptions import ValidationError
 
-        # Create first config
         config1 = SystemConfiguration.objects.create(
             center_id='center1',
             center_display_name='Center 1'
         )
 
-        # Try to create second config - should raise ValidationError
         with self.assertRaises(ValidationError):
             config2 = SystemConfiguration(
                 center_id='center2',
@@ -596,17 +580,14 @@ class SystemConfigurationModelTests(TestCase):
             )
             config2.save()
 
-        # Verify only one exists
         self.assertEqual(SystemConfiguration.objects.count(), 1)
 
     def test_get_instance_method(self):
         """
         FUNCTIONALITY: get_instance() returns the configuration
         """
-        # Before creation
         self.assertIsNone(SystemConfiguration.get_instance())
 
-        # After creation
         config = SystemConfiguration.objects.create(
             center_id='test',
             center_display_name='Test Center'
@@ -620,10 +601,8 @@ class SystemConfigurationModelTests(TestCase):
         """
         FUNCTIONALITY: is_setup_completed() returns correct state
         """
-        # Before setup
         self.assertFalse(SystemConfiguration.is_setup_completed())
 
-        # After setup
         SystemConfiguration.objects.create(
             center_id='test',
             center_display_name='Test Center'

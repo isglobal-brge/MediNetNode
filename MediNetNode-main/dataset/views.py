@@ -6,6 +6,7 @@ import os
 import logging
 from typing import Dict, Any
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.response import TemplateResponse
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -17,12 +18,12 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-from .models import Dataset, DatasetAccess, DatasetMetadata
+from .models import Dataset, DatasetAccess, DatasetMetadata, DatasetPrivacyPolicy, ResearcherEpsilonBudget
 from .uploader import SecureDatasetUploader
 from .forms import DatasetMetadataForm, DatasetEditForm
 from users.decorators import require_role
+from audit.audit_logger import AuditLogger
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +44,6 @@ def dataset_detail(request, dataset_id):
         PermissionDenied: If user doesn't have access to this dataset
         Http404: If dataset doesn't exist
     """
-    # Get dataset with related metadata
     dataset = get_object_or_404(
         Dataset.objects.using('datasets_db'),
         id=dataset_id
@@ -70,14 +70,12 @@ def dataset_detail(request, dataset_id):
             )
             raise PermissionDenied("You don't have access to this dataset")
     columns_count = dataset.columns_count
-    # Get metadata
     metadata_obj = DatasetMetadata.objects.using('datasets_db').filter(
         dataset_id=dataset_id
     ).order_by('-generated_at').first()
     
 
-    
-    # Initialize metadata with proper structure
+
     metadata = {
         'data_quality_score': None,
         'privacy_score': None,
@@ -96,7 +94,6 @@ def dataset_detail(request, dataset_id):
             # Check if this is actually the full metadata object
             if 'file_type' in metadata_obj.statistical_summary:
                 print("[DEBUG] Found full metadata in statistical_summary field")
-                # This field contains the full metadata, extract it
                 full_metadata = metadata_obj.statistical_summary
                 metadata.update({
                     'k_anonymity_verified': full_metadata.get('k_anonymity_verified', False),
@@ -110,7 +107,6 @@ def dataset_detail(request, dataset_id):
                 # This is actually statistical summary data
                 metadata['statistical_summary'] = metadata_obj.statistical_summary
         
-        # Check other fields
         if metadata_obj.quality_score is not None:
             metadata['data_quality_score'] = int(metadata_obj.quality_score * 100)
         
@@ -118,7 +114,6 @@ def dataset_detail(request, dataset_id):
             metadata['privacy_score'] = int(metadata_obj.completeness_percentage)
     
     
-    # Get access history with user details
     # Obtener access_history sin select_related cruzado
     access_history_raw = DatasetAccess.objects.using('datasets_db').filter(
         dataset_id=dataset_id
@@ -145,7 +140,6 @@ def dataset_detail(request, dataset_id):
             'assigned_by': assigned_by
         })
     
-    # Calculate usage statistics
     stats = {
         'total_accesses': dataset.access_count,
         'unique_users': DatasetAccess.objects.using('datasets_db')
@@ -157,9 +151,35 @@ def dataset_detail(request, dataset_id):
         'days_since_upload': (timezone.now() - dataset.uploaded_at).days
     }
     
-    # If it's a POST request, handle metadata updates
-    if request.method == 'POST' and (request.user.is_superuser or 
+    # Load privacy policy for this dataset (may not exist yet).
+    try:
+        privacy_policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+    except DatasetPrivacyPolicy.DoesNotExist:
+        privacy_policy = None
+
+    # If it's a POST request, handle metadata updates or privacy policy updates
+    if request.method == 'POST' and (request.user.is_superuser or
             (request.user.role and request.user.role.name == 'ADMIN')):
+
+        action = request.POST.get('action', 'update_metadata')
+
+        if action == 'update_privacy_policy':
+            sensitivity = request.POST.get('sensitivity', 'medium')
+            allowed = {c[0] for c in DatasetPrivacyPolicy.SENSITIVITY_CHOICES}
+            if sensitivity not in allowed:
+                messages.error(request, 'Sensitivity level no válido.')
+            else:
+                if privacy_policy is None:
+                    privacy_policy = DatasetPrivacyPolicy(dataset_id=dataset_id)
+                privacy_policy.sensitivity = sensitivity
+                # Reset per-job and lifetime budget to preset values; keep spent_epsilon.
+                defaults = DatasetPrivacyPolicy.SENSITIVITY_DEFAULTS[sensitivity]
+                privacy_policy.max_epsilon_per_job = defaults['max_epsilon_per_job']
+                privacy_policy.lifetime_budget = defaults['lifetime_budget']
+                privacy_policy.save()
+                messages.success(request, f'Política de privacidad actualizada: sensibilidad «{sensitivity}».')
+            return redirect('dataset:detail', dataset_id=dataset_id)
+
         form = DatasetMetadataForm(request.POST, instance=metadata_obj)
         if form.is_valid():
             metadata_obj = form.save(commit=False)
@@ -171,14 +191,29 @@ def dataset_detail(request, dataset_id):
     else:
         form = DatasetMetadataForm(instance=metadata_obj)
     
-    # Format file size for display
+    # Researcher budgets — only for ADMIN
+    researcher_budgets = []
+    pending_reset_requests = []
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.name == 'ADMIN':
+        from trainings.models import BudgetResetRequest
+        researcher_budgets = (
+            ResearcherEpsilonBudget.objects
+            .filter(dataset=dataset)
+            .order_by('researcher_id')
+        )
+        pending_reset_requests = list(
+            BudgetResetRequest.objects
+            .filter(dataset_id=dataset.id, status='pending')
+            .order_by('requested_at')
+        )
+
     def format_file_size(size_bytes):
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size_bytes < 1024:
                 return f"{size_bytes:.2f} {unit}"
             size_bytes /= 1024
         return f"{size_bytes:.2f} TB"
-    
+
     formatted_size = format_file_size(dataset.file_size)
     context = {
         'dataset': dataset,
@@ -189,11 +224,15 @@ def dataset_detail(request, dataset_id):
         'stats': stats,
         'formatted_size': formatted_size,
         'form': form,
-        'can_edit': request.user.is_superuser or 
-                   (request.user.role and request.user.role.name == 'ADMIN')
+        'can_edit': request.user.is_superuser or
+                   (request.user.role and request.user.role.name == 'ADMIN'),
+        'privacy_policy': privacy_policy,
+        'sensitivity_choices': DatasetPrivacyPolicy.SENSITIVITY_CHOICES,
+        'researcher_budgets': researcher_budgets,
+        'pending_reset_requests': pending_reset_requests,
     }
     
-    return render(request, 'dataset/detail.html', context)
+    return TemplateResponse(request, 'dataset/detail.html', context)
 
 
 @login_required
@@ -213,7 +252,6 @@ def dataset_list(request):
             id__in=accessible_dataset_ids
         )
     
-    # Search functionality
     search_query = request.GET.get('search', '').strip()
     if search_query:
         queryset = queryset.filter(
@@ -221,23 +259,19 @@ def dataset_list(request):
             Q(description__icontains=search_query) |
             Q(medical_domain__icontains=search_query)
         )
-    
-    # Filter by medical domain
+
     domain_filter = request.GET.get('domain', '').strip()
     if domain_filter:
         queryset = queryset.filter(medical_domain=domain_filter)
-    
-    # Filter by data type
+
     type_filter = request.GET.get('data_type', '').strip()
     if type_filter:
         queryset = queryset.filter(data_type=type_filter)
-    
-    # Filter by file format
+
     format_filter = request.GET.get('format', '').strip()
     if format_filter:
         queryset = queryset.filter(file_format=format_filter)
 
-    # Filter by status (Active/Paused)
     status_filter = request.GET.get('status', '').strip()
     if status_filter:
         if status_filter == 'active':
@@ -245,7 +279,6 @@ def dataset_list(request):
         elif status_filter == 'paused':
             queryset = queryset.filter(is_active=False)
 
-    # Filter by size range
     size_min = request.GET.get('size_min', '').strip()
     size_max = request.GET.get('size_max', '').strip()
     
@@ -263,7 +296,6 @@ def dataset_list(request):
         except ValueError:
             pass
     
-    # Filter by date range
     date_from = request.GET.get('date_from', '').strip()
     date_to = request.GET.get('date_to', '').strip()
     
@@ -283,7 +315,6 @@ def dataset_list(request):
         except ValueError:
             pass
     
-    # Sorting
     sort_by = request.GET.get('sort', 'uploaded_at')
     sort_order = request.GET.get('order', 'desc')
     
@@ -296,7 +327,6 @@ def dataset_list(request):
     else:
         queryset = queryset.order_by('-uploaded_at')
     
-    # Pagination
     page_size = request.GET.get('page_size', '10')
     try:
         page_size = int(page_size)
@@ -371,51 +401,92 @@ def dataset_upload(request):
     
     if request.method == 'POST':
         try:
-            # Get form data
             name = request.POST.get('name')
             description = request.POST.get('description')
             medical_domain = request.POST.get('medical_domain')
             data_type = request.POST.get('data_type', 'tabular')
             target_column = request.POST.get('target_column')
-            
-            # Validate required fields
+
             if not name or not description or not medical_domain:
                 return JsonResponse({'success': False, 'error': 'All fields are required'}, status=400)
-            
-            # Get uploaded file
+
+            # Optional experimental split ratio (10-50%)
+            split_ratio: float | None = None
+            split_ratio_raw = request.POST.get('split_ratio', '').strip()
+            if split_ratio_raw:
+                try:
+                    split_ratio = float(split_ratio_raw)
+                    if not (0.1 <= split_ratio <= 0.5):
+                        return JsonResponse(
+                            {'success': False, 'error': 'split_ratio must be between 0.1 and 0.5'},
+                            status=400,
+                        )
+                except ValueError:
+                    return JsonResponse(
+                        {'success': False, 'error': 'split_ratio must be a number'},
+                        status=400,
+                    )
+
+            # DP budget — always parsed, independent of experimental split
+            max_epsilon_per_job: float | None = None
+            lifetime_budget: float | None = None
+            try:
+                raw_eps = request.POST.get('max_epsilon_per_job', '').strip()
+                raw_lt  = request.POST.get('lifetime_budget', '').strip()
+                if raw_eps:
+                    max_epsilon_per_job = float(raw_eps)
+                    if max_epsilon_per_job <= 0:
+                        return JsonResponse(
+                            {'success': False, 'error': 'max_epsilon_per_job must be positive'},
+                            status=400,
+                        )
+                if raw_lt:
+                    lifetime_budget = float(raw_lt)
+                    if lifetime_budget <= 0:
+                        return JsonResponse(
+                            {'success': False, 'error': 'lifetime_budget must be positive'},
+                            status=400,
+                        )
+                if max_epsilon_per_job and lifetime_budget and max_epsilon_per_job > lifetime_budget:
+                    return JsonResponse(
+                        {'success': False, 'error': 'max_epsilon_per_job cannot exceed lifetime_budget'},
+                        status=400,
+                    )
+            except ValueError:
+                return JsonResponse(
+                    {'success': False, 'error': 'DP budget values must be numbers'},
+                    status=400,
+                )
+
             uploaded_file = request.FILES.get('file')
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
-            
-            # Save file temporarily
-            temp_path = _save_temp_file(uploaded_file)
-            
-            # Create uploader and process synchronously
+
+            # Save file temporarily (with request for security logging)
+            temp_path = _save_temp_file(uploaded_file, request)
+
             uploader = SecureDatasetUploader(request.user)
-            
+
             try:
-                # Perform upload synchronously
                 dataset, upload_info = uploader.upload_dataset(
                     file_path=temp_path,
                     name=name,
                     description=description,
                     medical_domain=medical_domain,
                     data_type=data_type,
-                    target_column=target_column
+                    target_column=target_column,
+                    split_ratio=split_ratio,
                 )
                 
-                # Cleanup temporary file
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
                     temp_dir = os.path.dirname(temp_path)
                     if os.path.exists(temp_dir) and not os.listdir(temp_dir):
                         os.rmdir(temp_dir)
-                
-                # Prepare success message
+
                 success_message = f'Dataset "{name}" uploaded successfully!'
                 phi_info = {}
-                
-                # Add information about removed PHI columns
+
                 if upload_info.get('phi_columns_removed'):
                     removed_columns = upload_info['phi_columns_removed']
                     removed_names = [col['name'] for col in removed_columns]
@@ -426,19 +497,40 @@ def dataset_upload(request):
                         'final_columns': upload_info.get('final_columns', 0)
                     }
                 
+                if max_epsilon_per_job and lifetime_budget:
+                    try:
+                        from dataset.models import DatasetPrivacyPolicy
+                        _domain_sensitivity = {
+                            'cardiology': 'medium', 'neurology': 'high', 'oncology': 'high',
+                            'radiology': 'medium', 'pathology': 'high', 'dermatology': 'medium',
+                            'ophthalmology': 'low', 'general': 'low', 'other': 'low',
+                        }
+                        sensitivity = _domain_sensitivity.get(medical_domain, 'medium')
+                        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+                            dataset=dataset,
+                            sensitivity=sensitivity,
+                            max_epsilon_per_job=max_epsilon_per_job,
+                            lifetime_budget=lifetime_budget,
+                        )
+                        success_message += ' DP budget policy created.'
+                    except Exception as policy_err:
+                        logger.warning("Could not create privacy policy: %s", policy_err)
+
                 messages.success(request, success_message)
                 response_data = {
                     'success': True,
                     'message': success_message,
-                    'dataset_id': dataset.id
+                    'dataset_id': dataset.id,
+                    'has_experiment_split': dataset.experiment_file_path is not None,
+                    'experiment_row_count': dataset.experiment_row_count,
+                    'has_dp_policy': bool(max_epsilon_per_job and lifetime_budget),
                 }
-                
-                # Add PHI information if columns were removed
+
                 if phi_info:
                     response_data['phi_info'] = phi_info
-                
+
                 return JsonResponse(response_data)
-                
+
             except Exception as upload_error:
                 # Cleanup temporary file on error
                 if os.path.exists(temp_path):
@@ -467,17 +559,175 @@ def dataset_upload(request):
 
 # Helper functions
 
-def _save_temp_file(uploaded_file) -> str:
-    """Save uploaded file to temporary location."""
+def _save_temp_file(uploaded_file, request=None) -> str:
+    """
+    Save uploaded file to temporary location with path traversal protection.
+
+    Security measures:
+    - Validates original filename doesn't contain path separators or traversal sequences
+    - Sanitizes filename to prevent directory traversal attacks
+    - Validates that final path is within temporary directory
+    - Blocks dangerous characters (../, /, \)
+    - Logs all path traversal attempts to audit system for ADMIN/AUDITOR review
+
+    Args:
+        uploaded_file: Django UploadedFile object
+        request: HTTP request object (optional, for logging user info)
+
+    Returns:
+        str: Absolute path to saved temporary file
+
+    Raises:
+        ValueError: If path traversal attempt detected
+    """
     import tempfile
-    
+
+    # Get user and IP for logging
+    user = request.user if request and hasattr(request, 'user') else None
+    ip_address = request.META.get('REMOTE_ADDR', 'Unknown') if request else 'Unknown'
+
+    # SECURITY: Validate original filename before any processing
+    # Reject filenames with path separators or traversal sequences
+    original_name = uploaded_file.name
+    if not original_name:
+        error_msg = "Filename cannot be empty"
+        logger.warning(
+            f"[SECURITY] Empty filename upload attempt. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}"
+        )
+        raise ValueError(error_msg)
+
+    if '/' in original_name or '\\' in original_name:
+        error_msg = (
+            f"Invalid filename '{original_name}': path traversal attack detected. "
+            "Filename must not contain directory separators (/ or \\)."
+        )
+        logger.error(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Directory separator. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log to audit system for ADMIN/AUDITOR review
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Directory separator in filename',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Directory Separator',
+                    'blocked': True,
+                    'file_size': uploaded_file.size,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    if '..' in original_name:
+        error_msg = (
+            f"Invalid filename '{original_name}': path traversal attack detected. "
+            "Filename must not contain '..' sequence."
+        )
+        logger.error(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Parent directory reference. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log to audit system for ADMIN/AUDITOR review
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Parent directory reference (..)',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Parent Directory',
+                    'blocked': True,
+                    'file_size': uploaded_file.size,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    # SECURITY: Extract only the base filename (defense in depth)
+    filename = os.path.basename(original_name)
+
+    # SECURITY: Reject empty or suspicious filenames
+    if not filename or filename.startswith('.'):
+        error_msg = f"Invalid filename '{original_name}': must be a valid file"
+        logger.warning(
+            f"[SECURITY] Suspicious filename upload attempt (hidden file). "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}'"
+        )
+
+        # Log suspicious filename attempt
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='SUSPICIOUS_FILENAME',
+                user=user,
+                details={
+                    'violation': 'Hidden file or invalid filename',
+                    'filename': original_name,
+                    'attack_type': 'Suspicious Upload',
+                    'blocked': True,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
     temp_dir = tempfile.mkdtemp(prefix='upload_')
-    temp_path = os.path.join(temp_dir, uploaded_file.name)
-    
+    temp_path = os.path.join(temp_dir, filename)
+
+    # SECURITY: Verify final path is within temp directory (prevent symlink attacks)
+    abs_temp_path = os.path.abspath(temp_path)
+    abs_temp_dir = os.path.abspath(temp_dir)
+
+    if not abs_temp_path.startswith(abs_temp_dir + os.sep):
+        # Cleanup and raise error
+        os.rmdir(temp_dir)
+        error_msg = (
+            f"Path traversal attack detected: resolved path '{abs_temp_path}' "
+            f"is outside temporary directory '{abs_temp_dir}'"
+        )
+        logger.critical(
+            f"[SECURITY] PATH TRAVERSAL ATTEMPT BLOCKED - Path escape. "
+            f"User: {user.username if user else 'Unknown'}, IP: {ip_address}, "
+            f"Filename: '{original_name}', Attempted path: '{abs_temp_path}'"
+        )
+
+        # Log critical path escape attempt
+        if user:
+            AuditLogger.log_security_violation(
+                violation_type='PATH_TRAVERSAL',
+                user=user,
+                details={
+                    'violation': 'Path escape - resolved outside temp directory',
+                    'malicious_filename': original_name,
+                    'attack_type': 'Path Traversal - Symlink/Escape',
+                    'blocked': True,
+                    'attempted_path': abs_temp_path,
+                    'allowed_base': abs_temp_dir,
+                },
+                ip_address=ip_address,
+                resource='dataset_upload',
+            )
+
+        raise ValueError(error_msg)
+
+    # Save file securely
     with open(temp_path, 'wb+') as destination:
         for chunk in uploaded_file.chunks():
             destination.write(chunk)
-    
+
     return temp_path
 
 
@@ -485,8 +735,7 @@ def _create_upload_session(user) -> str:
     """Create a unique upload session ID."""
     import uuid
     session_id = str(uuid.uuid4())
-    
-    # Store initial progress
+
     _update_upload_progress(session_id, {
         'status': 'initializing',
         'message': 'Preparing upload...',
@@ -524,11 +773,9 @@ def _start_async_upload(user, temp_path: str, name: str, description: str,
         _update_upload_progress(session_id, progress_data)
         _send_progress_update(session_id, progress_data)
     
-    # Create uploader with progress callback
     uploader = SecureDatasetUploader(user, progress_callback)
-    
+
     try:
-        # Perform upload
         dataset = uploader.upload_dataset(
             file_path=temp_path,
             name=name,
@@ -537,7 +784,6 @@ def _start_async_upload(user, temp_path: str, name: str, description: str,
             data_type=data_type
         )
         
-        # Final success update
         final_progress = {
             'status': 'completed',
             'message': 'Upload completed successfully!',
@@ -550,7 +796,6 @@ def _start_async_upload(user, temp_path: str, name: str, description: str,
         _send_progress_update(session_id, final_progress)
         
     except Exception as e:
-        # Handle upload error
         error_progress = {
             'status': 'error',
             'message': str(e),
@@ -563,7 +808,6 @@ def _start_async_upload(user, temp_path: str, name: str, description: str,
         _send_progress_update(session_id, error_progress)
         
     finally:
-        # Cleanup temporary file
         if os.path.exists(temp_path):
             try:
                 os.unlink(temp_path)
@@ -630,15 +874,13 @@ def api_validate_file(request):
         return JsonResponse({'valid': False, 'error': 'No file provided'})
     
     uploaded_file = request.FILES['file']
-    
-    # Basic validation (only check for empty files)
+
     if uploaded_file.size == 0:
         return JsonResponse({
             'valid': False, 
             'error': 'File cannot be empty'
         })
     
-    # Check extension
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()
     if file_ext not in SecureDatasetUploader.ALLOWED_EXTENSIONS:
         return JsonResponse({
@@ -660,8 +902,7 @@ def api_detect_columns(request):
         return JsonResponse({'success': False, 'error': 'No file provided'})
     
     uploaded_file = request.FILES['file']
-    
-    # Check if it's a CSV file
+
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()
     if file_ext != '.csv':
         return JsonResponse({
@@ -670,26 +911,24 @@ def api_detect_columns(request):
         })
     
     try:
-        # Save file temporarily
-        temp_path = _save_temp_file(uploaded_file)
+        # Save file temporarily (with request for security logging)
+        temp_path = _save_temp_file(uploaded_file, request)
         
-        # Create uploader instance and detect columns
         uploader = SecureDatasetUploader(request.user)
         columns = uploader.get_csv_columns(temp_path)
-        
-        # Cleanup temporary file
+
         if os.path.exists(temp_path):
             os.unlink(temp_path)
             temp_dir = os.path.dirname(temp_path)
             if os.path.exists(temp_dir) and not os.listdir(temp_dir):
                 os.rmdir(temp_dir)
-        
+
         return JsonResponse({
             'success': True,
             'columns': columns,
             'message': f'Detected {len(columns)} columns'
         })
-        
+
     except Exception as e:
         # Cleanup on error
         if 'temp_path' in locals() and os.path.exists(temp_path):
@@ -732,13 +971,12 @@ User = get_user_model()
 @require_role('ADMIN')
 def dataset_manage_access(request, dataset_id):
     """Manage access permissions for a dataset."""
-    
-    # Get dataset
+
     dataset = get_object_or_404(
         Dataset.objects.using('datasets_db'),
         id=dataset_id
     )
-    
+
     if request.method == 'POST':
         action = request.POST.get('action')
         
@@ -746,19 +984,16 @@ def dataset_manage_access(request, dataset_id):
             user_id = request.POST.get('user_id')
             can_train = request.POST.get('can_train') == 'on'
             can_view_metadata = request.POST.get('can_view_metadata') == 'on'
-            
+            can_use_experiment = request.POST.get('can_use_experiment') == 'on'
 
             if not user_id:
                 messages.error(request, 'No user selected')
                 return redirect('dataset:manage_access', dataset_id=dataset_id)
-            
+
             try:
-                
-                # Get user from main database
                 UserModel = get_user_model()
                 user = UserModel.objects.using('default').get(id=user_id)
-                
-                # Create or update access
+
                 try:
                     access, created = DatasetAccess.objects.using('datasets_db').get_or_create(
                         dataset_id=dataset_id,
@@ -766,25 +1001,25 @@ def dataset_manage_access(request, dataset_id):
                         defaults={
                             'assigned_by_id': request.user.id,
                             'can_train': can_train,
-                            'can_view_metadata': can_view_metadata
+                            'can_view_metadata': can_view_metadata,
+                            'can_use_experiment': can_use_experiment,
                         }
                     )
-
                 except Exception as e:
                     access = None
                     created = False
                     print(f"Error creating or updating access: {str(e)}")
 
-                if not created:
-                    # Update existing access
+                if not created and access is not None:
                     access.can_train = can_train
                     access.can_view_metadata = can_view_metadata
+                    access.can_use_experiment = can_use_experiment
                     access.assigned_by_id = request.user.id
                     access.save()
-                
+
                 message = f'Access {"updated" if not created else "granted"} for {user.username}'
                 messages.success(request, message)
-                
+
             except Exception as e:
                 messages.error(request, f'Error granting access: {str(e)}')
         
@@ -803,7 +1038,8 @@ def dataset_manage_access(request, dataset_id):
             user_id = request.POST.get('user_id')
             can_train = request.POST.get('can_train') == 'on'
             can_view_metadata = request.POST.get('can_view_metadata') == 'on'
-            
+            can_use_experiment = request.POST.get('can_use_experiment') == 'on'
+
             try:
                 access = DatasetAccess.objects.using('datasets_db').get(
                     dataset_id=dataset_id,
@@ -811,19 +1047,32 @@ def dataset_manage_access(request, dataset_id):
                 )
                 access.can_train = can_train
                 access.can_view_metadata = can_view_metadata
+                access.can_use_experiment = can_use_experiment
                 access.save()
                 messages.success(request, 'Permissions updated successfully')
             except Exception as e:
                 messages.error(request, f'Error updating permissions: {str(e)}')
+
+        elif action == 'reset_budget':
+            user_id = request.POST.get('user_id')
+            try:
+                budget = ResearcherEpsilonBudget.objects.using('datasets_db').get(
+                    dataset_id=dataset_id,
+                    researcher_id=user_id,
+                )
+                budget.reset_period()
+                messages.success(request, 'Epsilon budget reset successfully')
+            except ResearcherEpsilonBudget.DoesNotExist:
+                messages.warning(request, 'No budget record found for this user')
+            except Exception as e:
+                messages.error(request, f'Error resetting budget: {str(e)}')
         
         return redirect('dataset:manage_access', dataset_id=dataset_id)
     
-    # Get current access list with user details
     current_access_raw = DatasetAccess.objects.using('datasets_db').filter(
         dataset_id=dataset_id
     ).order_by('-assigned_at')
-    
-    # Get user details for each access
+
     UserModel = get_user_model()
     current_access = []
     for access in current_access_raw:
@@ -838,17 +1087,25 @@ def dataset_manage_access(request, dataset_id):
         except UserModel.DoesNotExist:
             assigned_by = None
         
-        if user:  # Only include if user exists
+        if user:
+            budget = None
+            try:
+                budget = ResearcherEpsilonBudget.objects.using('datasets_db').get(
+                    dataset_id=dataset_id,
+                    researcher_id=access.user_id,
+                )
+            except ResearcherEpsilonBudget.DoesNotExist:
+                pass
             current_access.append({
                 'access': access,
                 'user': user,
-                'assigned_by': assigned_by
+                'assigned_by': assigned_by,
+                'budget': budget,
             })
     
     # Get all users for granting access (exclude those who already have access)
     current_user_ids = [access['user'].id for access in current_access if access['user']]
     try:
-        # Get all active users excluding those who already have access
         available_users = UserModel.objects.using('default').filter(
             is_active=True
         ).exclude(
@@ -899,14 +1156,12 @@ def dataset_manage_access(request, dataset_id):
 @require_role('ADMIN')
 def datasets_dashboard(request):
     """Dashboard principal con métricas generales de datasets."""
-    
-    # Métricas básicas
+
     total_datasets = Dataset.objects.using('datasets_db').filter(is_active=True).count()
     total_size_bytes = Dataset.objects.using('datasets_db').filter(is_active=True).aggregate(
         total_size=Sum('file_size')
     )['total_size'] or 0
-    
-    # Convertir bytes a formato legible
+
     def format_file_size(size_bytes):
         if size_bytes == 0:
             return "0 B"
@@ -936,18 +1191,15 @@ def datasets_dashboard(request):
         display_name=Min('medical_domain')  # Use the first occurrence for display
     ).order_by('-total_count')
     
-    # Datasets recientes (últimos 7 días)
     week_ago = timezone.now() - timedelta(days=7)
     recent_datasets = Dataset.objects.using('datasets_db').filter(
         is_active=True,
         uploaded_at__gte=week_ago
     ).order_by('-uploaded_at')[:5]
     
-    # Estadísticas de acceso
     total_assignments = DatasetAccess.objects.using('datasets_db').count()
     active_researchers = DatasetAccess.objects.using('datasets_db').values('user_id').distinct().count()
     
-    # Top 5 datasets más accedidos
     top_datasets = Dataset.objects.using('datasets_db').filter(is_active=True).annotate(
         access_assignments=Count('access_permissions')
     ).order_by('-access_count')[:5]
@@ -987,7 +1239,6 @@ def dataset_edit(request, dataset_id):
     Edit existing dataset information.
     Only ADMIN and RESEARCHER (owner) can edit datasets.
     """
-    # Get dataset from datasets_db
     dataset = get_object_or_404(Dataset.objects.using('datasets_db'), pk=dataset_id, is_active=True)
 
     # Check permissions: ADMIN can edit any, RESEARCHER can edit own
@@ -999,16 +1250,13 @@ def dataset_edit(request, dataset_id):
         form = DatasetEditForm(request.POST, instance=dataset)
         if form.is_valid():
             try:
-                # Check if target_column changed
                 old_target_column = dataset.target_column
                 new_target_column = form.cleaned_data.get('target_column')
                 target_column_changed = old_target_column != new_target_column
 
-                # Save to datasets_db
                 updated_dataset = form.save(commit=False)
                 updated_dataset.save(using='datasets_db')
 
-                # Regenerate metadata if target_column changed
                 if target_column_changed and new_target_column:
                     logger.info(f'Target column changed from "{old_target_column}" to "{new_target_column}", regenerating metadata...')
 
@@ -1016,23 +1264,17 @@ def dataset_edit(request, dataset_id):
                         from .uploader import SecureDatasetUploader
                         import pandas as pd
 
-                        # Create uploader instance
                         uploader = SecureDatasetUploader(user=request.user)
 
-                        # Read the dataset file
                         df = pd.read_csv(updated_dataset.file_path)
 
-                        # Get existing metadata
                         dataset_metadata = DatasetMetadata.objects.using('datasets_db').get(dataset=updated_dataset)
                         existing_metadata = dataset_metadata.statistical_summary
 
-                        # Get column_info from existing metadata
                         column_info = existing_metadata.get('column_info', {})
 
-                        # Regenerate target_info with new target column
                         target_info = uploader._analyze_target_column(df, new_target_column, column_info)
 
-                        # Update metadata with new target_info
                         existing_metadata['target_info'] = target_info
                         dataset_metadata.statistical_summary = existing_metadata
                         dataset_metadata.save(using='datasets_db')
@@ -1070,7 +1312,6 @@ def dataset_edit(request, dataset_id):
     else:
         form = DatasetEditForm(instance=dataset)
 
-    # Get uploader info from default database
     try:
         UserModel = get_user_model()
         uploader = UserModel.objects.using('default').get(id=dataset.uploaded_by_id)
@@ -1099,12 +1340,10 @@ def dataset_toggle_active(request, dataset_id):
     """
     dataset = get_object_or_404(Dataset.objects.using('datasets_db'), pk=dataset_id)
 
-    # Toggle the is_active status
     new_status = not dataset.is_active
     dataset.is_active = new_status
     dataset.save(using='datasets_db')
 
-    # Prepare success message
     action = "activated" if new_status else "paused"
     messages.success(
         request,

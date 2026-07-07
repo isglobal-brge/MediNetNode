@@ -31,7 +31,6 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # Build query
         queryset = APIKey.objects.select_related('user', 'user__role')
         
         if options['user']:
@@ -47,7 +46,6 @@ class Command(BaseCommand):
         if options['active_only']:
             queryset = queryset.filter(is_active=True)
 
-        # Get API keys
         api_keys = queryset.order_by('user__username', '-created_at')
 
         if not api_keys.exists():
@@ -56,7 +54,6 @@ class Command(BaseCommand):
             )
             return
 
-        # Display header
         self.stdout.write(
             self.style.SUCCESS('API Keys List:')
         )
@@ -64,7 +61,6 @@ class Command(BaseCommand):
 
         current_user = None
         for api_key in api_keys:
-            # Group by user
             if current_user != api_key.user.username:
                 current_user = api_key.user.username
                 self.stdout.write(
@@ -72,7 +68,6 @@ class Command(BaseCommand):
                 )
                 self.stdout.write('-' * 50)
 
-            # Key info
             status_indicators = []
             if not api_key.is_active:
                 status_indicators.append('INACTIVE')

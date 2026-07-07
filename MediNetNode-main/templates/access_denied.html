@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Access Denied — MediNet{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center" style="min-height: 60vh;">
+    <div class="text-center" style="max-width: 480px;">
+        <div class="mb-4">
+            <span style="font-size: 4rem; line-height: 1;">
+                <i class="bi bi-shield-lock" style="color: var(--primary-color);"></i>
+            </span>
+        </div>
+        <h1 class="display-6 fw-bold mb-2">Access Denied</h1>
+        <p class="text-muted mb-4">
+            You do not have permission to access this resource.
+            If you believe this is an error, please contact your system administrator.
+        </p>
+        <div class="d-flex gap-2 justify-content-center">
+            <a href="javascript:history.back()" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Go Back
+            </a>
+            <a href="{% url 'root_redirect' %}" class="btn btn-primary">
+                <i class="bi bi-house me-1"></i> Dashboard
+            </a>
+        </div>
+        <p class="text-muted mt-4" style="font-size: 0.8rem;">
+            HTTP 403 &mdash; {% now "Y-m-d H:i" %} UTC
+        </p>
+    </div>
+</div>
+{% endblock %}

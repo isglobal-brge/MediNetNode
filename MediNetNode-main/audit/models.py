@@ -6,8 +6,7 @@ import json
 
 class AuditEvent(models.Model):
     """Extended audit system with risk scoring and categorization."""
-    
-    # Event Categories
+
     CATEGORY_CHOICES = [
         ('AUTH', 'Authentication'),
         ('DATA_ACCESS', 'Data Access'),
@@ -17,8 +16,7 @@ class AuditEvent(models.Model):
         ('API', 'API Access'),
         ('SYSTEM', 'System Operations'),
     ]
-    
-    # Severity Levels
+
     SEVERITY_CHOICES = [
         ('INFO', 'Information'),
         ('WARNING', 'Warning'),
@@ -27,7 +25,6 @@ class AuditEvent(models.Model):
         ('SECURITY', 'Security Event'),
     ]
 
-    # Basic audit fields
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -41,19 +38,16 @@ class AuditEvent(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)
     details = models.JSONField(default=dict, blank=True)
-    
-    # Classification fields
+
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='SYSTEM')
     severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='INFO')
     risk_score = models.IntegerField(default=0, help_text="Risk score 0-100")
-    
-    # Context fields
+
     session_id = models.CharField(max_length=40, blank=True)
     user_agent = models.TextField(blank=True)
     request_size = models.IntegerField(null=True, blank=True, help_text="Request size in bytes")
     request_duration_ms = models.IntegerField(null=True, blank=True)
-    
-    # Review management
+
     requires_review = models.BooleanField(default=False)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     reviewed_by = models.ForeignKey(
@@ -97,8 +91,7 @@ class DataAccessLog(models.Model):
         on_delete=models.CASCADE,
         related_name='data_access_log'
     )
-    
-    # Medical context
+
     medical_domain = models.CharField(max_length=100, blank=True, help_text="Medical specialty domain")
     patient_count_accessed = models.IntegerField(default=0)
     data_sensitivity_level = models.IntegerField(
@@ -106,8 +99,7 @@ class DataAccessLog(models.Model):
         choices=[(i, f"Level {i}") for i in range(1, 6)],
         help_text="Data sensitivity level 1-5"
     )
-    
-    # Access details
+
     columns_accessed = models.JSONField(default=list, blank=True)
     records_accessed = models.IntegerField(default=0)
     query_hash = models.CharField(max_length=64, blank=True, help_text="Hash of executed query")
@@ -125,8 +117,7 @@ class DataAccessLog(models.Model):
 
 class SecurityIncident(models.Model):
     """Security incidents automatically generated from critical audit events."""
-    
-    # Incident Types
+
     INCIDENT_TYPES = [
         ('UNAUTHORIZED_ACCESS', 'Unauthorized Access Attempt'),
         ('DATA_BREACH_ATTEMPT', 'Data Breach Attempt'),
@@ -135,29 +126,25 @@ class SecurityIncident(models.Model):
         ('PRIVILEGE_ESCALATION', 'Privilege Escalation Attempt'),
         ('ANOMALOUS_PATTERN', 'Anomalous Access Pattern'),
     ]
-    
-    # Incident States
+
     STATE_CHOICES = [
         ('OPEN', 'Open'),
         ('INVESTIGATING', 'Under Investigation'),
         ('RESOLVED', 'Resolved'),
         ('CLOSED', 'Closed'),
     ]
-    
-    # Severity levels
+
     SEVERITY_LEVELS = [
         (1, 'Low'),
-        (2, 'Medium'), 
+        (2, 'Medium'),
         (3, 'High'),
         (4, 'Critical'),
     ]
 
-    # Incident details
     incident_type = models.CharField(max_length=30, choices=INCIDENT_TYPES)
     state = models.CharField(max_length=15, choices=STATE_CHOICES, default='OPEN')
     severity = models.IntegerField(choices=SEVERITY_LEVELS, default=2)
-    
-    # Tracking
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     assigned_to = models.ForeignKey(
@@ -167,13 +154,11 @@ class SecurityIncident(models.Model):
         blank=True,
         related_name='assigned_incidents',
     )
-    
-    # Context
+
     description = models.TextField()
     resolution_notes = models.TextField(blank=True)
     risk_score = models.IntegerField(default=0, help_text="Aggregated risk score from related events")
-    
-    # Relationships
+
     related_events = models.ManyToManyField(
         AuditEvent,
         related_name='security_incidents',

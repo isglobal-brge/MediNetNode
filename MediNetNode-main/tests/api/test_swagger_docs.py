@@ -10,11 +10,23 @@ class SwaggerDocumentationTests(TestCase):
     """Test API documentation endpoints."""
     
     def setUp(self):
-        """Set up test client."""
+        """Set up test client with an authenticated user. The API schema now
+        requires authentication (was AllowAny → anonymous info disclosure)."""
+        from users.models import CustomUser, Role
         self.client = Client()
-    
+        role, _ = Role.objects.get_or_create(name='ADMIN', defaults={'permissions': {}})
+        self.user = CustomUser.objects.create_user(
+            username='swagger_admin', password='SwaggerPass123!', role=role
+        )
+        self.client.force_login(self.user)
+
+    def test_anonymous_docs_access_denied(self):
+        """Anonymous users must NOT be able to load the API schema/docs."""
+        anon = Client()
+        self.assertNotEqual(anon.get('/api/docs/swagger.json').status_code, 200)
+
     def test_swagger_ui_accessible(self):
-        """Test that Swagger UI is accessible."""
+        """Test that Swagger UI is accessible to authenticated users."""
         response = self.client.get('/api/docs/swagger/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'MediNet RESEARCHER API')
@@ -33,15 +45,13 @@ class SwaggerDocumentationTests(TestCase):
         # Parse YAML response (drf-yasg returns YAML by default)
         import yaml
         data = yaml.safe_load(response.content.decode('utf-8'))
-        
-        # Verify basic schema structure
+
         self.assertIn('swagger', data)
         self.assertIn('info', data)
         self.assertIn('paths', data)
-        
-        # Verify API info
+
         self.assertEqual(data['info']['title'], 'MediNet RESEARCHER API')
-        self.assertEqual(data['info']['version'], 'v1')
+        self.assertEqual(data['info']['version'], 'v2')
         
         # Note: endpoints might be empty in paths due to schema generation during tests
         # But we can verify security definitions are there

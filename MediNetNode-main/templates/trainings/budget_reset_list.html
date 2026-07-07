@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load csp_tags %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style nonce="{% csp_nonce %}">
+    .filter-bar {
+        background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .filter-bar .form-select {
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        backdrop-filter: blur(10px);
+    }
+    .filter-bar .form-select option { background: #343a40; color: white; }
+    .filter-bar .form-select:focus {
+        background: rgba(255,255,255,0.25);
+        border-color: rgba(255,255,255,0.5);
+        box-shadow: 0 0 0 0.2rem rgba(255,255,255,0.25);
+        color: white;
+    }
+
+    .status-badge { font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem;
+                    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .status-pending  { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d1e7dd; color: #0f5132; }
+    .status-rejected { background: #f8d7da; color: #842029; }
+
+    .request-row { transition: all 0.2s ease; border-left: 4px solid transparent; cursor: pointer; }
+    .request-row:hover { background-color: rgba(25, 118, 210, 0.05); border-left-color: #1976d2; }
+    .request-row.pending  { border-left-color: #ffc107; }
+    .request-row.approved { border-left-color: #28a745; }
+    .request-row.rejected { border-left-color: #dc3545; }
+
+    .pending-badge {
+        background: linear-gradient(45deg, #ff9800, #e65100);
+        color: white; border-radius: 50%; width: 22px; height: 22px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem;
+        vertical-align: middle;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                Privacy Budget Reset Requests
+                {% if pending_count %}
+                <span class="pending-badge">{{ pending_count }}</span>
+                {% endif %}
+            </h2>
+            <p class="text-muted mb-0">Review and act on researcher ε budget reset requests</p>
+        </div>
+        <a href="{% url 'trainings:dashboard' %}" class="btn btn-outline-secondary btn-sm">
+            ← Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar d-flex align-items-center gap-3">
+        <label class="fw-semibold mb-0 text-white">Filter by status:</label>
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <select name="status" class="form-select form-select-sm" style="width:auto;"
+                    onchange="this.form.submit()">
+                <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+                <option value="pending"  {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+            </select>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if page_obj.object_list %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Status</th>
+                            <th>Researcher</th>
+                            <th>Dataset</th>
+                            <th>Requested</th>
+                            <th>Reviewed</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in page_obj %}
+                        <tr class="request-row {{ item.obj.status }}"
+                            onclick="window.location='{% url 'trainings:budget_reset_detail' item.obj.id %}'">
+                            <td class="text-muted small">#{{ item.obj.id }}</td>
+                            <td>
+                                <span class="status-badge status-{{ item.obj.status }}">
+                                    {{ item.obj.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if item.researcher %}
+                                    <strong>{{ item.researcher.username }}</strong>
+                                    {% if item.researcher.get_full_name %}
+                                    <br><small class="text-muted">{{ item.researcher.get_full_name }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">ID {{ item.obj.researcher_id }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.dataset %}
+                                    {{ item.dataset.name }}
+                                {% else %}
+                                    <span class="text-muted">Dataset #{{ item.obj.dataset_id }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ item.obj.requested_at|date:"Y-m-d H:i" }}</small>
+                            </td>
+                            <td>
+                                {% if item.obj.reviewed_at %}
+                                    <small>{{ item.obj.reviewed_at|date:"Y-m-d H:i" }}</small>
+                                    {% if item.obj.reviewed_by %}
+                                    <br><small class="text-muted">by {{ item.obj.reviewed_by.username }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'trainings:budget_reset_detail' item.obj.id %}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   onclick="event.stopPropagation()">View</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="d-flex justify-content-center py-3">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">‹</a>
+                        </li>
+                        {% endif %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                        </li>
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">›</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <div class="text-muted mb-2" style="font-size:2.5rem;">✓</div>
+                <h5 class="text-muted">No requests found</h5>
+                {% if status_filter %}
+                <p class="text-muted">No <strong>{{ status_filter }}</strong> requests at this time.</p>
+                {% else %}
+                <p class="text-muted">Researchers have not submitted any budget reset requests yet.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

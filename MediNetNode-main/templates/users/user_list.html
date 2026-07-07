@@ -1,7 +1,20 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Users - MediNet{% endblock %}
+
+{% block extra_css %}
+<style nonce="{% csp_nonce %}">
+    .avatar-circle   { width: 48px; height: 48px; font-weight: 600; }
+    .session-dot     { width: 12px; height: 12px; }
+    .empty-icon-lg   { width: 80px; height: 80px; }
+    .modal-rounded   { border-radius: 16px; }
+    .modal-icon-md   { width: 60px; height: 60px; }
+    .modal-close-abs { position: absolute; right: 1rem; top: 1rem; }
+    .form-inline     { display: inline; }
+</style>
+{% endblock %}
 
 {% block page_title %}User Management{% endblock %}
 
@@ -114,11 +127,11 @@
                         <td class="px-4 py-3">
                             <div class="d-flex align-items-center">
                                 <div class="position-relative">
-                                    <div class="user-avatar bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px; font-weight: 600;">
+                                    <div class="user-avatar bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3 avatar-circle">
                                         {{ user.username|slice:":1"|upper }}
                                     </div>
                                     {% if user.is_active_session %}
-                                    <span class="position-absolute bottom-0 end-0 translate-middle-x bg-success border border-white rounded-circle" style="width: 12px; height: 12px;"></span>
+                                    <span class="position-absolute bottom-0 end-0 translate-middle-x bg-success border border-white rounded-circle session-dot"></span>
                                     {% endif %}
                                 </div>
                                 <div>
@@ -222,7 +235,7 @@
                     <tr>
                         <td colspan="6" class="text-center py-5">
                             <div class="text-muted">
-                                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 80px; height: 80px;">
+                                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 empty-icon-lg">
                                     <i class="bi bi-people display-5"></i>
                                 </div>
                                 <h5 class="fw-semibold mb-2">No users found</h5>
@@ -287,17 +300,17 @@
 <!-- Modern Delete Confirmation Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+        <div class="modal-content border-0 shadow-lg modal-rounded">
             <div class="modal-header border-0 pb-0">
                 <div class="text-center w-100">
-                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 60px; height: 60px;">
+                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 modal-icon-md">
                         <i class="bi bi-exclamation-triangle fs-3"></i>
                     </div>
                     <h5 class="modal-title fw-bold" id="deleteModalLabel">
                         Confirm User Deletion
                     </h5>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" style="position: absolute; right: 1rem; top: 1rem;"></button>
+                <button type="button" class="btn-close modal-close-abs" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center px-4">
                 <p class="text-muted mb-3">
@@ -314,7 +327,7 @@
                     <i class="bi bi-x-circle me-1"></i>
                     Cancel
                 </button>
-                <form id="deleteForm" method="post" style="display: inline;">
+                <form id="deleteForm" method="post" class="form-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger px-4">
                         <i class="bi bi-trash me-1"></i>
@@ -328,7 +341,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 function confirmDelete(userId, username) {
     document.getElementById('deleteUsername').textContent = username;
     document.getElementById('deleteForm').action = `/users/${userId}/delete/`;

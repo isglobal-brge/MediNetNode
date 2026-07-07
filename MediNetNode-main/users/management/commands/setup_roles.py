@@ -19,13 +19,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """Set up default permissions for each role."""
         force_update = options.get('force', False)
-        
-        # Define default permissions for each role
+
         role_permissions = {
             'RESEARCHER': {
                 'api.access': True,
-                'dataset.view': True,
-                'dataset.train': True,
+                'dataset.view': {'scope': 'ALL'},
+                'dataset.train': {'scope': 'ALL'},
+                'inference.execute': {'scope': 'ALL'},
+            },
+            'MEMBER': {
+                'api.access': True,
+                'dataset.view': {'scope': 'ALL'},
+                'dataset.create': True,
+                'dataset.train': {'scope': 'ALL'},
+                'training.view': True,
+                'inference.execute': {'scope': 'ALL'},
+                'inference.upload': True,
             },
             'ADMIN': {
                 'api.access': True,
@@ -42,12 +51,17 @@ class Command(BaseCommand):
                 'training.view': True,
                 'training.manage': True,
                 'system.admin': True,
+                'inference.execute': {'scope': 'ALL'},
+                'inference.upload': {'scope': 'ALL'},
+                'inference.approve': True,
+                'inference.admin': True,
             },
             'AUDITOR': {
                 'dataset.view': True,
                 'audit.view': True,
                 'training.view': True,
                 'user.view': True,
+                'inference.view': True,
             }
         }
 
@@ -66,7 +80,6 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f'[OK] Created {role_name} role with permissions')
                 )
             elif not role.permissions or force_update:
-                # Update empty permissions or force update
                 old_permissions = role.permissions.copy() if role.permissions else {}
                 role.permissions = permissions
                 role.save()
@@ -80,7 +93,6 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f'- {role_name} role already has permissions (use --force to update)')
 
-        # Summary
         if created_count > 0:
             self.stdout.write(
                 self.style.SUCCESS(f'\n[OK] Created {created_count} roles with permissions')
@@ -96,7 +108,6 @@ class Command(BaseCommand):
                 self.style.WARNING('No roles were created or updated')
             )
 
-        # Show current role status
         self.stdout.write('\n--- Current Role Status ---')
         for role in Role.objects.all().order_by('name'):
             permission_count = len(role.permissions) if role.permissions else 0

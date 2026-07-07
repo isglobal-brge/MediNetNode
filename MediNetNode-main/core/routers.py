@@ -5,7 +5,7 @@ class DatabaseRouter:
         'users': 'default',
         'auth_system': 'default',
         'audit': 'default',
-        'trainings': 'default',  # Training monitoring system
+        'trainings': 'default',
         'dataset': 'datasets_db',
         # Accept plural alias used in tests
         #'datasets': 'datasets_db',
@@ -20,11 +20,9 @@ class DatabaseRouter:
         return self.route_app_labels.get(app_label)
 
     def allow_relation(self, obj1, obj2, **hints):
-        """Allow relations between dataset models and user models.""" 
-        # Always allow relations between models in our managed databases
+        """Allow relations between dataset models and user models."""
         db_set = {'default', 'datasets_db'}
-        
-        # If both objects exist and are in our databases, allow the relation
+
         if obj1 and obj2:
             db1 = getattr(obj1._state, 'db', None) 
             db2 = getattr(obj2._state, 'db', None)
@@ -35,8 +33,7 @@ class DatabaseRouter:
         if hasattr(obj1, '_meta') and hasattr(obj2, '_meta'):
             app1 = obj1._meta.app_label
             app2 = obj2._meta.app_label
-            
-            # Allow User <-> Dataset relations specifically
+
             allowed_pairs = [
                 ('users', 'dataset'),
                 ('dataset', 'users'),

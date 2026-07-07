@@ -22,8 +22,16 @@ services:
     environment:
       # Override specific variables if needed
       # These take precedence over .env.docker
+      # ---- DEVELOPMENT MODE (default) --------------------------------------
+      # DEBUG=True relaxes the fail-closed guards so the stack runs out of the
+      # box. For a DEPLOY run, remove/flip these overrides: set DEBUG=False and
+      # keep the security posture from .env.docker (FLOWER_ALLOW_INSECURE=false;
+      # the Hub provides the TLS CA cert to the Node).
       - DEBUG=True
       - ALLOWED_HOSTS=localhost,127.0.0.1,172.17.0.1, 172.25.0.0, 172.25.0.1, 172.25.0.2, 172.25.0.3
+      # Dev convenience: allow plaintext Flower transport when running without
+      # certs. In Docker the Hub still supplies TLS certs; set false for deploy.
+      - FLOWER_ALLOW_INSECURE=true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/').read()"]

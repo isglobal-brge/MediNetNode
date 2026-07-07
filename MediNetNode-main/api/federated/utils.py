@@ -1,18 +1,25 @@
-import torch
+from __future__ import annotations
+
+import logging
+import math
 from datetime import datetime
-from opacus.validators import ModuleValidator
+
+logger = logging.getLogger(__name__)
 
 try:
     import django
     django.setup()
     from trainings.models import TrainingRound
     from django.contrib.auth import get_user_model
+    from dataset.models import DatasetPrivacyPolicy, ResearcherEpsilonBudget
     DJANGO_AVAILABLE = True
     User = get_user_model()
-    
+
 except ImportError as e:
     print(f"Warning: Django models not available for training tracking: {e}")
     DJANGO_AVAILABLE = False
+    DatasetPrivacyPolicy = None
+    ResearcherEpsilonBudget = None
     
 
 def flatten_with_prefix(config, prefix="", delimiter="__"):
@@ -31,47 +38,52 @@ def flatten_with_prefix(config, prefix="", delimiter="__"):
     for key, value in config.items():
         new_key = f"{prefix}{delimiter}{key}" if prefix else key
         if isinstance(value, dict):
-            # Recursively flatten nested dictionaries
             flat_config.update(flatten_with_prefix(value, prefix=new_key, delimiter=delimiter))
         elif isinstance(value, (list, tuple)):
-            # Convert lists/tuples to strings
             flat_config[new_key] = str(value)
         else:
             flat_config[new_key] = value
     return flat_config
 
-def unflatten_with_prefix(flat_config, delimiter="__"):
-    """
-    Reconstructs a nested dictionary from a flattened dictionary with prefixed keys.
+# DEPRECATED - LEGACY CODE - DO NOT USE
+# This function contained a critical security vulnerability (eval() usage)
+# and has been removed from active use. Kept for reference only.
+#
+# SECURITY ISSUE: Used eval() which allows arbitrary code execution
+# If you need similar functionality, use ast.literal_eval() instead
+#
+# def unflatten_with_prefix(flat_config, delimiter="__"):
+#     """
+#     Reconstructs a nested dictionary from a flattened dictionary with prefixed keys.
+#
+#     Args:
+#         flat_config (dict): The flattened dictionary with prefixed keys.
+#         delimiter (str, optional): The delimiter used between prefix and key. Defaults to "__".
+#
+#     Returns:
+#         dict: A nested dictionary reconstructed from the flattened dictionary.
+#     """
+#     nested_config = {}
+#
+#     for key, value in flat_config.items():
+#         parts = key.split(delimiter)
+#         current_level = nested_config
+#
+#         for part in parts[:-1]:
+#             if part not in current_level:
+#                 current_level[part] = {}
+#             current_level = current_level[part]
+#
+#         if isinstance(value, str):
+#             try:
+#                 value = eval(value)  # SECURITY VULNERABILITY - DO NOT USE
+#             except (SyntaxError, NameError):
+#                 pass
+#         current_level[parts[-1]] = value
+#
+#     return nested_config
 
-    Args:
-        flat_config (dict): The flattened dictionary with prefixed keys.
-        delimiter (str, optional): The delimiter used between prefix and key. Defaults to "__".
-
-    Returns:
-        dict: A nested dictionary reconstructed from the flattened dictionary.
-    """
-    nested_config = {}
-
-    for key, value in flat_config.items():
-        parts = key.split(delimiter)
-        current_level = nested_config
-
-        for part in parts[:-1]:
-            if part not in current_level:
-                current_level[part] = {}
-            current_level = current_level[part]
-        
-        if isinstance(value, str):
-            try:
-                value = eval(value)
-            except (SyntaxError, NameError):
-                pass
-        current_level[parts[-1]] = value
-    
-    return nested_config
-
-def check_model(net:torch.nn.Module):
+def check_model(net: "torch.nn.Module"):
     """
     Validates and fixes a PyTorch model using Opacus ModuleValidator.
 
@@ -80,7 +92,14 @@ def check_model(net:torch.nn.Module):
 
     Returns:
         torch.nn.Module: The validated and fixed PyTorch model.
+
+    Note:
+        torch/opacus are imported lazily here so the pure DB-accounting paths
+        in this module (e.g. _record_privacy_spend) can be imported and tested
+        without the heavy ML stack installed.
     """
+    from opacus.validators import ModuleValidator
+
     errors = ModuleValidator.validate(net, strict=False)
     print(f"Model validated with {len(errors)} errors")
     if len(errors) > 0:
@@ -99,7 +118,6 @@ def update_training_progress(training_session,round_number, current_process, met
         return
     
     try:
-        # Update resource usage
         if current_process:
             try:
                 cpu_percent = current_process.cpu_percent()
@@ -115,7 +133,6 @@ def update_training_progress(training_session,round_number, current_process, met
         training_session.current_round = round_number
         if training_session.status == 'STARTING':
             training_session.status = 'ACTIVE'
-            # Training session activated
         elif training_session.status != 'ACTIVE':
             training_session.status = 'ACTIVE'
         
@@ -125,7 +142,6 @@ def update_training_progress(training_session,round_number, current_process, met
         # Save current round state for persistence across Flower client restarts
         training_session.save(update_fields=['current_round', 'status', 'progress_percentage', 'cpu_usage', 'memory_usage'])
                 
-        # Create round record if metrics provided
         if metrics:
             round_record = TrainingRound(
                 session=training_session,
@@ -137,7 +153,6 @@ def update_training_progress(training_session,round_number, current_process, met
                 f1_score=metrics.get('f1')
             )
             
-            # Add resource usage to round
             if current_process:
                 try:
                     round_record.cpu_usage = current_process.cpu_percent()
@@ -152,15 +167,142 @@ def update_training_progress(training_session,round_number, current_process, met
             print(f"[INFO] Round {round_number} completed - Loss: {metrics.get('loss', 'N/A'):.4f}, Acc: {metrics.get('accuracy', 'N/A'):.4f}, F1: {metrics.get('f1', 'N/A'):.4f}")
         
     except Exception as e:
-        # Error updating progress
         raise e
+
+def _record_privacy_spend(training_session) -> None:
+    """Record actual ε spent in DatasetPrivacyPolicy after training completes.
+
+    Reads the highest-numbered TrainingRound's metrics to obtain the accumulated
+    privacy_epsilon, then delegates to DatasetPrivacyPolicy.record_spent() which
+    applies an atomic conditional DB update to prevent budget overruns.
+
+    This function never raises — recording failure must not affect training status.
+    """
+    try:
+        from trainings.models import TrainingSession
+
+        # Experimental sessions run on the small subset without budget accounting
+        # (they never reserved anything either). Nothing to reconcile.
+        if getattr(training_session, 'use_experiment', False):
+            logger.info(
+                "[DP] Skipping epsilon budget record for experimental session %s",
+                getattr(training_session, 'session_id', '?'),
+            )
+            return
+
+        dataset_id = getattr(training_session, 'dataset_id', None)
+        if not dataset_id:
+            logger.warning(
+                "[DP] training_session %s has no dataset_id — privacy spend not recorded",
+                getattr(training_session, 'session_id', '?'),
+            )
+            return
+
+        # Exactly-once claim. A session ends via exactly one of complete / fail /
+        # reap, but all three now funnel here; the atomic conditional update ensures
+        # only the first invocation applies spend + releases the reservation. Without
+        # this guard a second call would double-count actual spend AND double-release
+        # the reservation. Applies only to persisted TrainingSession rows (real prod
+        # path); non-persisted stand-ins fall through (no reservation to reconcile).
+        _persisted = isinstance(training_session, TrainingSession) and getattr(training_session, 'pk', None) is not None
+        if _persisted:
+            claimed = TrainingSession.objects.filter(
+                pk=training_session.pk, budget_reconciled=False
+            ).update(budget_reconciled=True)
+            if not claimed:
+                logger.info(
+                    "[DP] Budget already reconciled for session %s — skipping.",
+                    getattr(training_session, 'session_id', '?'),
+                )
+                return
+            training_session.budget_reconciled = True
+
+        # Sum the REAL per-round epsilon (0.0 if the job ran no scored rounds, e.g.
+        # it failed early or was reaped — in which case there is simply no spend to
+        # record; the in-flight admission marker is freed when the session leaves the
+        # STARTING/ACTIVE set, so nothing needs releasing here).
+        rounds = list(training_session.rounds.order_by('round_number'))
+        per_round = []
+        for r in rounds:
+            raw_eps = (r.metrics or {}).get('privacy_epsilon')
+            if raw_eps is None:
+                continue
+            try:
+                eps = float(raw_eps)
+            except (TypeError, ValueError):
+                logger.error(
+                    "[DP] Non-numeric privacy_epsilon (%r) in round %s of session %s",
+                    raw_eps, r.round_number, training_session.session_id,
+                )
+                continue
+            if math.isfinite(eps) and eps > 0.0:
+                per_round.append(eps)
+        actual_epsilon = float(sum(per_round))
+
+        # Dataset-level policy counter (audit aggregate). Only a real spend is added.
+        if actual_epsilon > 0.0:
+            try:
+                policy = DatasetPrivacyPolicy.objects.get(dataset_id=dataset_id)
+                policy.record_spent(actual_epsilon)
+                logger.info(
+                    "[DP] Recorded ε=%.6f for dataset %s (session %s, composed over %d round(s): %s)",
+                    actual_epsilon, dataset_id, training_session.session_id,
+                    len(per_round), [round(e, 4) for e in per_round],
+                )
+            except DatasetPrivacyPolicy.DoesNotExist:
+                logger.info(
+                    "[DP] No DatasetPrivacyPolicy for dataset %s — no audit spend recorded",
+                    dataset_id,
+                )
+        else:
+            logger.warning(
+                "[DP] No valid privacy_epsilon for session %s — no spend recorded",
+                training_session.session_id,
+            )
+
+        # Per-researcher budget: record the REAL spend (truthful, exactly-once via the
+        # budget_reconciled guard above). Admission (reserve_job_budget) does NOT debit
+        # spent, so this is the sole place the researcher budget grows.
+        if actual_epsilon > 0.0:
+            try:
+                researcher_id = getattr(training_session, 'user_id', None)
+                if researcher_id is not None:
+                    try:
+                        researcher_budget = ResearcherEpsilonBudget.objects.get(
+                            dataset_id=dataset_id,
+                            researcher_id=researcher_id,
+                        )
+                    except ResearcherEpsilonBudget.DoesNotExist:
+                        logger.info(
+                            "No ResearcherEpsilonBudget for researcher=%s dataset=%s — "
+                            "researcher spend not recorded",
+                            researcher_id, dataset_id,
+                        )
+                    else:
+                        researcher_budget.record_spent(actual_epsilon)
+                        logger.info(
+                            "ResearcherEpsilonBudget updated: researcher=%s dataset=%s +epsilon=%.4f",
+                            researcher_id, dataset_id, actual_epsilon,
+                        )
+            except Exception as exc:
+                logger.error(
+                    "Error updating ResearcherEpsilonBudget (researcher=%s): %s",
+                    getattr(training_session, 'user_id', None), exc,
+                )
+
+    except Exception as exc:
+        logger.error(
+            "[DP] Unexpected error recording privacy spend for session %s: %s",
+            getattr(training_session, 'session_id', '?'), exc,
+        )
+
 
 def complete_training_session(training_session, final_metrics=None):
     """Mark training session as completed with final metrics."""
-    
+
     if not DJANGO_AVAILABLE or not training_session:
         return
-    
+
     try:
         if final_metrics:
             training_session.mark_completed(
@@ -174,23 +316,29 @@ def complete_training_session(training_session, final_metrics=None):
             training_session.status = 'COMPLETED'
             training_session.completed_at = datetime.now()
             training_session.save()
-        
-        # Training session completed
-        
+
+        # Record differential-privacy spend now that training has finished.
+        # _record_privacy_spend never raises, so it cannot affect session status.
+        _record_privacy_spend(training_session)
+
     except Exception as e:
-        # Error completing session
         raise e
 
 def fail_training_session(training_session, error_message, traceback=None):
     """Mark training session as failed with error details."""
-    
+
     if not DJANGO_AVAILABLE or not training_session:
         return
-    
+
+    # Record any privacy budget consumed by completed rounds before marking failed.
+    # A Hub that deliberately crashes training on the last round must still be debited
+    # for the rounds that did run. _record_privacy_spend never raises.
+    _record_privacy_spend(training_session)
+
     try:
         training_session.mark_failed(error_message, traceback)
         print(f"[ERROR] Training session failed: {training_session.session_id} - {error_message}")
-        
+
     except Exception as e:
         print(f"[ERROR] Error marking training session as failed: {e}")
 

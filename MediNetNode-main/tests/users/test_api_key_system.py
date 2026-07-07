@@ -13,13 +13,10 @@ class APIKeyModelTests(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        # Create RESEARCHER role
         self.researcher_role = Role.objects.get(name='RESEARCHER')
-        
-        # Create ADMIN role for negative testing
+        # ADMIN role used for negative testing
         self.admin_role = Role.objects.get(name='ADMIN')
-        
-        # Create users
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_test',
             email='researcher@test.com',
@@ -42,17 +39,17 @@ class APIKeyModelTests(TestCase):
             ip_whitelist=['192.168.1.100', '10.0.0.50']
         )
         
-        # API key should be generated automatically
-        self.assertIsNotNone(api_key.key)
-        self.assertEqual(len(api_key.key), 64)
-        
+        # API key should be generated automatically (raw key exposed once on create)
+        self.assertIsNotNone(api_key._raw_key)
+        self.assertEqual(len(api_key._raw_key), 64)
+
         # Key should be unique
         api_key2 = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key 2',
             ip_whitelist=['192.168.1.200']
         )
-        self.assertNotEqual(api_key.key, api_key2.key)
+        self.assertNotEqual(api_key._raw_key, api_key2._raw_key)
     
     def test_api_key_generation_security(self):
         """Test API key generation produces secure random keys."""
@@ -136,8 +133,7 @@ class APIKeyModelTests(TestCase):
         # Update usage
         test_ip = '192.168.1.100'
         api_key.update_last_used(test_ip)
-        
-        # Reload from database
+
         api_key.refresh_from_db()
         self.assertIsNotNone(api_key.last_used_at)
         self.assertEqual(api_key.last_used_ip, test_ip)
@@ -186,7 +182,7 @@ class APIRequestModelTests(TestCase):
         request_log = APIRequest.objects.create(
             api_key=self.api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET',
             ip_address='192.168.1.100',
             user_agent='TestClient/1.0',
@@ -197,7 +193,7 @@ class APIRequestModelTests(TestCase):
         
         self.assertEqual(request_log.api_key, self.api_key)
         self.assertEqual(request_log.user, self.researcher_user)
-        self.assertEqual(request_log.endpoint, '/api/v1/ping')
+        self.assertEqual(request_log.endpoint, '/api/v2/ping')
         self.assertEqual(request_log.method, 'GET')
         self.assertEqual(request_log.status_code, 200)
         self.assertTrue(request_log.is_successful)
@@ -207,7 +203,7 @@ class APIRequestModelTests(TestCase):
         failed_request = APIRequest.objects.create(
             api_key=None,  # No API key for failed auth
             user=None,     # No user for failed auth
-            endpoint='/api/v1/get-data-info',
+            endpoint='/api/v2/get-data-info',
             method='GET',
             ip_address='192.168.1.200',  # Unauthorized IP
             user_agent='TestClient/1.0',
@@ -224,12 +220,11 @@ class APIRequestModelTests(TestCase):
     
     def test_api_request_indexing(self):
         """Test that database indexes work for efficient queries."""
-        # Create multiple requests for testing
         for i in range(5):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -269,14 +264,15 @@ class APIKeySecurityTests(TestCase):
             ip_whitelist=['192.168.1.100']
         )
         
-        # Try to create another key with same key value
+        # Try to create another key with the same stored hash → the unique
+        # constraint on key_hash must reject it.
         from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             APIKey.objects.create(
                 user=self.researcher_user,
                 name='Key 2',
                 ip_whitelist=['192.168.1.100'],
-                key=api_key1.key  # Same key should fail
+                key_hash=api_key1.key_hash  # Same hash should fail
             )
     
     def test_api_key_deactivation(self):
@@ -323,18 +319,17 @@ class APIKeySecurityTests(TestCase):
             name='Cascade Test Key',
             ip_whitelist=['192.168.1.100']
         )
-        
-        # Create request log
+
         APIRequest.objects.create(
             api_key=api_key,
             user=self.researcher_user,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET',
             ip_address='192.168.1.100',
             status_code=200,
             is_successful=True
         )
-        
+
         key_id = api_key.id
         user_id = self.researcher_user.id
         

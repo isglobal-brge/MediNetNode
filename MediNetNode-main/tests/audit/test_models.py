@@ -126,7 +126,6 @@ class DataAccessLogModelTests(TestCase):
     def test_data_sensitivity_levels(self):
         """Test all data sensitivity levels."""
         for level in range(1, 6):
-            # Create a separate audit event for each data access log
             audit_event = AuditEvent.objects.create(
                 user=self.user,
                 action=f'DATA_ACCESS_LEVEL_{level}',
@@ -190,7 +189,6 @@ class SecurityIncidentModelTests(TestCase):
 
     def test_update_risk_score(self):
         """Test risk score update from related events."""
-        # Create high-risk audit event
         audit_event = AuditEvent.objects.create(
             user=self.user,
             action='FAILED_LOGIN',
@@ -198,23 +196,19 @@ class SecurityIncidentModelTests(TestCase):
             risk_score=90,
             success=False
         )
-        
+
         incident = SecurityIncident.objects.create(
             incident_type='MULTIPLE_FAILED_AUTH',
             description='Multiple failed login attempts'
         )
-        
-        # Link the event
+
         incident.related_events.add(audit_event)
-        
-        # Update risk score
         incident.update_risk_score()
-        
+
         self.assertEqual(incident.risk_score, 90)
 
     def test_multiple_related_events(self):
         """Test incident with multiple related events."""
-        # Create multiple events
         event1 = AuditEvent.objects.create(
             user=self.user,
             action='FAILED_LOGIN',
@@ -233,7 +227,7 @@ class SecurityIncidentModelTests(TestCase):
         
         incident.related_events.add(event1, event2)
         incident.update_risk_score()
-        
+
         # Should take the maximum risk score
         self.assertEqual(incident.risk_score, 85)
 
@@ -270,7 +264,7 @@ class AuditLoggerTests(TestCase):
             user=self.user
         )
         self.assertEqual(auth_event.category, 'AUTH')
-        
+
         # Test data access categorization
         data_event = AuditLogger.log_event(
             action='QUERY_DATA',
@@ -287,7 +281,7 @@ class AuditLoggerTests(TestCase):
             user=self.user
         )
         self.assertLess(low_risk.risk_score, 30)
-        
+
         # Test high risk event
         high_risk = AuditLogger.log_event(
             action='DELETE_DATASET',
@@ -318,7 +312,6 @@ class AuditLoggerTests(TestCase):
 
     def test_security_incident_creation(self):
         """Test automatic security incident creation for high-risk events."""
-        # Create a very high-risk event
         event = AuditLogger.log_event(
             action='UNAUTHORIZED_DATA_ACCESS',
             user=self.user,
@@ -349,7 +342,7 @@ class AuditLoggerTests(TestCase):
     def test_api_access_logging(self):
         """Test API access logging convenience method."""
         event = AuditLogger.log_api_access(
-            endpoint='/api/v1/datasets',
+            endpoint='/api/v2/datasets',
             user=self.user,
             method='GET',
             success=True,
@@ -360,11 +353,8 @@ class AuditLoggerTests(TestCase):
         
         self.assertEqual(event.category, 'API')
         self.assertEqual(event.action, 'API_GET')
-        self.assertEqual(event.resource, 'api:/api/v1/datasets')
+        self.assertEqual(event.resource, 'api:/api/v2/datasets')
         self.assertEqual(event.request_size, 1024)
         self.assertEqual(event.request_duration_ms, 150)
-
-
-# Keep legacy tests for backward compatibility
 
 

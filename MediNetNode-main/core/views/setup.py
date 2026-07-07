@@ -30,16 +30,29 @@ class RootRedirectView(View):
     Root redirect view that intelligently routes users.
 
     If no users exist: redirect to setup
-    If users exist: redirect to login
+    If not authenticated: redirect to login
+    If authenticated: redirect to role-specific dashboard
     """
 
     def get(self, request):
-        # Check if any users exist
         if not User.objects.exists() and not SystemConfiguration.is_setup_completed():
-            # No users, redirect to setup
             return redirect('initial-setup-page')
+
+        if request.user.is_authenticated:
+            role_name = getattr(request.user.role, 'name', None) if hasattr(request.user, 'role') else None
+
+            if role_name == 'ADMIN' or request.user.is_superuser:
+                return redirect('admin_dashboard')
+            elif role_name == 'MEMBER':
+                return redirect('inference:member_dashboard')
+            elif role_name == 'AUDITOR':
+                return redirect('audit:dashboard')
+            elif role_name == 'RESEARCHER':
+                # RESEARCHER users use API only, redirect to API docs
+                return redirect('schema-swagger-ui')
+            else:
+                return redirect('login')
         else:
-            # Users exist, redirect to login
             return redirect('login')
 
 
@@ -52,12 +65,9 @@ class InitialSetupPageView(View):
     """
 
     def get(self, request):
-        # Check if setup is already completed
         if User.objects.exists() or SystemConfiguration.is_setup_completed():
-            # Setup already completed, redirect to login
             return redirect('login')
 
-        # Get suggested port from server
         suggested_port = request.META.get('SERVER_PORT', '8000')
 
         return render(request, 'setup/initial_setup.html', {
@@ -121,7 +131,6 @@ class InitialSetupView(APIView):
             - setup_required: Always True
             - tips: Tips to complete the setup
         """
-        # Security check
         allowed, error_data = self.check_setup_allowed()
         if not allowed:
             return Response(error_data, status=status.HTTP_403_FORBIDDEN)
@@ -320,7 +329,6 @@ class InitialSetupView(APIView):
                 email=email,
                 password=password
             )
-            # Assign ADMIN role
             user.role = admin_role
             user.save(update_fields=['role'])
 

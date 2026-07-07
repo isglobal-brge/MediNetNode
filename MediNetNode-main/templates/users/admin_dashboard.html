@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Dashboard - MediNet{% endblock %}
 
 {% block extra_css %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
+<style nonce="{% csp_nonce %}">
     /* Dataset metrics purple color */
     .bg-purple {
         background-color: #9c27b0 !important;
@@ -414,7 +415,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Modern Medical Blue Theme Colors - #42a5f5
     const gradientColors = [
@@ -558,8 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // User Activity Timeline Chart (30-day trend)
     const activityCtx = document.getElementById('activityChart').getContext('2d');
-    
-    // Get real activity data from backend
+
     const activityData = [
         {% for activity in activity_data %}
         {

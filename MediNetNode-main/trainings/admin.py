@@ -90,11 +90,11 @@ class TrainingSessionAdmin(admin.ModelAdmin):
     def status_badge(self, obj):
         """Display status with color coding."""
         colors = {
-            'STARTING': '#ffc107',    # Yellow
-            'ACTIVE': '#28a745',      # Green
-            'COMPLETED': '#007bff',   # Blue
-            'FAILED': '#dc3545',      # Red
-            'CANCELLED': '#6c757d',   # Gray
+            'STARTING': '#ffc107',
+            'ACTIVE': '#28a745',
+            'COMPLETED': '#007bff',
+            'FAILED': '#dc3545',
+            'CANCELLED': '#6c757d',
         }
         color = colors.get(obj.status, '#6c757d')
         return format_html(
@@ -231,7 +231,6 @@ class TrainingRoundAdmin(admin.ModelAdmin):
         return False
 
 
-# Custom admin site configuration
 admin.site.site_header = "MediNet Training Monitoring"
 admin.site.site_title = "Training Admin"
 admin.site.index_title = "Training Management"

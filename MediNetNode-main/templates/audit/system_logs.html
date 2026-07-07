@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}System Audit Logs - MediNet{% endblock %}
 
@@ -265,7 +266,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
 /* Filter Section Styling */
 .filter-icon-wrapper {
     width: 40px;
@@ -380,7 +381,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Handle collapse icon rotation
     const dateToggle = document.querySelector('[data-bs-target="#dateFilters"]');

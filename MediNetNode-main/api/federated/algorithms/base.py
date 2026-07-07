@@ -60,14 +60,12 @@ class FederatedMLAlgorithm(ABC):
         self.y_val = y_val
         self.config = config
 
-        # Validate input data
         if X_train.shape[0] != y_train.shape[0]:
             raise ValueError(
                 f"X_train and y_train must have same number of samples. "
                 f"Got X_train: {X_train.shape[0]}, y_train: {y_train.shape[0]}"
             )
 
-        # Validate validation data if provided
         if X_val is not None and y_val is not None:
             if X_val.shape[0] != y_val.shape[0]:
                 raise ValueError(

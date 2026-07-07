@@ -57,7 +57,6 @@ class CustomUserModelTests(TestCase):
 
     def test_create_user_with_each_role(self):
         """Test: Crear usuario con cada rol (Admin, Investigador, Auditor)"""
-        # Get or create roles (some might exist from setUp)
         admin_role, _ = Role.objects.get_or_create(
             name='ADMIN', 
             defaults={'permissions': {'user.create': True, 'user.view': True, 'user.delete': True}}
@@ -70,8 +69,7 @@ class CustomUserModelTests(TestCase):
             name='AUDITOR', 
             defaults={'permissions': {'logs.view': True, 'audit.view': True}}
         )
-        
-        # Test Admin user creation
+
         admin_user = CustomUser.objects.create_user(
             username='admin_user',
             password='AdminPass123!',
@@ -81,8 +79,7 @@ class CustomUserModelTests(TestCase):
         self.assertEqual(admin_user.role.name, 'ADMIN')
         self.assertTrue(admin_user.has_permission('user.create'))
         self.assertTrue(admin_user.has_permission('user.view'))
-        
-        # Test Investigador user creation
+
         researcher_user = CustomUser.objects.create_user(
             username='researcher_user',
             password='ResearcherPass123!',
@@ -93,8 +90,7 @@ class CustomUserModelTests(TestCase):
         # RESEARCHER should NOT have user management permissions
         self.assertFalse(researcher_user.has_permission('user.view'))
         self.assertFalse(researcher_user.has_permission('user.create'))
-        
-        # Test Auditor user creation
+
         auditor_user = CustomUser.objects.create_user(
             username='auditor_user',
             password='AuditorPass123!',
@@ -112,16 +108,15 @@ class CustomUserModelTests(TestCase):
             password='SessionPass123!',
             role=self.admin_role
         )
-        
+
         # New user without last_activity should be expired
         self.assertTrue(user.is_session_expired())
-        
-        # Set recent activity
+
         user.last_activity = timezone.now()
         user.save()
         self.assertFalse(user.is_session_expired())
-        
-        # Set old activity (more than 30 minutes ago)
+
+        # Old activity (more than 30 minutes ago)
         user.last_activity = timezone.now() - timedelta(minutes=35)
         user.save()
         self.assertTrue(user.is_session_expired())
@@ -136,30 +131,27 @@ class CustomUserModelTests(TestCase):
             role=self.admin_role
         )
         initial_password_hash = user.password
-        
-        # Change password - should create history entry
+
+        # Changing password should create a history entry
         user.set_password('NewPass123!')
         user.save()
-        
-        # Check history was created
+
         history = PasswordHistory.objects.filter(user=user)
         self.assertEqual(history.count(), 1)
         self.assertEqual(history.first().password_hash, initial_password_hash)
-        
-        # Test password reuse detection
+
         self.assertTrue(user.check_password_history('InitialPass123!'))  # Old password
         self.assertTrue(user.check_password_history('NewPass123!'))      # Current password
         self.assertFalse(user.check_password_history('NeverUsedPass123!'))  # Never used
-        
-        # Change password 5 more times
+
         for i in range(5):
             user.set_password(f'Password{i}123!')
             user.save()
-        
+
         # Should only keep last 5 passwords in history + current
         total_history = PasswordHistory.objects.filter(user=user).count()
-        self.assertLessEqual(total_history, 5)  # Max 5 in history
-        
+        self.assertLessEqual(total_history, 5)
+
         # Initial password should no longer be detectable after 6 changes
         self.assertFalse(user.check_password_history('InitialPass123!'))
 

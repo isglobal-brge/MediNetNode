@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}{{ page_title }} - MediNet{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     .session-card {
         border: none;
         border-radius: 12px;
@@ -401,7 +402,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     let refreshCountdown = parseInt(localStorage.getItem('training_refresh_interval') || '10');
     let currentInterval = refreshCountdown;
@@ -414,10 +415,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const nextRefreshElement = document.getElementById('nextRefresh');
     const pauseBtn = document.getElementById('pauseBtn');
     
-    // Initialize resource gauges
     initializeResourceGauges();
-    
-    // Initialize refresh control
+
     initializeRefreshControl();
     
     function initializeRefreshControl() {
@@ -452,10 +451,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function setRefreshInterval(interval) {
-        // Clear existing interval
         clearInterval(countdownInterval);
-        
-        // Update buttons
+
         document.querySelectorAll('.refresh-interval-btn').forEach(btn => {
             btn.classList.remove('active');
         });
@@ -588,14 +585,12 @@ document.addEventListener('DOMContentLoaded', function() {
         sessions.forEach(session => {
             const card = document.querySelector(`[data-session-id="${session.session_id}"]`);
             if (card) {
-                // Update progress bar
                 const progressBar = card.querySelector('.progress-bar');
                 if (progressBar) {
                     progressBar.style.width = session.progress_percentage + '%';
                     progressBar.setAttribute('data-progress', session.progress_percentage);
                 }
                 
-                // Update progress text
                 const progressText = card.querySelector('.progress').nextElementSibling;
                 if (progressText) {
                     const roundInfo = progressText.querySelector('small:first-child');
@@ -609,11 +604,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // Update resource gauges
                 updateResourceGauge(card, '.cpu-gauge .gauge-fill', session.cpu_usage || 0);
                 updateResourceGauge(card, '.memory-gauge .gauge-fill', Math.min((session.memory_usage || 0) / 1024 * 100, 100));
-                
-                // Update resource labels
+
                 const cpuLabel = card.querySelector('.cpu-gauge .resource-label div:first-child');
                 const memoryLabel = card.querySelector('.memory-gauge .resource-label div:first-child');
                 

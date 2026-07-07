@@ -18,36 +18,31 @@ from users.models import CustomUser
 @require_role('AUDITOR')
 def auditor_dashboard(request):
     """Dashboard principal para auditores con métricas y visualizaciones."""
-    
-    # Configurar período de análisis (por defecto 7 días)
+
     days = int(request.GET.get('days', 7))
     if days not in [7, 30, 90]:
         days = 7
-        
+
     start_date = timezone.now() - timedelta(days=days)
-    
-    # Métricas principales
+
     total_events = AuditEvent.objects.filter(timestamp__gte=start_date).count()
     security_events = AuditEvent.objects.filter(
-        timestamp__gte=start_date, 
+        timestamp__gte=start_date,
         severity__in=['CRITICAL', 'SECURITY']
     ).count()
     failed_events = AuditEvent.objects.filter(
-        timestamp__gte=start_date, 
+        timestamp__gte=start_date,
         success=False
     ).count()
-    
-    # Incidentes de seguridad
+
     open_incidents = SecurityIncident.objects.filter(state__in=['OPEN', 'INVESTIGATING']).count()
     total_incidents = SecurityIncident.objects.count()
-    
-    # Eventos que requieren revisión
+
     events_pending_review = AuditEvent.objects.filter(
-        requires_review=True, 
+        requires_review=True,
         reviewed_at__isnull=True
     ).count()
-    
-    # Usuarios más activos en el período
+
     top_users = AuditEvent.objects.filter(
         timestamp__gte=start_date,
         user__isnull=False
@@ -57,36 +52,32 @@ def auditor_dashboard(request):
         event_count=Count('id'),
         avg_risk=Avg('risk_score')
     ).order_by('-event_count')[:10]
-    
-    # Eventos por categoría para gráfico pie
+
     events_by_category = AuditEvent.objects.filter(
         timestamp__gte=start_date
     ).values('category').annotate(
         count=Count('id')
     ).order_by('-count')
-    
-    # Timeline de eventos críticos (últimos 10)
+
     critical_events = AuditEvent.objects.filter(
         timestamp__gte=start_date,
         severity__in=['CRITICAL', 'SECURITY']
     ).select_related('user').order_by('-timestamp')[:10]
-    
-    # Datos para gráfico de tendencias (últimos 7 días)
+
     trends_data = []
     for i in range(6, -1, -1):  # Últimos 7 días
         date = timezone.now().date() - timedelta(days=i)
         day_events = AuditEvent.objects.filter(
             timestamp__date=date
         )
-        
+
         trends_data.append({
             'date': date.strftime('%Y-%m-%d'),
             'total': day_events.count(),
             'security': day_events.filter(severity__in=['CRITICAL', 'SECURITY']).count(),
             'failed': day_events.filter(success=False).count()
         })
-    
-    # Análisis de patrones sospechosos
+
     suspicious_patterns = _detect_suspicious_patterns(start_date)
     
     context = {
@@ -110,29 +101,28 @@ def auditor_dashboard(request):
 @require_role('AUDITOR')
 def audit_search(request):
     """Búsqueda avanzada de eventos de auditoría."""
-    
+
     events = AuditEvent.objects.select_related('user', 'reviewed_by').all()
-    
-    # Filtros
+
     category_filter = request.GET.get('category')
     if category_filter and category_filter != 'ALL':
         events = events.filter(category=category_filter)
-    
+
     severity_filter = request.GET.get('severity')
     if severity_filter and severity_filter != 'ALL':
         events = events.filter(severity=severity_filter)
-        
+
     user_filter = request.GET.get('user')
     if user_filter:
         events = events.filter(
             Q(user__username__icontains=user_filter) |
             Q(user__email__icontains=user_filter)
         )
-    
+
     ip_filter = request.GET.get('ip_address')
     if ip_filter:
         events = events.filter(ip_address__icontains=ip_filter)
-    
+
     # Filtro por rango de fechas
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
@@ -150,7 +140,6 @@ def audit_search(request):
         except ValueError:
             pass
     
-    # Filtro por risk score mínimo
     min_risk = request.GET.get('min_risk')
     if min_risk:
         try:
@@ -158,8 +147,7 @@ def audit_search(request):
             events = events.filter(risk_score__gte=min_risk_value)
         except ValueError:
             pass
-    
-    # Búsqueda en texto libre
+
     search_text = request.GET.get('search')
     if search_text:
         events = events.filter(
@@ -167,24 +155,20 @@ def audit_search(request):
             Q(resource__icontains=search_text) |
             Q(details__icontains=search_text)
         )
-    
-    # Solo eventos que requieren revisión
+
     if request.GET.get('requires_review') == 'true':
         events = events.filter(requires_review=True, reviewed_at__isnull=True)
-    
-    # Ordenamiento
+
     order_by = request.GET.get('order_by', '-timestamp')
     if order_by in ['-timestamp', 'timestamp', '-risk_score', 'risk_score', 'category', 'severity']:
         events = events.order_by(order_by)
     else:
         events = events.order_by('-timestamp')
-    
-    # Paginación
+
     paginator = Paginator(events, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Opciones para filtros
+
     categories = AuditEvent.CATEGORY_CHOICES
     severities = AuditEvent.SEVERITY_CHOICES
     
@@ -202,27 +186,24 @@ def audit_search(request):
 @require_role('AUDITOR')
 def dataset_analysis(request):
     """Análisis especializado de accesos a datasets."""
-    
-    # Filtrar solo eventos de acceso a datos
+
     data_events = AuditEvent.objects.filter(category='DATA_ACCESS').select_related('user')
-    
-    # Filtros específicos
+
     days = int(request.GET.get('days', 30))
     start_date = timezone.now() - timedelta(days=days)
     data_events = data_events.filter(timestamp__gte=start_date)
-    
+
     medical_domain = request.GET.get('medical_domain')
     if medical_domain:
         # Filtrar por dominio médico usando DataAccessLog relacionado
         data_events = data_events.filter(
             data_access_log__medical_domain__icontains=medical_domain
         )
-    
-    # Estadísticas generales
+
     total_accesses = data_events.count()
     unique_users = data_events.values('user').distinct().count()
     unique_datasets = data_events.values('resource').distinct().count()
-    
+
     # Top datasets más accedidos - filtrar solo accesos reales a datasets
     top_datasets = data_events.filter(
         resource__startswith='dataset:'
@@ -240,17 +221,15 @@ def dataset_analysis(request):
     from dataset.models import Dataset
     available_domains = Dataset.objects.using('datasets_db').values_list('medical_domain', flat=True).distinct().exclude(medical_domain__isnull=True).exclude(medical_domain__exact='')
     
-    # Accesos por dominio médico
     domain_stats = DataAccessLog.objects.filter(
         audit_event__timestamp__gte=start_date
     ).values('medical_domain').annotate(
         access_count=Count('id'),
         avg_sensitivity=Avg('data_sensitivity_level')
     ).order_by('-access_count')
-    
-    # Patrones de acceso sospechosos específicos para datasets
+
     suspicious_data_patterns = _detect_suspicious_data_patterns(start_date)
-    
+
     # Accesos por hora del día (heatmap)
     hourly_access = {}
     for hour in range(24):
@@ -277,17 +256,16 @@ def dataset_analysis(request):
 @require_role('AUDITOR')
 def security_incidents(request):
     """Gestión de incidentes de seguridad."""
-    
+
     incidents = SecurityIncident.objects.select_related('assigned_to').all()
-    
-    # Filtros
+
     state_filter = request.GET.get('state')
     # Default filter: show only open and investigating incidents if no filter specified
     if not state_filter:
         incidents = incidents.filter(state__in=['OPEN', 'INVESTIGATING'])
     elif state_filter != 'ALL':
         incidents = incidents.filter(state=state_filter)
-    
+
     severity_filter = request.GET.get('severity')
     if severity_filter:
         try:
@@ -295,16 +273,13 @@ def security_incidents(request):
             incidents = incidents.filter(severity=severity_value)
         except ValueError:
             pass
-    
-    # Ordenamiento
+
     incidents = incidents.order_by('-created_at')
-    
-    # Paginación
+
     paginator = Paginator(incidents, 25)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Estadísticas de incidentes
+
     incident_stats = {
         'total': SecurityIncident.objects.count(),
         'open': SecurityIncident.objects.filter(state='OPEN').count(),
@@ -366,11 +341,9 @@ def mark_event_reviewed(request, event_id):
         
         if event.reviewed_at:
             return JsonResponse({'success': False, 'error': 'Event already reviewed'})
-        
-        # Mark as reviewed
+
         event.mark_reviewed(request.user)
-        
-        # Log this action
+
         from .audit_logger import AuditLogger
         AuditLogger.log_event(
             action='MARK_EVENT_REVIEWED',
@@ -393,10 +366,9 @@ def mark_event_reviewed(request, event_id):
 @require_role('AUDITOR')
 def export_audit_report(request):
     """Exportar reporte de auditoría en CSV."""
-    
-    # Construir queryset basado en filtros
+
     events = AuditEvent.objects.select_related('user', 'reviewed_by').all()
-    
+
     # Aplicar los mismos filtros que en audit_search
     category_filter = request.GET.get('category')
     if category_filter and category_filter != 'ALL':
@@ -417,8 +389,7 @@ def export_audit_report(request):
             events = events.filter(timestamp__date__lte=end)
         except ValueError:
             pass
-    
-    # Crear respuesta CSV
+
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="audit_report_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
     
@@ -428,8 +399,9 @@ def export_audit_report(request):
         'Success', 'Risk Score', 'Severity', 'Requires Review', 'Details'
     ])
     
+    from medinet_core.security.csv_safe import csv_safe_cell
     for event in events[:5000]:  # Limitar a 5000 registros para evitar timeouts
-        writer.writerow([
+        writer.writerow([csv_safe_cell(v) for v in (
             event.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             event.category,
             event.action,
@@ -441,7 +413,7 @@ def export_audit_report(request):
             event.severity,
             'Yes' if event.requires_review else 'No',
             json.dumps(event.details) if event.details else ''
-        ])
+        )])
     
     return response
 
@@ -526,7 +498,6 @@ def dataset_real_data_analysis(request):
         }
     )
     
-    # Obtener todos los datasets disponibles
     datasets = Dataset.objects.using('datasets_db').all()
     
     selected_dataset_id = request.GET.get('dataset_id')
@@ -550,7 +521,6 @@ def dataset_real_data_analysis(request):
                 ).hexdigest()[:8].upper()
             }
             
-            # Verificar que el archivo existe
             if os.path.exists(selected_dataset.file_path):
                 try:
                     # Leer solo las primeras 100 filas (límite de seguridad)
@@ -562,12 +532,10 @@ def dataset_real_data_analysis(request):
                         df = None
                     
                     if df is not None:
-                        # Análisis de anonimización automática
                         anonymization_score = _analyze_anonymization_quality(df)
-                        
-                        # Análisis de cumplimiento
+
                         compliance_analysis = _analyze_dataset_compliance(df, selected_dataset)
-                        
+
                         # Convertir a diccionario para template con límite de filas
                         dataset_data = {
                             'dataframe': df,
@@ -579,7 +547,7 @@ def dataset_real_data_analysis(request):
                             'missing_values': df.isnull().sum().to_dict(),
                             'unique_counts': df.nunique().to_dict()
                         }
-                        
+
                         # Log específico del acceso a datos reales
                         AuditLogger.log_event(
                             action='REAL_DATA_PREVIEW_ACCESSED',
@@ -604,17 +572,13 @@ def dataset_real_data_analysis(request):
                 
         except Dataset.DoesNotExist:
             dataset_data = {'error': 'Dataset not found'}
-    
-    # Estadísticas de uso por dominio médico
+
     domain_usage_stats = _get_domain_usage_statistics()
-    
-    # Detección de accesos anómalos
+
     anomaly_detection = _detect_anomalous_access_patterns()
-    
-    # Análisis de cumplimiento de políticas
+
     policy_compliance = _analyze_policy_compliance()
-    
-    # Datasets sin uso reciente (unused)
+
     unused_datasets = _find_unused_datasets()
     
     context = {
@@ -896,16 +860,14 @@ def _find_unused_datasets():
     
     end_date = timezone.now()
     cutoff_date = end_date - timedelta(days=90)  # Sin uso en 90 días
-    
-    # Datasets que han sido accedidos recientemente
+
     recently_accessed_datasets = set(
         AuditEvent.objects.filter(
             category='DATA_ACCESS',
             timestamp__gte=cutoff_date
         ).values_list('resource', flat=True)
     )
-    
-    # Obtener todos los datasets
+
     all_datasets = Dataset.objects.using('datasets_db').values('id', 'name', 'medical_domain', 'uploaded_at')
     
     unused_datasets = []

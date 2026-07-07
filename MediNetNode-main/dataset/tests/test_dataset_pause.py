@@ -8,7 +8,8 @@ from django.db import connections
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from dataset.models import Dataset, DatasetAccess
+from unittest.mock import patch
+from dataset.models import Dataset, DatasetAccess, DatasetPrivacyPolicy
 from users.models import Role, APIKey
 from api.views import validate_training_permissions, get_user_datasets
 from django.http import JsonResponse
@@ -41,7 +42,6 @@ class DatasetToggleActiveTest(TestCase):
         """Set up test data."""
         self.client = Client()
 
-        # Get or create roles
         self.admin_role, _ = Role.objects.get_or_create(
             name='ADMIN',
             defaults={
@@ -56,7 +56,6 @@ class DatasetToggleActiveTest(TestCase):
             }
         )
 
-        # Create admin user
         self.admin_user = User.objects.create_user(
             username='admin_test',
             email='admin@test.com',
@@ -64,7 +63,6 @@ class DatasetToggleActiveTest(TestCase):
             role=self.admin_role
         )
 
-        # Create test dataset with temp file
         self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
         self.temp_file.write(b'col1,col2\nval1,val2\n')
         self.temp_file.close()
@@ -78,7 +76,7 @@ class DatasetToggleActiveTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum',
+            checksum_sha256='test_checksum',
             is_active=True
         )
 
@@ -91,18 +89,14 @@ class DatasetToggleActiveTest(TestCase):
         """Test that admin can pause an active dataset."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Verify dataset is active
         self.assertTrue(self.dataset.is_active)
 
-        # Pause the dataset
         response = self.client.post(
             reverse('dataset:toggle_active', args=[self.dataset.id])
         )
 
-        # Check redirect
         self.assertEqual(response.status_code, 302)
 
-        # Verify dataset is now paused
         self.dataset.refresh_from_db()
         self.assertFalse(self.dataset.is_active)
 
@@ -110,19 +104,15 @@ class DatasetToggleActiveTest(TestCase):
         """Test that admin can activate a paused dataset."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Set dataset to paused
         self.dataset.is_active = False
         self.dataset.save(using='datasets_db')
 
-        # Activate the dataset
         response = self.client.post(
             reverse('dataset:toggle_active', args=[self.dataset.id])
         )
 
-        # Check redirect
         self.assertEqual(response.status_code, 302)
 
-        # Verify dataset is now active
         self.dataset.refresh_from_db()
         self.assertTrue(self.dataset.is_active)
 
@@ -130,23 +120,19 @@ class DatasetToggleActiveTest(TestCase):
         """Test that toggle_active only accepts POST requests."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Try GET request
         response = self.client.get(
             reverse('dataset:toggle_active', args=[self.dataset.id])
         )
 
-        # Should be rejected
         self.assertEqual(response.status_code, 405)
 
     def test_paused_dataset_in_list(self):
         """Test that paused datasets appear in list view."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Pause the dataset
         self.dataset.is_active = False
         self.dataset.save(using='datasets_db')
 
-        # Get list view
         response = self.client.get(reverse('dataset:list'))
 
         # Paused dataset should still appear
@@ -157,7 +143,6 @@ class DatasetToggleActiveTest(TestCase):
         """Test filtering datasets by active status."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Create a paused dataset
         temp_file2 = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
         temp_file2.write(b'col1,col2\nval1,val2\n')
         temp_file2.close()
@@ -171,15 +156,13 @@ class DatasetToggleActiveTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum2',
+            checksum_sha256='test_checksum2',
             is_active=False
         )
 
         try:
-            # Filter by active status
             response = self.client.get(reverse('dataset:list') + '?status=active')
 
-            # Should only show active dataset
             self.assertContains(response, self.dataset.name)
             self.assertNotContains(response, paused_dataset.name)
         finally:
@@ -189,14 +172,11 @@ class DatasetToggleActiveTest(TestCase):
         """Test filtering datasets by paused status."""
         self.client.login(username='admin_test', password='testpass123')
 
-        # Pause the dataset
         self.dataset.is_active = False
         self.dataset.save(using='datasets_db')
 
-        # Filter by paused status
         response = self.client.get(reverse('dataset:list') + '?status=paused')
 
-        # Should show paused dataset
         self.assertContains(response, self.dataset.name)
 
 
@@ -225,7 +205,6 @@ class DatasetAPIActiveValidationTest(TestCase):
         """Set up test data."""
         self.client = Client()
 
-        # Get or create roles
         self.researcher_role, _ = Role.objects.get_or_create(
             name='RESEARCHER',
             defaults={
@@ -236,7 +215,6 @@ class DatasetAPIActiveValidationTest(TestCase):
             }
         )
 
-        # Create researcher user
         self.researcher_user = User.objects.create_user(
             username='researcher_test',
             email='researcher@test.com',
@@ -244,14 +222,13 @@ class DatasetAPIActiveValidationTest(TestCase):
             role=self.researcher_role
         )
 
-        # Create API key for researcher
-        
-        self.api_key = APIKey.objects.create(
+        self.api_key = APIKey(
             user=self.researcher_user,
-            key='test_api_key_123'
+            name='Test API Key',
         )
+        self.api_key.set_key('test_api_key_123')
+        self.api_key.save()
 
-        # Create test datasets
         self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
         self.temp_file.write(b'col1,col2\nval1,val2\n')
         self.temp_file.close()
@@ -265,7 +242,7 @@ class DatasetAPIActiveValidationTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum_active',
+            checksum_sha256='test_checksum_active',
             is_active=True
         )
 
@@ -282,11 +259,10 @@ class DatasetAPIActiveValidationTest(TestCase):
             data_type='tabular',
             file_size=1024,
             file_format='csv',
-            checksum_md5='test_checksum_paused',
+            checksum_sha256='test_checksum_paused',
             is_active=False
         )
 
-        # Grant access to both datasets
         DatasetAccess.objects.using('datasets_db').create(
             dataset=self.active_dataset,
             user_id=self.researcher_user.id,
@@ -312,11 +288,8 @@ class DatasetAPIActiveValidationTest(TestCase):
 
     def test_get_data_info_excludes_paused_datasets(self):
         """Test that get_user_datasets() only returns active datasets."""
-
-        # Call the helper function directly
         datasets = get_user_datasets(self.researcher_user)
 
-        # Should only return active dataset
         self.assertEqual(len(datasets), 1)
         self.assertEqual(datasets[0].id, self.active_dataset.id)
         self.assertEqual(datasets[0].name, 'Active Dataset')
@@ -324,9 +297,6 @@ class DatasetAPIActiveValidationTest(TestCase):
 
     def test_start_client_rejects_paused_dataset(self):
         """Test that validate_training_permissions rejects paused datasets."""
-        
-
-        # Prepare model_json with paused dataset
         model_json = {
             'model': {
                 'dataset': {
@@ -340,22 +310,17 @@ class DatasetAPIActiveValidationTest(TestCase):
             }
         }
 
-        # Call the validation function directly
         result = validate_training_permissions(self.researcher_user, model_json)
 
-        # Should return JsonResponse error for paused dataset
         self.assertIsInstance(result, JsonResponse)
         self.assertEqual(result.status_code, 403)
 
-        # Parse the response content
         data = json.loads(result.content)
         self.assertIn('error', data)
         self.assertIn('paused', data['error'].lower())
 
     def test_start_client_accepts_active_dataset(self):
         """Test that validate_training_permissions accepts active datasets."""
-
-        # Prepare model_json with active dataset
         model_json = {
             'model': {
                 'dataset': {
@@ -369,8 +334,14 @@ class DatasetAPIActiveValidationTest(TestCase):
             }
         }
 
-        # Call the validation function directly
-        result = validate_training_permissions(self.researcher_user, model_json)
+        # The Node fail-closes without a privacy policy, so configure one and a
+        # deterministic epsilon estimate for the budget gate.
+        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+            dataset=self.active_dataset, sensitivity='medium',
+            max_epsilon_per_job=1.0, lifetime_budget=5.0,
+        )
 
-        # Should return None (no error) for active dataset
+        with patch('api.views.estimate_job_epsilon', return_value=0.5):
+            result = validate_training_permissions(self.researcher_user, model_json)
+
         self.assertIsNone(result)

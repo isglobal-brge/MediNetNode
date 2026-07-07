@@ -614,7 +614,6 @@ function toggleIncidentDetails(incidentId) {
 }
 
 function updateIncidentState(incidentId, newState) {
-    // Set up custom modal
     const stateLabels = {
         'OPEN': 'Open',
         'INVESTIGATING': 'Under Investigation', 
@@ -638,12 +637,10 @@ function updateIncidentState(incidentId, newState) {
     `;
     
     document.getElementById('confirmMessage').innerHTML = message;
-    
-    // Show modal
+
     const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
     modal.show();
-    
-    // Handle confirmation
+
     document.getElementById('confirmButton').onclick = function() {
         modal.hide();
         

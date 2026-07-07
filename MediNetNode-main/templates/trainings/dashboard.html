@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}{{ page_title }} - MediNet{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{% csp_nonce %}">
     /* Training Dashboard Specific Styles - Matching Platform Style */
     .metric-card {
         background: var(--card-bg);
@@ -289,6 +290,11 @@
                 <i class="bi bi-list-ul"></i>
                 Browse Training History
             </a>
+            <a href="{% url 'trainings:budget_reset_list' %}" class="btn-action secondary">
+                <i class="bi bi-shield-exclamation"></i>
+                Privacy Budget Resets
+                {% if pending_count %}<span class="badge bg-warning text-dark ms-1">{{ pending_count }}</span>{% endif %}
+            </a>
             <a href="#" class="btn-action secondary" onclick="exportTrainingData()">
                 <i class="bi bi-download"></i>
                 Export Training Data
@@ -412,7 +418,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     let refreshCountdown = 30;
     let countdownInterval;
@@ -421,7 +427,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const countdownElement = document.getElementById('countdown');
     const refreshText = document.getElementById('refreshText');
     
-    // Show auto-refresh indicator
     refreshIndicator.style.display = 'block';
     
     function updateCountdown() {
@@ -438,11 +443,9 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshIndicator.classList.add('updating');
         refreshText.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Updating...';
         
-        // Fetch updated statistics
         fetch('{% url "trainings:dashboard_stats_api" %}')
             .then(response => response.json())
             .then(data => {
-                // Update statistics
                 document.getElementById('activeCount').textContent = data.active_count;
                 document.getElementById('todayCompleted').textContent = data.today_completed;
                 document.getElementById('successRate').textContent = data.success_rate + '%';

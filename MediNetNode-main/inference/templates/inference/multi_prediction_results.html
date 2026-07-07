@@ -1,0 +1,658 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load inference_filters %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page header */
+    .page-header {
+        background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Wizard steps */
+    .wizard-steps {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-top: 1.5rem;
+    }
+
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+    }
+
+    .wizard-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+    .wizard-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+
+    .wizard-step.active {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+    }
+
+    .wizard-step .step-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .wizard-step.active .step-num,
+    .wizard-step.completed .step-num {
+        background: white;
+        color: #059669;
+    }
+
+    /* Summary stats */
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .summary-stat {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .summary-stat .value {
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+
+    .summary-stat .value.success { color: #059669; }
+    .summary-stat .value.error { color: #dc2626; }
+    .summary-stat .value.info { color: #0d6efd; }
+
+    .summary-stat .label {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    /* Model result card */
+    .model-result-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+
+    .model-result-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        cursor: pointer;
+    }
+
+    .model-result-header.success {
+        background: #ecfdf5;
+        border-left: 4px solid #10b981;
+    }
+
+    .model-result-header.error {
+        background: #fef2f2;
+        border-left: 4px solid #ef4444;
+    }
+
+    .model-result-header .model-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .model-result-header .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+
+    .model-result-header.success .icon {
+        background: #d1fae5;
+        color: #059669;
+    }
+
+    .model-result-header.error .icon {
+        background: #fecaca;
+        color: #dc2626;
+    }
+
+    .model-result-header h5 {
+        margin: 0;
+        font-weight: 600;
+        font-size: 1rem;
+    }
+
+    .model-result-header .model-meta {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    .model-result-header .stats-mini {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        font-size: 0.85rem;
+    }
+
+    .model-result-header .stats-mini span {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .model-result-header .toggle-icon {
+        color: #9ca3af;
+        transition: transform 0.2s;
+    }
+
+    .model-result-header.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+    }
+
+    .model-result-body {
+        padding: 1.25rem;
+    }
+
+    /* Collapsible body */
+    .model-result-body.collapsed {
+        display: none;
+    }
+
+    /* Results table */
+    .results-table-wrapper {
+        overflow-x: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+    }
+
+    .results-table {
+        width: 100%;
+        margin: 0;
+        font-size: 0.85rem;
+    }
+
+    .results-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        padding: 0.6rem 0.75rem;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .results-table td {
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+    }
+
+    .results-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    /* Prediction badges */
+    .prediction-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 1rem;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+
+    .prediction-badge.class-0 { background: #dbeafe; color: #1e40af; }
+    .prediction-badge.class-1 { background: #fef3c7; color: #92400e; }
+    .prediction-badge.class-2 { background: #dcfce7; color: #166534; }
+    .prediction-badge.class-3 { background: #fce7f3; color: #be185d; }
+
+    /* Probability bar */
+    .prob-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .prob-bar-track {
+        flex: 1;
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        min-width: 60px;
+    }
+
+    .prob-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #059669);
+        border-radius: 3px;
+    }
+
+    .prob-bar-value {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #374151;
+        min-width: 45px;
+        text-align: right;
+    }
+
+    /* Error display */
+    .error-list {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .error-list ul {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+
+    .error-list li {
+        color: #991b1b;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Global errors */
+    .global-error-card {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .global-error-card h5 {
+        color: #991b1b;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Action footer */
+    .action-footer {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .wizard-steps {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .wizard-step {
+            border-radius: 0.5rem !important;
+            justify-content: center;
+        }
+
+        .summary-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .model-result-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .model-result-header .stats-mini {
+            margin-top: 0.5rem;
+        }
+
+        .action-footer {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Wizard Steps -->
+    <div class="page-header">
+        <div class="text-center">
+            <h1>
+                {% if global_errors %}
+                <i class="bi bi-x-circle me-2"></i>Multi-Model Prediction Failed
+                {% elif failed_count > 0 and successful_count > 0 %}
+                <i class="bi bi-exclamation-circle me-2"></i>Partial Success
+                {% elif failed_count > 0 %}
+                <i class="bi bi-x-circle me-2"></i>All Predictions Failed
+                {% else %}
+                <i class="bi bi-check-circle me-2"></i>Multi-Model Prediction Complete
+                {% endif %}
+            </h1>
+            <p class="lead">
+                {% if global_errors %}
+                An error occurred before processing could begin
+                {% elif failed_count > 0 and successful_count > 0 %}
+                {{ successful_count }} of {{ models|length }} models completed successfully
+                {% elif failed_count > 0 %}
+                {{ failed_count }} model{{ failed_count|pluralize }} failed to process
+                {% else %}
+                Successfully processed {{ total_rows }} record{{ total_rows|pluralize }} across {{ models|length }} model{{ models|length|pluralize }}
+                {% endif %}
+            </p>
+
+            <!-- Wizard Steps -->
+            <div class="wizard-steps">
+                {% for step in wizard_steps %}
+                <div class="wizard-step {% if step.num == wizard_step %}active{% elif step.num < wizard_step %}completed{% endif %}">
+                    <span class="step-num">
+                        {% if step.num < wizard_step %}
+                        <i class="bi bi-check"></i>
+                        {% else %}
+                        {{ step.num }}
+                        {% endif %}
+                    </span>
+                    <i class="{{ step.icon }}"></i>
+                    <span class="d-none d-sm-inline">{{ step.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if global_errors %}
+    <!-- Global Error Display -->
+    <div class="global-error-card">
+        <h5><i class="bi bi-exclamation-triangle me-2"></i>Processing Error</h5>
+        <div class="error-list">
+            <ul>
+                {% for error in global_errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% else %}
+
+    <!-- Summary Stats -->
+    <div class="summary-stats">
+        <div class="summary-stat">
+            <div class="value info">{{ models|length }}</div>
+            <div class="label">Models Used</div>
+        </div>
+        <div class="summary-stat">
+            <div class="value info">{{ total_rows }}</div>
+            <div class="label">Records Processed</div>
+        </div>
+        <div class="summary-stat">
+            <div class="value success">{{ successful_count }}</div>
+            <div class="label">Successful</div>
+        </div>
+        {% if failed_count > 0 %}
+        <div class="summary-stat">
+            <div class="value error">{{ failed_count }}</div>
+            <div class="label">Failed</div>
+        </div>
+        {% endif %}
+        <div class="summary-stat">
+            <div class="value info">{{ total_execution_time_ms }}ms</div>
+            <div class="label">Total Time</div>
+        </div>
+    </div>
+
+    <!-- Results per Model -->
+    {% for result in all_results %}
+    <div class="model-result-card">
+        <div class="model-result-header {% if result.success %}success{% else %}error{% endif %}" onclick="toggleModelResult(this)">
+            <div class="model-info">
+                <div class="icon">
+                    {% if result.success %}
+                    <i class="bi bi-check-lg"></i>
+                    {% else %}
+                    <i class="bi bi-x-lg"></i>
+                    {% endif %}
+                </div>
+                <div>
+                    <h5>{{ result.model.name }}</h5>
+                    <div class="model-meta">
+                        v{{ result.model.version }} | {{ result.model.get_domain_display }}
+                        {% if result.success %} | {{ result.output_type|title }}{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="stats-mini">
+                {% if result.success %}
+                <span><i class="bi bi-clock"></i> {{ result.execution_time_ms }}ms</span>
+                <span><i class="bi bi-file-text"></i> {{ result.predictions|length }} predictions</span>
+                {% else %}
+                <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> Error</span>
+                {% endif %}
+                <i class="bi bi-chevron-down toggle-icon"></i>
+            </div>
+        </div>
+        <div class="model-result-body">
+            {% if result.success %}
+            <!-- Results Table -->
+            <div class="results-table-wrapper">
+                <table class="results-table table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Predicted Class</th>
+                            <th>Confidence</th>
+                            <th>Probabilities</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pred in result.predictions %}
+                        <tr>
+                            <td>{{ pred.row_index }}</td>
+                            <td>
+                                {% if pred.label is not None %}
+                                <span class="prediction-badge class-{{ pred.label }}">
+                                    {{ result.class_labels|get_class_label:pred.label }}
+                                </span>
+                                {% elif pred.value is not None %}
+                                <span class="prediction-badge">{{ pred.value|floatformat:4 }}</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pred.probabilities %}
+                                    {% for class_id, prob in pred.probabilities.items %}
+                                        {% if class_id == pred.label|stringformat:"s" %}
+                                        <div class="prob-bar">
+                                            <div class="prob-bar-track">
+                                                <div class="prob-bar-fill" style="width: {{ prob|floatformat:0 }}%"></div>
+                                            </div>
+                                            <span class="prob-bar-value">{{ prob|floatformat:1 }}%</span>
+                                        </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pred.probabilities %}
+                                <small class="text-muted">
+                                    {% for class_id, prob in pred.probabilities.items %}
+                                    {{ result.class_labels|get_class_label:class_id }}: {{ prob|floatformat:1 }}%{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </small>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <!-- Error Display -->
+            <div class="error-list">
+                <ul>
+                    {% for error in result.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+
+    <!-- Action Footer -->
+    <div class="action-footer">
+        <div>
+            <a href="{% url 'inference:my_history' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-clock-history me-1"></i>View History
+            </a>
+        </div>
+        <div>
+            {% if successful_count > 0 %}
+            <button type="button" class="btn btn-outline-primary" id="exportAllCsvBtn">
+                <i class="bi bi-download me-1"></i>Export All CSV
+            </button>
+            {% endif %}
+            <a href="{% url 'inference:new_prediction' %}" class="btn btn-success">
+                <i class="bi bi-plus-lg me-1"></i>New Prediction
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleModelResult(header) {
+    header.classList.toggle('collapsed');
+    const body = header.nextElementSibling;
+    body.classList.toggle('collapsed');
+}
+
+{% if successful_count > 0 %}
+// All results data for export
+const exportData = [
+    {% for result in all_results %}
+    {% if result.success %}
+    {
+        modelName: '{{ result.model.name|escapejs }}',
+        modelVersion: '{{ result.model.version|escapejs }}',
+        classLabels: {
+            {% for key, val in result.class_labels.items %}
+            '{{ key }}': '{{ val|escapejs }}'{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        },
+        predictions: [
+            {% for pred in result.predictions %}
+            {
+                row_index: {{ pred.row_index }},
+                label: {% if pred.label is not None %}{{ pred.label }}{% else %}null{% endif %},
+                value: {% if pred.value is not None %}{{ pred.value }}{% else %}null{% endif %},
+                probabilities: {% if pred.probabilities %}{
+                    {% for class_id, prob in pred.probabilities.items %}
+                    '{{ class_id }}': {{ prob }}{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                }{% else %}null{% endif %}
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+    },
+    {% endif %}
+    {% endfor %}
+];
+
+// Export all successful results to CSV
+document.getElementById('exportAllCsvBtn').addEventListener('click', function() {
+    // Build combined CSV
+    let csv = 'Model Name,Model Version,Row,Predicted Label,Class Name,Confidence (%)\n';
+
+    exportData.forEach(function(model) {
+        model.predictions.forEach(function(pred) {
+            let className = '';
+            let confidence = '';
+
+            if (pred.label !== null && pred.label !== undefined) {
+                className = model.classLabels[String(pred.label)] || ('Class ' + pred.label);
+            }
+
+            if (pred.probabilities && pred.label !== null) {
+                const conf = pred.probabilities[String(pred.label)];
+                if (conf !== undefined) {
+                    confidence = conf.toFixed(2);
+                }
+            }
+
+            csv += [
+                '"' + model.modelName.replace(/"/g, '""') + '"',
+                model.modelVersion,
+                pred.row_index,
+                pred.label !== null && pred.label !== undefined ? pred.label : (pred.value ? pred.value.toFixed(4) : ''),
+                '"' + className.replace(/"/g, '""') + '"',
+                confidence
+            ].join(',') + '\n';
+        });
+    });
+
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+    const filename = 'multi_predictions_' + timestamp + '.csv';
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+});
+{% endif %}
+</script>
+{% endblock %}

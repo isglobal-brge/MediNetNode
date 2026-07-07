@@ -23,19 +23,16 @@ class APIAuthenticationMiddlewareTests(TestCase):
         """Set up test data."""
         self.factory = RequestFactory()
         self.middleware = APIAuthenticationMiddleware(Mock())
-        
-        # Create RESEARCHER role
+
         self.researcher_role = Role.objects.get(name='RESEARCHER')
-        
-        # Create RESEARCHER user
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_test',
             email='researcher@test.com',
             password='ResearcherPass123!',
             role=self.researcher_role
         )
-        
-        # Create API key
+
         self.api_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key',
@@ -45,34 +42,32 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_non_api_requests_pass_through(self):
         """Test that non-API requests are not processed by middleware."""
         request = self.factory.get('/')
-        
-        # Mock get_response to return a simple response
+
         mock_response = Mock()
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
+
         # Should pass through without authentication
         self.assertEqual(response, mock_response)
         self.middleware.get_response.assert_called_once_with(request)
     
     def test_missing_api_key_returns_401(self):
         """Test that requests without X-API-Key header return 401."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         
         response = self.middleware(request)
         
         self.assertIsInstance(response, JsonResponse)
         self.assertEqual(response.status_code, 401)
-        
-        # Check response content
+
         response_data = self.get_json_response_data(response)
         self.assertEqual(response_data['error'], 'Missing X-API-Key header')
     
     def test_invalid_api_key_returns_401(self):
         """Test that invalid API key returns 401."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key_12345',
             REMOTE_ADDR='192.168.1.100'
         )
@@ -87,7 +82,6 @@ class APIAuthenticationMiddlewareTests(TestCase):
     
     def test_expired_api_key_returns_401(self):
         """Test that expired API key returns 401."""
-        # Create expired API key
         expired_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Expired Key',
@@ -96,8 +90,8 @@ class APIAuthenticationMiddlewareTests(TestCase):
         )
         
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=expired_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=expired_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -110,8 +104,8 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_unauthorized_ip_returns_403(self):
         """Test that unauthorized IP address returns 403."""
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.200'  # Not in whitelist
         )
         
@@ -123,7 +117,6 @@ class APIAuthenticationMiddlewareTests(TestCase):
     
     def test_non_researcher_role_returns_403(self):
         """Test that non-RESEARCHER users cannot access API."""
-        # Create ADMIN user and API key
         admin_role = Role.objects.get(name='ADMIN')
         admin_user = CustomUser.objects.create_user(
             username='admin_test',
@@ -138,8 +131,8 @@ class APIAuthenticationMiddlewareTests(TestCase):
         )
         
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=admin_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=admin_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -155,8 +148,8 @@ class APIAuthenticationMiddlewareTests(TestCase):
         self.researcher_user.save()
         
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -172,8 +165,8 @@ class APIAuthenticationMiddlewareTests(TestCase):
         self.researcher_user.save()
         
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
         
@@ -186,19 +179,17 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_valid_authentication_sets_request_attributes(self):
         """Test that valid authentication sets api_key and api_user on request."""
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
-        
-        # Mock get_response to return a simple response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Check that request attributes are set
+
         self.assertEqual(request.api_key, self.api_key)
         self.assertEqual(request.api_user, self.researcher_user)
         self.assertTrue(hasattr(request, 'start_time'))
@@ -206,23 +197,21 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_successful_request_logging(self):
         """Test that successful requests are logged."""
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100',
             HTTP_USER_AGENT='TestClient/1.0'
         )
-        
-        # Mock get_response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Check that request was logged
+
         log_entry = APIRequest.objects.get(
             api_key=self.api_key,
-            endpoint='/api/v1/ping'
+            endpoint='/api/v2/ping'
         )
         self.assertEqual(log_entry.method, 'GET')
         self.assertEqual(log_entry.ip_address, '192.168.1.100')
@@ -233,15 +222,14 @@ class APIAuthenticationMiddlewareTests(TestCase):
     def test_failed_request_logging(self):
         """Test that failed authentication requests are logged."""
         request = self.factory.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key',
             REMOTE_ADDR='192.168.1.100'
         )
         
         response = self.middleware(request)
-        
-        # Check that failed request was logged
-        log_entry = APIRequest.objects.get(endpoint='/api/v1/ping')
+
+        log_entry = APIRequest.objects.get(endpoint='/api/v2/ping')
         self.assertIsNone(log_entry.api_key)
         self.assertIsNone(log_entry.user)
         self.assertEqual(log_entry.status_code, 401)
@@ -254,42 +242,43 @@ class APIAuthenticationMiddlewareTests(TestCase):
         initial_last_ip = self.api_key.last_used_ip
         
         request = self.factory.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
             REMOTE_ADDR='192.168.1.100'
         )
-        
-        # Mock get_response
+
         mock_response = Mock()
         mock_response.status_code = 200
         self.middleware.get_response = Mock(return_value=mock_response)
-        
+
         response = self.middleware(request)
-        
-        # Reload API key from database
+
         self.api_key.refresh_from_db()
-        
-        # Check that last used fields were updated
+
         self.assertNotEqual(self.api_key.last_used_at, initial_last_used)
         self.assertEqual(self.api_key.last_used_ip, '192.168.1.100')
     
     def test_client_ip_extraction(self):
-        """Test client IP extraction from various headers."""
-        # Test X-Forwarded-For header
+        """Client IP comes from REMOTE_ADDR; X-Forwarded-For is only honored when
+        the request originates from a trusted proxy (security hardening — never
+        trust client-supplied forwarding headers from arbitrary sources)."""
+        from django.test import override_settings
+
+        # Untrusted source: client-supplied X-Forwarded-For is ignored.
         request = self.factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.1, 192.168.1.100')
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '203.0.113.1')
-        
-        # Test X-Client-IP header
-        request = self.factory.get('/', HTTP_X_CLIENT_IP='10.0.0.100')
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '10.0.0.100')
-        
-        # Test REMOTE_ADDR fallback
-        request = self.factory.get('/')
         request.META['REMOTE_ADDR'] = '127.0.0.1'
-        ip = self.middleware.get_client_ip(request)
-        self.assertEqual(ip, '127.0.0.1')
+        self.assertEqual(self.middleware.get_client_ip(request), '127.0.0.1')
+
+        # Trusted proxy: the first X-Forwarded-For entry is used.
+        with override_settings(TRUSTED_PROXIES=['127.0.0.1']):
+            request = self.factory.get('/', HTTP_X_FORWARDED_FOR='203.0.113.1, 192.168.1.100')
+            request.META['REMOTE_ADDR'] = '127.0.0.1'
+            self.assertEqual(self.middleware.get_client_ip(request), '203.0.113.1')
+
+        # REMOTE_ADDR fallback when no forwarding involved.
+        request = self.factory.get('/')
+        request.META['REMOTE_ADDR'] = '10.0.0.100'
+        self.assertEqual(self.middleware.get_client_ip(request), '10.0.0.100')
 
 
 class RateLimitMiddlewareTests(TestCase):
@@ -303,8 +292,7 @@ class RateLimitMiddlewareTests(TestCase):
         """Set up test data."""
         self.factory = RequestFactory()
         self.middleware = RateLimitMiddleware(Mock())
-        
-        # Create test user and API key
+
         self.researcher_role = Role.objects.get(name='RESEARCHER')
         
         self.researcher_user = CustomUser.objects.create_user(
@@ -333,7 +321,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_unauthenticated_api_requests_pass_through(self):
         """Test that unauthenticated API requests bypass rate limiting."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         
         mock_response = Mock()
         self.middleware.get_response = Mock(return_value=mock_response)
@@ -344,7 +332,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_rate_limit_enforcement(self):
         """Test that rate limits are enforced."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create 100 recent successful requests (at the limit)
@@ -352,7 +340,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -371,7 +359,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_rate_limit_not_exceeded(self):
         """Test that requests under rate limit pass through."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create only 50 recent requests (under the limit)
@@ -379,7 +367,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -396,7 +384,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_ping_endpoint_higher_rate_limit(self):
         """Test that ping endpoint has higher rate limit."""
-        request = self.factory.get('/api/v1/ping')
+        request = self.factory.get('/api/v2/ping')
         request.api_user = self.researcher_user
         
         # Create 500 ping requests (should still be allowed)
@@ -404,7 +392,7 @@ class RateLimitMiddlewareTests(TestCase):
             APIRequest.objects.create(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint='/api/v1/ping',
+                endpoint='/api/v2/ping',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,
@@ -422,7 +410,7 @@ class RateLimitMiddlewareTests(TestCase):
     
     def test_old_requests_not_counted(self):
         """Test that requests outside the time window are not counted."""
-        request = self.factory.get('/api/v1/test')
+        request = self.factory.get('/api/v2/test')
         request.api_user = self.researcher_user
         
         # Create 100 old requests (outside 1-hour window) 
@@ -434,7 +422,7 @@ class RateLimitMiddlewareTests(TestCase):
             bulk_requests.append(APIRequest(
                 api_key=self.api_key,
                 user=self.researcher_user,
-                endpoint=f'/api/v1/test-{i}',
+                endpoint=f'/api/v2/test-{i}',
                 method='GET',
                 ip_address='192.168.1.100',
                 status_code=200,

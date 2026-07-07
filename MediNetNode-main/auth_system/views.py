@@ -15,13 +15,16 @@ def login_view(request):
     user = authenticate(request, username=username, password=password)
     if user is None:
         return JsonResponse({"ok": False, "error": "invalid_credentials"}, status=400)
+
+    # Regenerate session ID to prevent session fixation
+    request.session.cycle_key()
+
     login(request, user)
-    
-    # Initialize session activity timestamp
+
     from django.utils import timezone
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
-    
+
     return JsonResponse({"ok": True})
 
 from django.shortcuts import render, redirect
@@ -42,13 +45,11 @@ def login_page(request):
     next_url = request.GET.get('next') or request.POST.get('next')
 
     if request.method == 'GET':
-        # For GET requests, only pass next_url if explicitly provided
         return render(request, 'auth/login.html', {
             'next': next_url,  # Don't set default here - let role-based redirect handle it
             'error': None,
         })
 
-    # POST branch
     username = request.POST.get("username", "")
     password = request.POST.get("password", "")
     user = authenticate(request, username=username, password=password)
@@ -58,32 +59,43 @@ def login_page(request):
             'error': 'Invalid username or password.'
         }, status=400)
 
+    # Regenerate session ID to prevent session fixation
+    request.session.cycle_key()
+
     login(request, user)
-    
-    # Initialize session activity timestamp
+
     from django.utils import timezone
     request.session['last_activity_ts'] = int(timezone.now().timestamp())
     request.session.modified = True
-    
-    # If there's a specific next URL, use it
+
+    # Only honor `next` when it points back to this host — otherwise a crafted
+    # ?next=https://evil.com would turn the post-login redirect into an open
+    # redirect (phishing). Reject external/scheme-relative targets.
     if next_url and next_url.strip():
-        return redirect(next_url)
-    
-    # Default redirect based on user role
+        from django.utils.http import url_has_allowed_host_and_scheme
+        if url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+
     try:
         if user.role and hasattr(user.role, 'name'):
             role_name = user.role.name
             if role_name == 'ADMIN':
                 return redirect('admin_dashboard')
+            elif role_name == 'MEMBER':
+                return redirect('inference:member_dashboard')
             elif role_name == 'AUDITOR':
                 return redirect('audit:auditor_dashboard')
             elif role_name == 'RESEARCHER':
                 return redirect('researcher_info')
     except AttributeError:
         pass
-    
-    # Fallback for users without roles or any errors
-    return redirect('admin_dashboard')
+
+    # Fallback for users without roles or any errors (default to login)
+    return redirect('login')
 
 
 
@@ -128,11 +140,10 @@ def csrf_validate(view_func):
 
 
 def get_client_ip(request):
-    """Get the real client IP address."""
-    xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
+    """Get the real client IP address (spoof-resistant — trusts X-Forwarded-For
+    only from configured trusted proxies)."""
+    from medinet_core.security.ip import get_trusted_client_ip
+    return get_trusted_client_ip(request)
 
 
 def logout_view(request):

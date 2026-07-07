@@ -7,8 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 import json
+from unittest.mock import patch
 from users.models import CustomUser, Role, APIKey
-from dataset.models import Dataset, DatasetAccess
+from dataset.models import Dataset, DatasetAccess, DatasetPrivacyPolicy
 
 
 class APIEndpointTests(TestCase):
@@ -20,7 +21,6 @@ class APIEndpointTests(TestCase):
         """Set up test data."""
         self.client = Client()
 
-        # Get or create RESEARCHER role
         self.researcher_role, _ = Role.objects.get_or_create(
             name='RESEARCHER',
             defaults={
@@ -31,23 +31,20 @@ class APIEndpointTests(TestCase):
                 }
             }
         )
-        
-        # Create RESEARCHER user
+
         self.researcher_user = CustomUser.objects.create_user(
             username='researcher_api_test',
             email='researcher@test.com',
             password='ResearcherPass123!',
             role=self.researcher_role
         )
-        
-        # Create API key
+
         self.api_key = APIKey.objects.create(
             user=self.researcher_user,
             name='Test API Key',
             ip_whitelist=['127.0.0.1', '192.168.1.100']
         )
-        
-        # Create test datasets
+
         self.dataset1 = Dataset.objects.using('datasets_db').create(
             name='Heart Disease Dataset',
             description='Heart disease prediction dataset',
@@ -71,8 +68,7 @@ class APIEndpointTests(TestCase):
             file_size=512000,
             file_format='csv'
         )
-        
-        # Grant access to datasets
+
         DatasetAccess.objects.using('datasets_db').create(
             dataset=self.dataset1,
             user_id=self.researcher_user.id,
@@ -92,25 +88,25 @@ class APIEndpointTests(TestCase):
     def get_auth_headers(self):
         """Get authentication headers for API requests."""
         return {
-            'HTTP_X_API_KEY': self.api_key.key,
+            'HTTP_X_API_KEY': self.api_key._raw_key,
             'HTTP_X_CLIENT_IP': '127.0.0.1'
         }
     
     def test_ping_endpoint_success(self):
         """Test ping endpoint with valid authentication."""
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
         
         self.assertEqual(response.status_code, 200)
         
         data = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(data['status'], 'pong')
+        self.assertEqual(data['status'], 'ok')
     
     def test_ping_endpoint_no_auth(self):
         """Test ping endpoint without authentication."""
-        response = self.client.get('/api/v1/ping')
+        response = self.client.get('/api/v2/ping')
         
         self.assertEqual(response.status_code, 401)
         
@@ -120,7 +116,7 @@ class APIEndpointTests(TestCase):
     def test_ping_endpoint_invalid_key(self):
         """Test ping endpoint with invalid API key."""
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             HTTP_X_API_KEY='invalid_key_12345',
             HTTP_X_CLIENT_IP='127.0.0.1'
         )
@@ -133,9 +129,9 @@ class APIEndpointTests(TestCase):
     def test_ping_endpoint_wrong_ip(self):
         """Test ping endpoint from unauthorized IP."""
         response = self.client.get(
-            '/api/v1/ping',
-            HTTP_X_API_KEY=self.api_key.key,
-            HTTP_X_CLIENT_IP='192.168.2.100'  # Not in whitelist
+            '/api/v2/ping',
+            HTTP_X_API_KEY=self.api_key._raw_key,
+            REMOTE_ADDR='192.168.2.100'  # Not in whitelist (client IP comes from REMOTE_ADDR)
         )
         
         self.assertEqual(response.status_code, 403)
@@ -146,20 +142,19 @@ class APIEndpointTests(TestCase):
     def test_get_data_info_success(self):
         """Test get_data_info endpoint with valid authentication."""
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
         self.assertEqual(response.status_code, 200)
         
         data = json.loads(response.content.decode('utf-8'))
-        
-        # Check that we get the expected structure
-        expected_keys = ['dataset_id', 'dataset_name', 'medical_domain', 
+
+        expected_keys = ['dataset_id', 'dataset_name', 'medical_domain',
                         'patient_count', 'data_type', 'file_size', 'description', 'created_at']
         for key in expected_keys:
             self.assertIn(key, data)
-        
+
         # Check that we get both datasets
         self.assertEqual(len(data['dataset_id']), 2)
         self.assertIn('Heart Disease Dataset', data['dataset_name'])
@@ -167,19 +162,18 @@ class APIEndpointTests(TestCase):
     
     def test_get_data_info_no_auth(self):
         """Test get_data_info endpoint without authentication."""
-        response = self.client.get('/api/v1/get-data-info')
+        response = self.client.get('/api/v2/get-data-info')
         
         self.assertEqual(response.status_code, 401)
     
     def test_get_data_info_no_datasets(self):
         """Test get_data_info when user has no dataset access."""
-        # Remove dataset access
         DatasetAccess.objects.using('datasets_db').filter(
             user_id=self.researcher_user.id
         ).delete()
         
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
@@ -207,29 +201,41 @@ class APIEndpointTests(TestCase):
                 }
             },
             "server_address": "localhost:8080",
-            "client_id": "client_123"
+            "client_id": "client_123",
+            "ssl_enabled": False
         }
-        
-        response = self.client.post(
-            '/api/v1/start-client',
-            data=json.dumps(payload),
-            content_type='application/json',
-            **self.get_auth_headers()
+
+        # The dataset needs a privacy policy (Node fail-closes without one).
+        DatasetPrivacyPolicy.objects.using('datasets_db').create(
+            dataset=self.dataset1, sensitivity='medium',
+            max_epsilon_per_job=1.0, lifetime_budget=5.0,
         )
-        
+
+        # Patch the epsilon estimator (deterministic, avoids heavy DP math) and
+        # the Flower client subprocess (do not spawn a real process in tests).
+        with patch('api.views.estimate_job_epsilon', return_value=0.5), \
+             patch('api.views.Process') as MockProcess:
+            response = self.client.post(
+                '/api/v2/start-client',
+                data=json.dumps(payload),
+                content_type='application/json',
+                **self.get_auth_headers()
+            )
+
         self.assertEqual(response.status_code, 200)
-        
+
         data = json.loads(response.content.decode('utf-8'))
         self.assertEqual(data['status'], 'Flower Client started')
         self.assertEqual(data['client_id'], 'client_123')
         self.assertEqual(data['user'], 'researcher_api_test')
+        MockProcess.assert_called_once()
     
     def test_start_client_no_auth(self):
         """Test start_client endpoint without authentication."""
         payload = {"model_json": {"framework": "pytorch"}}
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json'
         )
@@ -244,7 +250,7 @@ class APIEndpointTests(TestCase):
         }
         
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
@@ -253,12 +259,12 @@ class APIEndpointTests(TestCase):
         self.assertEqual(response.status_code, 400)
         
         data = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(data['error'], 'model_json is required')
+        self.assertEqual(data['error'], 'Invalid configuration format')
     
     def test_start_client_invalid_json(self):
         """Test start_client endpoint with invalid JSON."""
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data='invalid json data',
             content_type='application/json',
             **self.get_auth_headers()
@@ -271,7 +277,6 @@ class APIEndpointTests(TestCase):
     
     def test_start_client_no_train_permission(self):
         """Test start_client endpoint when user lacks train permission."""
-        # Remove train permission
         self.researcher_role.permissions = {
             'api.access': True, 
             'dataset.view': True
@@ -282,37 +287,36 @@ class APIEndpointTests(TestCase):
         payload = {
             "model_json": {"framework": "pytorch"},
             "server_address": "localhost:8080",
-            "client_id": "client_123"
+            "client_id": "client_123",
+            "ssl_enabled": False
         }
-        
+
         response = self.client.post(
-            '/api/v1/start-client',
+            '/api/v2/start-client',
             data=json.dumps(payload),
             content_type='application/json',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 403)
-        
+
         data = json.loads(response.content.decode('utf-8'))
         self.assertEqual(data['error'], 'User does not have training permissions')
     
     def test_api_request_logging(self):
         """Test that API requests are properly logged."""
         from users.models import APIRequest
-        
-        # Make a request
+
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Check that request was logged
+
         log_entry = APIRequest.objects.filter(
             api_key=self.api_key,
-            endpoint='/api/v1/ping',
+            endpoint='/api/v2/ping',
             method='GET'
         ).first()
         
@@ -324,19 +328,16 @@ class APIEndpointTests(TestCase):
     
     def test_api_key_last_used_update(self):
         """Test that API key last_used fields are updated."""
-        # Check initial state
         self.assertIsNone(self.api_key.last_used_at)
         self.assertIsNone(self.api_key.last_used_ip)
-        
-        # Make a request
+
         response = self.client.get(
-            '/api/v1/ping',
+            '/api/v2/ping',
             **self.get_auth_headers()
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
-        # Reload API key and check updates
+
         self.api_key.refresh_from_db()
         self.assertIsNotNone(self.api_key.last_used_at)
         self.assertEqual(self.api_key.last_used_ip, '127.0.0.1')
@@ -344,7 +345,7 @@ class APIEndpointTests(TestCase):
     def test_dataset_format_compatibility(self):
         """Test that dataset format matches client_api.py expectations."""
         response = self.client.get(
-            '/api/v1/get-data-info',
+            '/api/v2/get-data-info',
             **self.get_auth_headers()
         )
         
@@ -361,12 +362,10 @@ class APIEndpointTests(TestCase):
         self.assertIsInstance(data['file_size'], list)
         self.assertIsInstance(data['description'], list)
         self.assertIsInstance(data['created_at'], list)
-        
-        # Verify all lists have same length
+
         lengths = [len(data[key]) for key in data.keys()]
         self.assertTrue(all(length == lengths[0] for length in lengths))
-        
-        # Verify data types
+
         if data['dataset_id']:  # If we have data
             self.assertIsInstance(data['dataset_id'][0], int)
             self.assertIsInstance(data['dataset_name'][0], str)
@@ -384,15 +383,15 @@ class APIErrorHandlingTests(TestCase):
     def test_invalid_endpoint_returns_401(self):
         """Test that invalid endpoints return 401 (auth required first)."""
         # API middleware checks auth first, so invalid endpoints return 401 without auth
-        response = self.client.get('/api/v1/invalid-endpoint')
+        response = self.client.get('/api/v2/invalid-endpoint')
         self.assertEqual(response.status_code, 401)
     
     def test_wrong_http_method(self):
         """Test endpoints with wrong HTTP methods."""
         # API middleware checks authentication first, so wrong methods return 401 without auth
         # This is actually correct behavior for a secure API
-        response = self.client.post('/api/v1/ping')
+        response = self.client.post('/api/v2/ping')
         self.assertEqual(response.status_code, 401)  # Unauthorized (auth required first)
         
-        response = self.client.get('/api/v1/start-client')
+        response = self.client.get('/api/v2/start-client')
         self.assertEqual(response.status_code, 401)  # Unauthorized (auth required first)

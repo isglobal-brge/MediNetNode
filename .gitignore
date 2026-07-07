@@ -22,9 +22,20 @@ db.sqlite3-journal
 /static
 *.sqlite3
 
+# Model files (generated in tests)
+*.onnx
+*.pt
+*.pth
+*.pkl
+*.h5
+*.pb
+
 # Environment variables
 .env
 .env.local
+
+# Test credentials — contains API keys and passwords, never commit
+MediNetNode-main/test_config.json
 
 # IDE
 .vscode/
@@ -41,6 +52,12 @@ logs/
 CLAUDE.md
 .claude/settings.local.json
 
+# Test artifacts
+tests/inference/models/
+tests/test_files/
+*.test.onnx
+*.test.pt
+
 # Docker volumes
 config/
 
@@ -49,3 +66,4 @@ config/
 Thumbs.db
 documentacion/
 */log.txt
+.superpowers/

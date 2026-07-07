@@ -1,7 +1,20 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Create User - MediNet{% endblock %}
+
+{% block extra_css %}
+<style nonce="{% csp_nonce %}">
+    .user-icon-circle {
+        width: 48px;
+        height: 48px;
+    }
+    .pw-highlight {
+        box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25) !important;
+    }
+</style>
+{% endblock %}
 
 {% block page_title %}Create New User{% endblock %}
 
@@ -19,7 +32,7 @@
         <div class="modern-card">
             <div class="card-header bg-transparent border-0 p-3 pb-0">
                 <div class="text-center">
-                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 48px; height: 48px;">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 user-icon-circle">
                         <i class="bi bi-person-plus fs-5"></i>
                     </div>
                     <h5 class="fw-bold mb-1">Create New User</h5>
@@ -27,6 +40,21 @@
                 </div>
             </div>
             <div class="card-body p-4">
+                {% if messages %}
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 <form method="post" novalidate>
                     {% csrf_token %}
                     
@@ -111,7 +139,7 @@
                                     {{ form.password1.errors|join:", " }}
                                 </div>
                             {% endif %}
-                            <div class="password-feedback invalid-feedback" id="password-feedback" style="display: none;"></div>
+                            <div class="password-feedback invalid-feedback d-none" id="password-feedback"></div>
                         </div>
                         
                         <div class="col-md-4">
@@ -124,7 +152,7 @@
                                     {{ form.password2.errors|join:", " }}
                                 </div>
                             {% endif %}
-                            <div class="password-match-feedback invalid-feedback" id="password-match-feedback" style="display: none;"></div>
+                            <div class="password-match-feedback invalid-feedback d-none" id="password-match-feedback"></div>
                         </div>
                     </div>
                     
@@ -166,7 +194,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Get form elements
     const form = document.querySelector('form');
@@ -277,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const errors = validatePassword(password);
             
             this.classList.remove('is-valid', 'is-invalid');
-            passwordFeedback.style.display = 'none';
+            passwordFeedback.classList.add('d-none');
             
             if (password.trim() === '') {
                 return;
@@ -287,8 +315,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('is-valid');
             } else {
                 this.classList.add('is-invalid');
-                passwordFeedback.innerHTML = errors.join('. ') + '.';
-                passwordFeedback.style.display = 'block';
+                passwordFeedback.textContent = errors.join('. ') + '.';
+                passwordFeedback.classList.remove('d-none');
             }
             
             // Trigger password confirmation validation
@@ -306,24 +334,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const confirmPassword = password2.value;
         
         password2.classList.remove('is-valid', 'is-invalid');
-        passwordMatchFeedback.style.display = 'none';
-        
+        passwordMatchFeedback.classList.add('d-none');
+
         if (confirmPassword.trim() === '') {
             return;
         }
-        
+
         if (password === confirmPassword) {
             if (validatePassword(password).length === 0) {
                 password2.classList.add('is-valid');
             } else {
                 password2.classList.add('is-invalid');
-                passwordMatchFeedback.innerHTML = 'Password must meet all requirements.';
-                passwordMatchFeedback.style.display = 'block';
+                passwordMatchFeedback.textContent = 'Password must meet all requirements.';
+                passwordMatchFeedback.classList.remove('d-none');
             }
         } else {
             password2.classList.add('is-invalid');
-            passwordMatchFeedback.innerHTML = 'Passwords do not match.';
-            passwordMatchFeedback.style.display = 'block';
+            passwordMatchFeedback.textContent = 'Passwords do not match.';
+            passwordMatchFeedback.classList.remove('d-none');
         }
     }
     
@@ -336,8 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (generateButton) {
         generateButton.addEventListener('click', function() {
             const generatedPassword = generateSecurePassword();
-            
-            // Set password values
+
             password1.value = generatedPassword;
             password2.value = generatedPassword;
             
@@ -347,17 +374,19 @@ document.addEventListener('DOMContentLoaded', function() {
             password2.dispatchEvent(inputEvent);
             
             // Show a brief feedback that password was generated
-            this.innerHTML = '<i class="bi bi-check text-success"></i>';
+            this.classList.add('btn-success', 'border-success');
+            this.querySelector('i').className = 'bi bi-check';
             setTimeout(() => {
-                this.innerHTML = '<i class="bi bi-key"></i>';
+                this.classList.remove('btn-success', 'border-success');
+                this.querySelector('i').className = 'bi bi-key';
             }, 1000);
-            
-            // Optional: Briefly highlight the password fields
-            password1.style.boxShadow = '0 0 0 0.2rem rgba(25, 135, 84, 0.25)';
-            password2.style.boxShadow = '0 0 0 0.2rem rgba(25, 135, 84, 0.25)';
+
+            // Briefly highlight the password fields
+            password1.classList.add('pw-highlight');
+            password2.classList.add('pw-highlight');
             setTimeout(() => {
-                password1.style.boxShadow = '';
-                password2.style.boxShadow = '';
+                password1.classList.remove('pw-highlight');
+                password2.classList.remove('pw-highlight');
             }, 1500);
         });
     }
@@ -365,43 +394,63 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form submission validation
     form.addEventListener('submit', function(e) {
         let hasErrors = false;
-        
+
+        console.group('[CreateUser] Form submit');
+        console.log('username:', username?.value);
+        console.log('email:', email?.value);
+        console.log('password1 length:', password1?.value?.length);
+        console.log('password2 length:', password2?.value?.length);
+        const roleEl = form.querySelector('select[name="role"]');
+        console.log('role value:', roleEl?.value, '| role text:', roleEl?.options[roleEl?.selectedIndex]?.text);
+
         // Validate all fields
         const requiredInputs = form.querySelectorAll('input[required], select[required]');
+        console.log('required inputs found:', requiredInputs.length);
         requiredInputs.forEach(input => {
-            if (!input.value.trim()) {
+            const empty = !input.value.trim();
+            console.log(`  [required] name=${input.name} value="${input.value}" empty=${empty}`);
+            if (empty) {
                 input.classList.add('is-invalid');
                 hasErrors = true;
             }
         });
-        
+
         // Validate passwords specifically
         if (password1 && password1.value) {
             const passwordErrors = validatePassword(password1.value);
+            console.log('password1 validation errors:', passwordErrors);
             if (passwordErrors.length > 0) {
                 password1.classList.add('is-invalid');
-                passwordFeedback.innerHTML = passwordErrors.join('. ') + '.';
-                passwordFeedback.style.display = 'block';
+                passwordFeedback.textContent = passwordErrors.join('. ') + '.';
+                passwordFeedback.classList.remove('d-none');
                 hasErrors = true;
             }
+        } else {
+            console.warn('password1 is empty or element not found');
         }
-        
+
         if (password2 && password1 && password1.value !== password2.value) {
+            console.warn('passwords do not match');
             password2.classList.add('is-invalid');
-            passwordMatchFeedback.innerHTML = 'Passwords do not match.';
-            passwordMatchFeedback.style.display = 'block';
+            passwordMatchFeedback.textContent = 'Passwords do not match.';
+            passwordMatchFeedback.classList.remove('d-none');
             hasErrors = true;
         }
-        
+
+        console.log('hasErrors:', hasErrors);
         if (hasErrors) {
+            console.warn('Submission BLOCKED by client-side validation');
             e.preventDefault();
-            // Scroll to first error
             const firstError = form.querySelector('.is-invalid');
             if (firstError) {
+                console.log('First invalid field:', firstError.name);
                 firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 firstError.focus();
             }
+        } else {
+            console.log('Submission ALLOWED — sending POST to server');
         }
+        console.groupEnd();
     });
 });
 </script>

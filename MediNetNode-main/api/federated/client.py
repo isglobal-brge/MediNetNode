@@ -1,3 +1,11 @@
+# Never let a Unicode log char (e.g. DP 'ε') crash the client on a cp1252 console.
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    try:
+        _stream.reconfigure(errors="backslashreplace")
+    except (AttributeError, ValueError):
+        pass
+
 import numpy as np
 import torch
 import warnings
@@ -15,10 +23,28 @@ from datetime import datetime
 from .dl_client import DLFlowerClient
 from .ml_client import MLFlowerClient
 from .algorithms import get_algorithm
+from .train_functions import _TRAINING_BATCH_SIZE
 # Add Django project to path for model imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medinet.settings')
 warnings.filterwarnings("ignore")
+
+
+def _insecure_transport_allowed():
+    """Plaintext Flower transport requires an explicit local opt-in (H5).
+
+    True only when `FLOWER_ALLOW_INSECURE` is truthy or the Node runs in DEBUG.
+    In production this is False, so the client refuses to connect in the clear
+    even if the Hub omits the CA certificate — a malicious Hub cannot force a
+    plaintext downgrade to sniff gradients.
+    """
+    if os.environ.get('FLOWER_ALLOW_INSECURE', 'false').strip().lower() in ('1', 'true', 'yes'):
+        return True
+    try:
+        from django.conf import settings as _dj_settings
+        return bool(_dj_settings.DEBUG)
+    except Exception:
+        return False
 
 try:
     import django
@@ -37,11 +63,12 @@ DEVICE = torch.device("cpu")  # Try "cuda" to train on GPU
 MODEL_JSON = dict()
 MODEL_VALIDATED = False
 TABLE_NAME = None
+USE_EXPERIMENT = False
 CLIENT_IP = "localhost"
-ASSIGNED_CLIENT_ID = None  # Global variable for client_id
-TRAINING_SESSION = None  # Global training session instance
-CURRENT_USER = None  # Global user context
-CURRENT_PROCESS = None  # Current training process
+ASSIGNED_CLIENT_ID = None
+TRAINING_SESSION = None
+CURRENT_USER = None
+CURRENT_PROCESS = None
 disable_progress_bar()
 
 
@@ -56,7 +83,7 @@ def client_fn(context: Context):
         FlowerClient: The Flower client instance.
     """
     # Try to recover training session if not already loaded (Flower restart)
-    global MODEL_VALIDATED, MODEL_JSON, TABLE_NAME, ASSIGNED_CLIENT_ID, TRAINING_SESSION
+    global MODEL_VALIDATED, MODEL_JSON, TABLE_NAME, USE_EXPERIMENT, ASSIGNED_CLIENT_ID, TRAINING_SESSION
 
     if not TRAINING_SESSION and ASSIGNED_CLIENT_ID and DJANGO_AVAILABLE:
         try:
@@ -70,22 +97,21 @@ def client_fn(context: Context):
     elif TRAINING_SESSION:
         print(f"[LIST] Using existing training session: {TRAINING_SESSION.session_id} (Round {TRAINING_SESSION.current_round})")
     
-    # Extract only the model part from the full JSON structure
     print(f"MODEL_JSON KEYS: {MODEL_JSON.keys()}")
     print(f"MODEL_JSON TYPE: {MODEL_JSON['model']['metadata']['model_type']}")
     model_config = MODEL_JSON.get('model', MODEL_JSON)
     model_type = model_config['metadata']['model_type']
     partition_id = int(context.node_config.get("partition-id", 0))
 
-    # ==================== ML CLIENT INITIALIZATION ====================
     if model_type == 'ml':
         print(f"\n{'='*70}")
-        print(f"🤖 INITIALIZING ML CLIENT (Machine Learning)")
+        print(f"INITIALIZING ML CLIENT (Machine Learning)")
         print(f"{'='*70}")
 
-        # Extract ML algorithm configuration
         training_config = model_config.get('training', {})
-        ml_method = training_config.get('ml_method', 'fedsvm').lower()
+        ml_method = (training_config.get('ml_method')
+                     or model_config.get('architecture', {}).get('ml_algorithm', {}).get('type')
+                     or 'fedsvm').lower()
 
         print(f"[INFO] ML Algorithm: {ml_method}")
         print(f"[PACKAGE] Dataset: {TABLE_NAME}")
@@ -95,10 +121,10 @@ def client_fn(context: Context):
         (X_train, y_train), (X_val, y_val) = load_ml_data(
             dataset_id=TABLE_NAME,
             val_size=training_config.get('val_size', 0.2),
-            random_state=training_config.get('random_state', 42)
+            random_state=training_config.get('random_state', 42),
+            use_experiment=USE_EXPERIMENT,
         )
 
-        # Get algorithm class from registry
         print(f"\n[SEARCH] Loading algorithm '{ml_method}' from registry...")
         try:
             AlgorithmClass = get_algorithm(ml_method)
@@ -107,14 +133,13 @@ def client_fn(context: Context):
             print(f"[ERROR] {e}")
             raise
 
-        # Initialize algorithm instance with validation data
         print(f"\n[CONFIG] Initializing {ml_method} algorithm...")
-        algorithm_instance = AlgorithmClass(X_train, y_train, MODEL_JSON, X_val, y_val)
+        algo_config = {**MODEL_JSON, 'training': training_config}
+        algorithm_instance = AlgorithmClass(X_train, y_train, algo_config, X_val, y_val)
         print(f"[OK] Algorithm initialized successfully")
         print(f"   Training samples: {len(X_train)}")
         print(f"   Validation samples: {len(X_val)}")
 
-        # Create ML Flower client
         print(f"\n[FLOWER] Creating MLFlowerClient...")
         flower_client = MLFlowerClient(
             algorithm_instance=algorithm_instance,
@@ -130,15 +155,13 @@ def client_fn(context: Context):
         print(f"[OK] MLFlowerClient created successfully")
         print(f"{'='*70}\n")
 
-    # ==================== DL CLIENT INITIALIZATION ====================
     else:
         print(f"\n{'='*70}")
-        print(f"🧠 INITIALIZING DL CLIENT (Deep Learning)")
+        print(f"INITIALIZING DL CLIENT (Deep Learning)")
         print(f"{'='*70}")
 
         net = DynamicModel(model_config).to(DEVICE)
 
-        # [SEARCH] DEBUG: Check model after creation
         print(f"DEBUG: Model created with {sum(p.numel() for p in net.parameters()) if net.parameters() else 0} parameters")
         print(f"DEBUG: Model state_dict keys: {list(net.state_dict().keys()) if hasattr(net, 'state_dict') else 'No state_dict'}")
         print(f"DEBUG: Net type: {type(net)}")
@@ -149,18 +172,15 @@ def client_fn(context: Context):
             MODEL_VALIDATED = True
         print("##################### MODEL VALIDATED #####################")
 
-        # Log data loading attempt
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Loading data for table: {TABLE_NAME}\n")
 
-        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=32)
+        trainloader, valloader = create_train_val_loaders(TABLE_NAME, batch_size=_TRAINING_BATCH_SIZE, use_experiment=USE_EXPERIMENT)
 
-        # Log data loading results
         with open('client_debug.log', 'a', encoding='utf-8') as f:
             f.write(f"Trainloader length: {len(trainloader) if trainloader else 'None'}\n")
             f.write(f"Valloader length: {len(valloader) if valloader else 'None'}\n")
 
-        # Create DL Flower client
         flower_client = DLFlowerClient(
             net=net,
             trainloader=trainloader,
@@ -178,10 +198,9 @@ def client_fn(context: Context):
         print(f"[OK] DLFlowerClient created successfully")
         print(f"{'='*70}\n")
 
-    # Set the client_id if available (common for both ML and DL)
     if ASSIGNED_CLIENT_ID:
         flower_client.set_client_id(ASSIGNED_CLIENT_ID)
-        print(f"🆔 FlowerClient ID set to: {ASSIGNED_CLIENT_ID}")
+        print(f"FlowerClient ID set to: {ASSIGNED_CLIENT_ID}")
     else:
         print("[WARNING] Warning: No client_id assigned")
 
@@ -198,14 +217,12 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         session_id: UUID of the training session.
         ca_cert (str): CA certificate for SSL/TLS connection (PEM format).
     """
-    global MODEL_JSON, MODEL_VALIDATED, TABLE_NAME, CLIENT_IP, ASSIGNED_CLIENT_ID, CURRENT_USER, TRAINING_SESSION
+    global MODEL_JSON, MODEL_VALIDATED, TABLE_NAME, USE_EXPERIMENT, CLIENT_IP, ASSIGNED_CLIENT_ID, CURRENT_USER, TRAINING_SESSION
 
-    # Set the assigned client_id and user
     ASSIGNED_CLIENT_ID = client_id
     CURRENT_USER = user
-    print(f"🆔 CLIENT_ID assigned globally: {ASSIGNED_CLIENT_ID}")
-    
-    #Get client IP automatically
+    print(f"CLIENT_ID assigned globally: {ASSIGNED_CLIENT_ID}")
+
     import socket
     try:
         # Connect to server to get local IP that will be used
@@ -215,15 +232,16 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     except:
         CLIENT_IP = "localhost"
     
-    print(f"🌐 Client IP detected: {CLIENT_IP}")
-    
-    # Pass the complete model configuration, not just layers
+    print(f"Client IP detected: {CLIENT_IP}")
+
     MODEL_JSON = model_json  # Full config instead of just layers
     MODEL_VALIDATED = False
-    
+
     # Access dataset from the correct path based on debug_received_from_server.json structure
     TABLE_NAME = int(model_json['model']['dataset']['selected_datasets'][0]['dataset_id'])
+    USE_EXPERIMENT = bool(model_json.get('use_experiment', False))
     print(f"DEBUG: Model config loaded with {len(model_json.keys()) if isinstance(model_json, dict) else 0} sections")
+    print(f"DEBUG: USE_EXPERIMENT set to: {USE_EXPERIMENT}")
     print(f"DEBUG: TABLE_NAME set to: {TABLE_NAME}")
     print(f"DEBUG: SERVER_ADDRESS set to: {server_address}")
     
@@ -242,8 +260,7 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
     else:
         print("[WARNING] Warning: No session_id provided for training tracking")
         TRAINING_SESSION = None
-    
-    # Force write to file for debugging
+
     with open('client_debug.log', 'w', encoding='utf-8') as f:
         f.write(f"MODEL_JSON: {model_json}\n")
         f.write(f"TABLE_NAME: {TABLE_NAME}\n")
@@ -253,23 +270,34 @@ def start_flower_client(model_json, server_address="localhost:8080", client_id=N
         f.write(f"USER: {user.username if user else 'None'}\n")
     
     try:
-        # Convert CA certificate to bytes for Flower SSL connection
         root_certificates = ca_cert.encode() if ca_cert else None
 
         if root_certificates:
             print(f"[LOCKED] Starting Flower client with SSL/TLS (certificate provided)")
         else:
-            print(f"[WARNING] Starting Flower client without SSL (no certificate)")
+            # H5: fail closed. The Node must not connect in plaintext just
+            # because the Hub omitted a CA cert (a malicious Hub could force
+            # plaintext to sniff gradients). Plaintext requires an explicit
+            # local opt-in — FLOWER_ALLOW_INSECURE=true or DEBUG — never the
+            # Hub's say-so.
+            if not _insecure_transport_allowed():
+                raise RuntimeError(
+                    "No CA certificate provided for the Flower connection and plaintext "
+                    "transport is not permitted. Refusing to connect in the clear "
+                    "(fail-closed, H5). Set FLOWER_ALLOW_INSECURE=true (dev only) to override."
+                )
+            print(f"[WARNING] Starting Flower client without SSL — insecure transport explicitly allowed (dev only)")
 
         start_client(
             server_address=server_address,
             client_fn=client_fn,
-            root_certificates=root_certificates
+            root_certificates=root_certificates,
+            max_retries=int(os.environ.get("FLOWER_MAX_RETRIES", 10)),
+            max_wait_time=float(os.environ.get("FLOWER_MAX_WAIT_TIME", 300.0)),
         )
         # If we reach here, training completed successfully
         complete_training_session(TRAINING_SESSION)
     except Exception as e:
-        # Training failed
         import traceback
         fail_training_session(TRAINING_SESSION, str(e), traceback.format_exc())
         raise

@@ -3,7 +3,6 @@ from django.contrib.auth.models import Group, Permission
 
 
 def ensure_admin_superuser_setup(sender, **kwargs):
-    # Ensure base roles exist with appropriate permissions
     # These permissions must match setup_roles.py for consistency
     from .models import Role
 

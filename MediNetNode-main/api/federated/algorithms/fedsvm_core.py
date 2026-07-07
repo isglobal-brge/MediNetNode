@@ -19,8 +19,6 @@ from collections import OrderedDict
 from copy import deepcopy
 
 
-# ==================== Helper Functions ====================
-
 def h(alphas, svs):
     """
     Construct the hyperplane:
@@ -32,8 +30,6 @@ def h(alphas, svs):
         res += alphas[i] * svs[i]
     return res
 
-
-# ==================== Delta Strategy Mixins ====================
 
 class FedSVM_Optim:
     """
@@ -138,8 +134,6 @@ class FedSVM_MultipleDeltas:
         return [(self.svs_shas[index], sv) for index, sv in enumerate(self.svs)]
 
 
-# ==================== Kernel Functions Mixin ====================
-
 class FedSVMClientKernel:
     """
     Mixin class that provides kernel functions (RBF, polynomial, linear).
@@ -169,8 +163,6 @@ class FedSVMClientKernel:
         else:
             raise ValueError(f"Kernel not supported: {self.kernel['kernel']}")
 
-
-# ==================== Base FedSVM Client ====================
 
 class FedSVMClient:
     """
@@ -372,8 +364,6 @@ class FedSVMClient:
         return to_send_delta, self.svs_labels[to_send_idx]
 
 
-# ==================== FedSVMClientOptMD Implementation ====================
-
 class FedSVMClientOptMD(
     FedSVMClient, FedSVM_Optim, FedSVM_MultipleDeltas, FedSVMClientKernel
 ):
@@ -391,11 +381,8 @@ class FedSVMClientOptMD(
         super().__init__(client_no, X, y, rff, client_eps, C, kernel, device)
         print(f"[OK] [Client {self.client_no}] Using multiple deltas with optimization")
 
-        # Set kernel function based on configuration
         self.kernel_fun = self.select_kernel_fun()
 
-
-# ==================== Evaluation Functions ====================
 
 def evaluate_fedsvm(y_true, y_pred):
     """

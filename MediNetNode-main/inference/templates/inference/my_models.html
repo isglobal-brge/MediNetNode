@@ -1,0 +1,551 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Models - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Status badges */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .status-approved { background-color: #198754; color: white; }
+    .status-pending { background-color: #fd7e14; color: white; }
+    .status-rejected { background-color: #dc3545; color: white; }
+    .status-deprecated { background-color: #6c757d; color: white; }
+
+    /* Domain badges */
+    .domain-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background-color: #e9ecef;
+        color: #495057;
+        text-transform: capitalize;
+    }
+
+    /* Model card for mobile */
+    .model-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    .model-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-color: #0d6efd;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+    }
+
+    /* Stats mini cards */
+    .stat-mini {
+        padding: 8px 16px;
+        border-radius: 8px;
+        text-align: center;
+        min-width: 80px;
+    }
+    .stat-mini .number {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    .stat-mini .label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 16px;
+    }
+
+    /* Table improvements */
+    .models-table th {
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .models-table td {
+        vertical-align: middle;
+    }
+
+    /* Model name styling */
+    .model-name {
+        font-weight: 500;
+        color: #212529;
+    }
+    .model-name:hover {
+        color: #0d6efd;
+    }
+    .model-meta {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    /* File size formatting */
+    .file-size {
+        font-family: 'Consolas', monospace;
+        font-size: 0.85rem;
+    }
+
+    /* Empty state */
+    .empty-state {
+        padding: 60px 20px;
+        text-align: center;
+    }
+    .empty-state i {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 20px;
+    }
+
+    /* Rejection reason tooltip */
+    .rejection-reason {
+        font-size: 0.75rem;
+        color: #dc3545;
+        margin-top: 4px;
+    }
+
+    /* Accuracy display */
+    .accuracy-badge {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #e7f5ff;
+        color: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}My Models{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="modern-card p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h4 class="mb-1 fw-bold">
+                        <i class="bi bi-box-seam me-2"></i>My Models
+                    </h4>
+                    <p class="text-muted mb-0">Manage and monitor your uploaded models</p>
+                </div>
+                <a href="{% url 'inference:upload_model' %}" class="btn btn-primary">
+                    <i class="bi bi-cloud-upload me-2"></i>Upload New Model
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Mini Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex flex-wrap gap-3">
+            <div class="stat-mini bg-light">
+                <div class="number text-primary">{{ stats.total }}</div>
+                <div class="label text-muted">Total</div>
+            </div>
+            <div class="stat-mini bg-success bg-opacity-10">
+                <div class="number text-success">{{ stats.approved }}</div>
+                <div class="label text-muted">Active</div>
+            </div>
+            <div class="stat-mini bg-warning bg-opacity-10">
+                <div class="number text-warning">{{ stats.pending }}</div>
+                <div class="label text-muted">Pending</div>
+            </div>
+            <div class="stat-mini bg-danger bg-opacity-10">
+                <div class="number text-danger">{{ stats.rejected }}</div>
+                <div class="label text-muted">Rejected</div>
+            </div>
+            <div class="stat-mini bg-secondary bg-opacity-10">
+                <div class="number text-secondary">{{ stats.deprecated }}</div>
+                <div class="label text-muted">Deprecated</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="filter-bar">
+            <form method="get" class="row g-3 align-items-end">
+                <!-- Search -->
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-search me-1"></i>Search
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           name="q"
+                           value="{{ search_query }}"
+                           placeholder="Search by name, description...">
+                </div>
+
+                <!-- Status Filter -->
+                <div class="col-lg-2 col-md-3 col-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-funnel me-1"></i>Status
+                    </label>
+                    <select class="form-select" name="status">
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Domain Filter -->
+                <div class="col-lg-2 col-md-3 col-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-heart-pulse me-1"></i>Domain
+                    </label>
+                    <select class="form-select" name="domain">
+                        <option value="all">All Domains</option>
+                        {% for domain in domains %}
+                        <option value="{{ domain }}" {% if domain_filter == domain %}selected{% endif %}>
+                            {{ domain|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Sort -->
+                <div class="col-lg-2 col-md-3 col-6">
+                    <label class="form-label small text-muted">
+                        <i class="bi bi-sort-down me-1"></i>Sort by
+                    </label>
+                    <select class="form-select" name="sort">
+                        {% for value, label in sort_choices %}
+                        <option value="{{ value }}" {% if sort_by == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="col-lg-2 col-md-3 col-6">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-grow-1">
+                            <i class="bi bi-search"></i> Filter
+                        </button>
+                        <a href="{% url 'inference:my_models' %}" class="btn btn-outline-secondary" title="Clear filters">
+                            <i class="bi bi-x-lg"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Results Count -->
+{% if search_query or status_filter != 'all' or domain_filter != 'all' %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex align-items-center gap-2 text-muted small">
+            <span>Showing {{ total_count }} result{{ total_count|pluralize }}</span>
+            {% if search_query %}
+            <span class="badge bg-secondary">Search: "{{ search_query }}"</span>
+            {% endif %}
+            {% if status_filter != 'all' %}
+            <span class="badge bg-secondary">Status: {{ status_filter|title }}</span>
+            {% endif %}
+            {% if domain_filter != 'all' %}
+            <span class="badge bg-secondary">Domain: {{ domain_filter|title }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Models Table/Cards -->
+<div class="row">
+    <div class="col-12">
+        <div class="modern-card">
+            {% if models %}
+            <!-- Desktop Table View -->
+            <div class="table-responsive d-none d-md-block">
+                <table class="table models-table mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%">Model</th>
+                            <th style="width: 12%">Domain</th>
+                            <th style="width: 12%">Status</th>
+                            <th style="width: 12%">Uploaded</th>
+                            <th style="width: 10%">Size</th>
+                            <th style="width: 24%" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for model in models %}
+                        <tr>
+                            <!-- Model Name & Info -->
+                            <td>
+                                <div class="d-flex align-items-start gap-2">
+                                    <i class="bi bi-box text-primary mt-1"></i>
+                                    <div>
+                                        <div class="model-name">{{ model.name }}</div>
+                                        <div class="model-meta">
+                                            v{{ model.version }}
+                                            {% if model.accuracy_percent %}
+                                            <span class="accuracy-badge ms-2">
+                                                <i class="bi bi-bullseye"></i> {{ model.accuracy_percent|floatformat:1 }}%
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        {% if model.status == 'rejected' and model.rejection_reason %}
+                                        <div class="rejection-reason">
+                                            <i class="bi bi-exclamation-circle"></i> {{ model.rejection_reason|truncatewords:10 }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Domain -->
+                            <td>
+                                <span class="domain-badge">{{ model.domain }}</span>
+                            </td>
+
+                            <!-- Status -->
+                            <td>
+                                {% if model.status == 'approved' %}
+                                <span class="status-badge status-approved">
+                                    <i class="bi bi-check-circle-fill"></i> Active
+                                </span>
+                                {% elif model.status == 'pending' %}
+                                <span class="status-badge status-pending">
+                                    <i class="bi bi-hourglass-split"></i> Pending
+                                </span>
+                                {% elif model.status == 'rejected' %}
+                                <span class="status-badge status-rejected">
+                                    <i class="bi bi-x-circle-fill"></i> Rejected
+                                </span>
+                                {% else %}
+                                <span class="status-badge status-deprecated">
+                                    <i class="bi bi-archive-fill"></i> Deprecated
+                                </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Upload Date -->
+                            <td>
+                                <span title="{{ model.created_at|date:'M d, Y H:i' }}">
+                                    {{ model.created_at|timesince }} ago
+                                </span>
+                            </td>
+
+                            <!-- File Size -->
+                            <td>
+                                <span class="file-size">{{ model.file_size_formatted }}</span>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="text-end">
+                                <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                    <!-- View (all models) -->
+                                    <a href="{% url 'inference:model_detail' model.id %}" class="btn btn-outline-primary action-btn" title="View Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+
+                                    {% if model.status == 'approved' %}
+                                    <!-- Use for Inference (active only) -->
+                                    <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}"
+                                       class="btn btn-success action-btn"
+                                       title="Use for Inference">
+                                        <i class="bi bi-play-fill"></i>
+                                    </a>
+                                    <!-- Stats (active only) -->
+                                    <button class="btn btn-outline-info action-btn" title="View Statistics">
+                                        <i class="bi bi-graph-up"></i>
+                                    </button>
+                                    {% endif %}
+
+                                    {% if model.status == 'pending' %}
+                                    <!-- Edit (pending only) -->
+                                    <button class="btn btn-outline-secondary action-btn" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    {% endif %}
+
+                                    {% if model.status == 'rejected' %}
+                                    <!-- Resubmit (rejected only) -->
+                                    <a href="{% url 'inference:upload_model' %}?resubmit={{ model.id }}"
+                                       class="btn btn-warning action-btn"
+                                       title="Resubmit">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Mobile Card View -->
+            <div class="d-md-none p-3">
+                {% for model in models %}
+                <div class="model-card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="mb-1 model-name">
+                                <i class="bi bi-box text-primary me-1"></i>{{ model.name }}
+                            </h6>
+                            <small class="text-muted">v{{ model.version }}</small>
+                        </div>
+                        {% if model.status == 'approved' %}
+                        <span class="status-badge status-approved">
+                            <i class="bi bi-check-circle-fill"></i> Active
+                        </span>
+                        {% elif model.status == 'pending' %}
+                        <span class="status-badge status-pending">
+                            <i class="bi bi-hourglass-split"></i> Pending
+                        </span>
+                        {% elif model.status == 'rejected' %}
+                        <span class="status-badge status-rejected">
+                            <i class="bi bi-x-circle-fill"></i> Rejected
+                        </span>
+                        {% else %}
+                        <span class="status-badge status-deprecated">
+                            <i class="bi bi-archive-fill"></i> Deprecated
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-3 mb-3 small text-muted">
+                        <span><i class="bi bi-heart-pulse me-1"></i>{{ model.domain|title }}</span>
+                        <span><i class="bi bi-calendar me-1"></i>{{ model.created_at|timesince }} ago</span>
+                        {% if model.accuracy_percent %}
+                        <span><i class="bi bi-bullseye me-1"></i>{{ model.accuracy_percent|floatformat:1 }}%</span>
+                        {% endif %}
+                    </div>
+
+                    {% if model.status == 'rejected' and model.rejection_reason %}
+                    <div class="alert alert-danger py-2 mb-3 small">
+                        <i class="bi bi-exclamation-circle me-1"></i>{{ model.rejection_reason|truncatewords:15 }}
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'inference:model_detail' model.id %}" class="btn btn-outline-primary btn-sm flex-grow-1">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        {% if model.status == 'approved' %}
+                        <a href="{% url 'inference:new_prediction' %}?model={{ model.id }}"
+                           class="btn btn-success btn-sm flex-grow-1">
+                            <i class="bi bi-play-fill me-1"></i>Use
+                        </a>
+                        {% elif model.status == 'rejected' %}
+                        <a href="{% url 'inference:upload_model' %}?resubmit={{ model.id }}"
+                           class="btn btn-warning btn-sm flex-grow-1">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Resubmit
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if models.has_other_pages %}
+            <div class="card-footer bg-white border-top">
+                <nav aria-label="Models pagination">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if models.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ models.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                                <i class="bi bi-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="bi bi-chevron-left"></i> Previous</span>
+                        </li>
+                        {% endif %}
+
+                        <li class="page-item disabled">
+                            <span class="page-link">
+                                Page {{ models.number }} of {{ models.paginator.num_pages }}
+                            </span>
+                        </li>
+
+                        {% if models.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ models.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                                Next <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Next <i class="bi bi-chevron-right"></i></span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <div class="text-center mt-2 small text-muted">
+                    Showing {{ models.start_index }}-{{ models.end_index }} of {{ models.paginator.count }} models
+                </div>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="empty-state">
+                {% if search_query or status_filter != 'all' or domain_filter != 'all' %}
+                <!-- No results for filters -->
+                <i class="bi bi-search"></i>
+                <h5 class="text-muted">No models match your filters</h5>
+                <p class="text-muted mb-4">Try adjusting your search or filter criteria</p>
+                <a href="{% url 'inference:my_models' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-x-lg me-2"></i>Clear Filters
+                </a>
+                {% else %}
+                <!-- No models at all -->
+                <i class="bi bi-box-seam"></i>
+                <h5 class="text-muted">No models uploaded yet</h5>
+                <p class="text-muted mb-4">Upload your first model to get started with inference</p>
+                <a href="{% url 'inference:upload_model' %}" class="btn btn-primary">
+                    <i class="bi bi-cloud-upload me-2"></i>Upload Your First Model
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit form when dropdown changes (optional UX improvement)
+document.querySelectorAll('.filter-bar select').forEach(select => {
+    select.addEventListener('change', function() {
+        // Optional: auto-submit on filter change
+        // this.closest('form').submit();
+    });
+});
+</script>
+{% endblock %}

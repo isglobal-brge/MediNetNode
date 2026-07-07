@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load csp_tags %}
 
 {% block title %}Edit User - MediNet{% endblock %}
 
@@ -192,7 +193,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{% csp_nonce %}">
 document.addEventListener('DOMContentLoaded', function() {
     // Add form validation visual feedback
     const form = document.querySelector('form');

@@ -1,0 +1,688 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - MediNet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Header gradient */
+    .page-header {
+        background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #14b8a6 100%);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+
+    .page-header h1 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-header .lead {
+        opacity: 0.9;
+        margin-bottom: 0;
+    }
+
+    /* Stats cards */
+    .stats-row {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1.25rem;
+    }
+
+    .stat-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        min-width: 140px;
+    }
+
+    .stat-card .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .stat-card .label {
+        font-size: 0.8rem;
+        opacity: 0.85;
+        margin-top: 0.25rem;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .filter-bar .form-control,
+    .filter-bar .form-select {
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+        font-size: 0.875rem;
+    }
+
+    .filter-bar .form-control:focus,
+    .filter-bar .form-select:focus {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 0.2rem rgba(14, 165, 233, 0.15);
+    }
+
+    .filter-bar label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #6b7280;
+        margin-bottom: 0.25rem;
+    }
+
+    /* History table */
+    .history-table {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .history-table table {
+        margin-bottom: 0;
+    }
+
+    .history-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+        color: #6b7280;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 0.875rem 1rem;
+    }
+
+    .history-table td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .history-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .history-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Model info cell */
+    .model-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .model-info .name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .model-info .version {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    /* Status badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-badge.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .status-badge.failed {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    /* Domain badge */
+    .domain-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        background: #f3f4f6;
+        color: #4b5563;
+    }
+
+    /* Metrics */
+    .metric-cell {
+        text-align: center;
+    }
+
+    .metric-cell .value {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .metric-cell .unit {
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }
+
+    /* Timestamp */
+    .timestamp-cell {
+        font-size: 0.875rem;
+    }
+
+    .timestamp-cell .date {
+        color: #1f2937;
+    }
+
+    .timestamp-cell .time {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        color: #d1d5db;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state h4 {
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Results count */
+    .results-info {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Pagination */
+    .pagination-wrapper {
+        padding: 1rem;
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .pagination .page-link {
+        border-radius: 0.5rem;
+        margin: 0 0.125rem;
+        border: none;
+        color: #6b7280;
+    }
+
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+        color: white;
+    }
+
+    .pagination .page-link:hover {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+
+    /* Mobile cards */
+    .history-card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .history-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+
+    .history-card-body {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .history-card-body .metric {
+        text-align: center;
+    }
+
+    .history-card-body .metric .label {
+        font-size: 0.7rem;
+        color: #6b7280;
+        display: block;
+    }
+
+    .history-card-body .metric .value {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .history-card-footer {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f3f4f6;
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .desktop-table {
+            display: none;
+        }
+        .mobile-cards {
+            display: block;
+        }
+    }
+
+    @media (min-width: 993px) {
+        .mobile-cards {
+            display: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .page-header {
+            padding: 1.5rem;
+        }
+
+        .stats-row {
+            gap: 0.5rem;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            padding: 0.75rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.25rem;
+        }
+
+        .filter-bar .row > div {
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1><i class="bi bi-clock-history me-2"></i>My Prediction History</h1>
+                <p class="lead">Track all your inference requests and results</p>
+
+                <!-- Stats cards -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="value">{{ stats.total|default:0 }}</div>
+                        <div class="label">Total Predictions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value">{{ stats.success_rate|floatformat:0 }}%</div>
+                        <div class="label">Success Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value">{{ stats.total_records|default:0 }}</div>
+                        <div class="label">Records Processed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value">{{ stats.avg_execution_time|floatformat:0 }}ms</div>
+                        <div class="label">Avg. Exec Time</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                <a href="{% url 'inference:new_prediction' %}" class="btn btn-light btn-lg">
+                    <i class="bi bi-play-fill me-2"></i>New Prediction
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" id="filterForm">
+            <div class="row g-2">
+                <!-- Search -->
+                <div class="col-md-3">
+                    <label>Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0">
+                            <i class="bi bi-search text-muted"></i>
+                        </span>
+                        <input type="text"
+                               name="q"
+                               class="form-control border-start-0"
+                               placeholder="Model name..."
+                               value="{{ search_query }}">
+                    </div>
+                </div>
+
+                <!-- Model Filter -->
+                <div class="col-md-2">
+                    <label>Model</label>
+                    <select name="model" class="form-select" onchange="this.form.submit()">
+                        <option value="all">All Models</option>
+                        {% for m in user_models %}
+                        <option value="{{ m.model_id }}" {% if model_filter == m.model_id|stringformat:"s" %}selected{% endif %}>
+                            {{ m.model_name }} v{{ m.model_version }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Domain Filter -->
+                <div class="col-md-2">
+                    <label>Domain</label>
+                    <select name="domain" class="form-select" onchange="this.form.submit()">
+                        <option value="all">All Domains</option>
+                        {% for domain in domains %}
+                        <option value="{{ domain }}" {% if domain_filter == domain %}selected{% endif %}>
+                            {{ domain|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="col-md-2">
+                    <label>Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Sort -->
+                <div class="col-md-2">
+                    <label>Sort By</label>
+                    <select name="sort" class="form-select" onchange="this.form.submit()">
+                        {% for value, label in sort_choices %}
+                        <option value="{{ value }}" {% if sort_by == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Filter Button -->
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Date Range (collapsible) -->
+            <div class="row g-2 mt-2">
+                <div class="col-md-2">
+                    <label>From Date</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label>To Date</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+                </div>
+                <div class="col-md-8 d-flex align-items-end">
+                    {% if search_query or model_filter != 'all' or domain_filter != 'all' or status_filter != 'all' or date_from or date_to %}
+                    <a href="{% url 'inference:my_history' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Info -->
+    {% if total_count != stats.total %}
+    <div class="results-info">
+        Showing {{ total_count }} of {{ stats.total }} prediction{{ stats.total|pluralize }}
+        {% if search_query %}for "<strong>{{ search_query }}</strong>"{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- History Content -->
+    {% if predictions %}
+
+    <!-- Desktop Table -->
+    <div class="history-table desktop-table">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Domain</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Records</th>
+                    <th class="text-center">Exec Time</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pred in predictions %}
+                <tr>
+                    <td>
+                        <div class="model-info">
+                            <span class="name">{{ pred.model_name }}</span>
+                            <span class="version">v{{ pred.model_version }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="domain-badge">{{ pred.model_domain|title }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if pred.success %}
+                        <span class="status-badge success">
+                            <i class="bi bi-check-circle-fill"></i> Success
+                        </span>
+                        {% else %}
+                        <span class="status-badge failed" title="{{ pred.error_message }}">
+                            <i class="bi bi-x-circle-fill"></i> Failed
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="metric-cell">
+                        <span class="value">{{ pred.records_count }}</span>
+                        <span class="unit">rows</span>
+                    </td>
+                    <td class="metric-cell">
+                        <span class="value">{{ pred.execution_time_ms }}</span>
+                        <span class="unit">ms</span>
+                    </td>
+                    <td class="timestamp-cell">
+                        <div class="date">{{ pred.timestamp|date:"M d, Y" }}</div>
+                        <div class="time">{{ pred.timestamp|time:"H:i:s" }}</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination inside table container -->
+        {% if predictions.has_other_pages %}
+        <div class="pagination-wrapper">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if predictions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ predictions.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if model_filter != 'all' %}&model={{ model_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in predictions.paginator.page_range %}
+                        {% if predictions.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > predictions.number|add:'-3' and num < predictions.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if model_filter != 'all' %}&model={{ model_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if predictions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ predictions.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if model_filter != 'all' %}&model={{ model_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Mobile Cards -->
+    <div class="mobile-cards">
+        {% for pred in predictions %}
+        <div class="history-card">
+            <div class="history-card-header">
+                <div class="model-info">
+                    <span class="name">{{ pred.model_name }}</span>
+                    <span class="version">v{{ pred.model_version }}</span>
+                </div>
+                {% if pred.success %}
+                <span class="status-badge success">
+                    <i class="bi bi-check-circle-fill"></i>
+                </span>
+                {% else %}
+                <span class="status-badge failed">
+                    <i class="bi bi-x-circle-fill"></i>
+                </span>
+                {% endif %}
+            </div>
+            <div class="history-card-body">
+                <div class="metric">
+                    <span class="label">Domain</span>
+                    <span class="value">{{ pred.model_domain|title }}</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Records</span>
+                    <span class="value">{{ pred.records_count }}</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Exec Time</span>
+                    <span class="value">{{ pred.execution_time_ms }}ms</span>
+                </div>
+            </div>
+            <div class="history-card-footer">
+                <i class="bi bi-clock me-1"></i>
+                {{ pred.timestamp|date:"M d, Y" }} at {{ pred.timestamp|time:"H:i" }}
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Mobile Pagination -->
+        {% if predictions.has_other_pages %}
+        <div class="d-flex justify-content-center mt-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination mb-0">
+                    {% if predictions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ predictions.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if model_filter != 'all' %}&model={{ model_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">{{ predictions.number }} / {{ predictions.paginator.num_pages }}</span>
+                    </li>
+
+                    {% if predictions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ predictions.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if model_filter != 'all' %}&model={{ model_filter }}{% endif %}{% if domain_filter != 'all' %}&domain={{ domain_filter }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if sort_by != 'recent' %}&sort={{ sort_by }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state">
+        <i class="bi bi-clock-history"></i>
+        {% if search_query or model_filter != 'all' or domain_filter != 'all' or status_filter != 'all' or date_from or date_to %}
+        <h4>No predictions found</h4>
+        <p>Try adjusting your search criteria or filters</p>
+        <a href="{% url 'inference:my_history' %}" class="btn btn-primary">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Clear Filters
+        </a>
+        {% else %}
+        <h4>No prediction history yet</h4>
+        <p>Start making predictions to see your history here</p>
+        <a href="{% url 'inference:new_prediction' %}" class="btn btn-primary">
+            <i class="bi bi-play-fill me-1"></i>Make Your First Prediction
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-submit on date change
+    document.querySelectorAll('input[type="date"]').forEach(function(input) {
+        input.addEventListener('change', function() {
+            document.getElementById('filterForm').submit();
+        });
+    });
+
+    // Clear search on escape
+    document.querySelector('input[name="q"]').addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            this.value = '';
+            this.form.submit();
+        }
+    });
+</script>
+{% endblock %}

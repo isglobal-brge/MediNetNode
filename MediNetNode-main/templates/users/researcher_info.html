@@ -39,9 +39,9 @@
       <div class="card-body">
         <h6 class="mb-3">Available API Endpoints:</h6>
         <ul class="mb-3">
-          <li><code>GET /api/v1/ping</code> - Health check and connectivity test</li>
-          <li><code>GET /api/v1/get-data-info</code> - Retrieve authorized dataset metadata</li>
-          <li><code>POST /api/v1/start-client</code> - Initiate federated learning training</li>
+          <li><code>GET /api/v2/ping</code> - Health check and connectivity test</li>
+          <li><code>GET /api/v2/get-data-info</code> - Retrieve authorized dataset metadata</li>
+          <li><code>POST /api/v2/start-client</code> - Initiate federated learning training</li>
         </ul>
         
         <h6 class="mb-3">Authentication Requirements:</h6>
@@ -59,7 +59,44 @@
       </div>
     </div>
   </div>
-  
+
+    <!-- DP Budget Section -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0">Mis presupuestos de Privacidad Diferencial (&epsilon;)</h5>
+      </div>
+      <div class="card-body">
+        {% if researcher_budgets %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Dataset ID</th>
+                <th>Gastado (&epsilon;)</th>
+                <th>Restante (&epsilon;)</th>
+                <th>Límite total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for budget in researcher_budgets %}
+              <tr>
+                <td>#{{ budget.dataset_id }}</td>
+                <td>{{ budget.spent_epsilon|floatformat:4 }}</td>
+                <td>{{ budget.remaining_budget|floatformat:4 }}</td>
+                <td>{{ budget.lifetime_budget|floatformat:4 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">
+          Aún no has entrenado con ningún dataset en este Node.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
