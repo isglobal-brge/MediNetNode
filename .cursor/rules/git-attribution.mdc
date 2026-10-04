@@ -1,0 +1,6 @@
+---
+description: Git attribution policy
+alwaysApply: true
+---
+
+Do not add Claude or Cursor as co-authors to commits, or add AI attribution trailers or pull request footers. Preserve human authors and co-authors.
